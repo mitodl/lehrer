@@ -1,6 +1,6 @@
 # Lehrer - OpenEdx Platform Build Pipeline
 
-A Dagger module for building and deploying Open edX platform images and related services. This module provides composable and reusable functions based on the MIT ODL Earthly build process.
+A Dagger module for building and deploying Open edX platform images, services, and micro-frontends. This module provides composable and reusable functions based on the MIT ODL Earthly build process.
 
 ## Overview
 
@@ -8,7 +8,8 @@ This module replaces the Earthly-based build pipeline with Dagger, providing:
 
 - **Composable functions** - Build steps can be used independently or chained together
 - **Flexibility** - Support for multiple deployments with different configurations
-- **Multiple services** - Build platform, codejail, and edx-notes containers
+- **Multiple services** - Build platform, codejail, edx-notes, and MFEs
+- **Local development** - Watch containers for testing MFE slot configs
 - **Reproducibility** - Consistent builds across environments
 - **Efficiency** - Leverages Dagger's caching and parallelization
 
@@ -259,6 +260,122 @@ dagger call build-notes --release-name master \
   publish \
   --address ghcr.io/mitodl/openedx-notes:latest
 ```
+
+## Building Micro-Frontends (MFEs)
+
+The module provides functions for building Open edX Micro-Frontends with deployment-specific configurations.
+
+### MFE Build Features
+
+- Build any Open edX MFE from source
+- Support for slot configuration files (Footer.jsx, env.config.jsx, etc.)
+- Deployment-specific styling (mitx-styles.scss, mitxonline-styles.scss)
+- Learning MFE special handling (smoot-design, AI drawer components)
+- Translation support via openedx-atlas
+- Local development with watch container
+
+### Basic MFE Build
+
+```bash
+# Build the learning MFE
+dagger call build-mfe \
+  --mfe-name learning \
+  --mfe-repo https://github.com/openedx/frontend-app-learning \
+  --mfe-branch open-release/sumac.latest \
+  --deployment-name mitxonline \
+  export --path ./dist
+
+# Build with smoot-design bundle (learning MFE)
+dagger call build-mfe \
+  --mfe-name learning \
+  --mfe-repo https://github.com/openedx/frontend-app-learning \
+  --mfe-branch master \
+  --deployment-name mitxonline \
+  --enable-smoot-design \
+  --enable-ai-drawer \
+  export --path ./dist
+
+# Build with custom styles
+dagger call build-mfe \
+  --mfe-name account \
+  --mfe-repo https://github.com/openedx/frontend-app-account \
+  --mfe-branch master \
+  --deployment-name mitxonline \
+  --styles-file mitxonline-styles.scss \
+  export --path ./dist
+```
+
+### MFE Environment Variables
+
+MFEs require environment variables for configuration. Since Dagger doesn't support dict parameters, you need to chain `with-env-variable` calls or use a wrapper script:
+
+```bash
+# Build with environment variables using wrapper container
+dagger call build-mfe \
+  --mfe-name learning \
+  --mfe-repo https://github.com/openedx/frontend-app-learning \
+  --deployment-name mitxonline \
+  | dagger call container \
+    --env LMS_BASE_URL=https://courses.learn.mit.edu \
+    --env SITE_NAME="MIT Learn" \
+    --env APP_ID=learning \
+    directory /app/mfe/dist \
+  export --path ./dist
+
+# Alternatively, use with-env-variable chains:
+# This would be done programmatically in a CI/CD script
+```
+
+For production use, create a helper function or script that generates the full build command with all required environment variables. See the Concourse pipeline values.py for full environment variable examples.
+
+Common environment variables include:
+- `LMS_BASE_URL` - Base URL of the LMS
+- `SITE_NAME` - Display name of the site
+- `BASE_URL` - Base URL for the MFE
+- `APP_ID` - MFE application identifier
+- `DEPLOYMENT_NAME` - Deployment name
+- `ENABLE_AI_DRAWER_SLOT` - Enable AI drawer (learning MFE)
+
+See the Concourse pipeline values.py for full environment variable examples.
+
+### MFE Watch Container for Local Development
+
+For testing slot config changes locally without rebuilding:
+
+```bash
+# Start watch server with hot reload
+dagger call watch-mfe \
+  --mfe-source ./frontend-app-learning \
+  --deployment-name mitxonline \
+  --mfe-name learning \
+  up --ports 8080:8080
+
+# Access at http://localhost:8080
+
+# Note: Set environment variables by chaining with-env-variable calls
+# in your wrapper script or CI/CD pipeline
+```
+
+The watch container:
+- Mounts your local MFE source code
+- Mounts slot configuration files
+- Runs `npm start` with hot reload
+- Automatically rebuilds when files change
+- Perfect for testing Footer.jsx, env.config.jsx changes
+
+### Slot Configuration Files
+
+The `mfe_slot_config` directory contains:
+
+- `Footer.jsx` - Custom footer component (all MFEs)
+- `learning-mfe-config.env.jsx` - Learning MFE config
+- `{deployment}/common-mfe-config.env.jsx` - Common config per deployment
+- `AIDrawerManagerSidebar.jsx` - AI drawer sidebar (learning MFE)
+- `SidebarAIDrawerCoordinator.jsx` - AI drawer coordinator (learning MFE)
+- `mitx-styles.scss` - MITx Residential styles
+- `mitxonline-styles.scss` - MITx Online styles
+
+These files are copied into the MFE build to customize behavior per deployment.
 
 ## Differences from Earthfile
 

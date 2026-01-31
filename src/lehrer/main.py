@@ -920,3 +920,220 @@ class Lehrer:
         ])
         
         return container
+    
+    @function
+    async def build_mfe(
+        self,
+        mfe_name: str,
+        mfe_repo: str,
+        mfe_branch: str = "master",
+        node_version: str = "20.18.0",
+        deployment_name: str = "mitxonline",
+        slot_config: dagger.Directory | None = None,
+        enable_smoot_design: bool = False,
+        enable_ai_drawer: bool = False,
+        styles_file: str | None = None,
+    ) -> dagger.Directory:
+        """Build an Open edX Micro Frontend (MFE)
+        
+        Args:
+            mfe_name: MFE application name (e.g., 'learning', 'discussions', 'account')
+            mfe_repo: Git repository URL for the MFE
+            mfe_branch: Git branch to build from (default: master)
+            node_version: Node.js version to use (default: 20.18.0)
+            deployment_name: Deployment name (e.g., 'mitxonline', 'mitx')
+            slot_config: Directory containing slot configuration files
+            enable_smoot_design: Enable smoot-design bundle (for learning MFE)
+            enable_ai_drawer: Enable AI drawer components (for learning MFE)
+            styles_file: Deployment-specific styles file to include
+        
+        Returns:
+            Directory containing built MFE dist files
+        
+        Note:
+            Set environment variables using with_env_variable() on the returned container.
+            For example:
+              dir = await build_mfe(...).with_env_variable("LMS_BASE_URL", "...").directory("/app/mfe/dist")
+        """
+        if slot_config is None:
+            slot_config = dag.current_module().source().directory("mfe_slot_config")
+        
+        # Start with Node.js base image
+        container = (
+            dag.container()
+            .from_(f"node:{node_version}-trixie-slim")
+        )
+        
+        # Install system dependencies
+        container = (
+            container
+            .with_exec(["apt-get", "update"])
+            .with_exec([
+                "apt", "install", "-y", "python3", "python-is-python3",
+                "build-essential", "git"
+            ])
+            .with_exec(["apt", "clean"])
+        )
+        
+        # Clone MFE repository
+        container = (
+            container
+            .with_workdir("/app")
+            .with_exec([
+                "git", "clone",
+                "--branch", mfe_branch,
+                "--depth", "1",
+                mfe_repo,
+                "mfe"
+            ])
+            .with_workdir("/app/mfe")
+        )
+        
+        # Determine config file to use
+        is_learning_mfe = mfe_name.lower() == "learning"
+        config_file = "learning-mfe-config" if is_learning_mfe else f"{deployment_name}/common-mfe-config"
+        
+        # Copy Footer.jsx
+        footer_file = slot_config.file("Footer.jsx")
+        container = container.with_file("/app/mfe/Footer.jsx", footer_file)
+        
+        # Copy env.config.jsx
+        env_config_file = slot_config.file(f"{config_file}.env.jsx")
+        container = container.with_file("/app/mfe/env.config.jsx", env_config_file)
+        
+        # For learning MFE, copy common-mfe-config.env.jsx
+        if is_learning_mfe:
+            common_config_file = slot_config.file(f"{deployment_name}/common-mfe-config.env.jsx")
+            container = container.with_file("/app/mfe/common-mfe-config.env.jsx", common_config_file)
+        
+        # Copy AI drawer components if enabled
+        if enable_ai_drawer and is_learning_mfe:
+            ai_drawer_sidebar = slot_config.file("AIDrawerManagerSidebar.jsx")
+            container = container.with_file("/app/mfe/AIDrawerManagerSidebar.jsx", ai_drawer_sidebar)
+            
+            sidebar_coordinator = slot_config.file("SidebarAIDrawerCoordinator.jsx")
+            container = container.with_file("/app/mfe/SidebarAIDrawerCoordinator.jsx", sidebar_coordinator)
+        
+        # Copy styles file if specified
+        if styles_file:
+            styles = slot_config.file(styles_file)
+            container = container.with_file(f"/app/mfe/{styles_file}", styles)
+        
+        # Install npm dependencies
+        container = container.with_exec(["npm", "install"])
+        
+        # Install openedx-atlas for translations
+        container = container.with_exec(["npm", "install", "-g", "@edx/openedx-atlas"])
+        
+        # Handle smoot-design for learning MFE
+        if enable_smoot_design and is_learning_mfe:
+            container = (
+                container
+                .with_exec(["npm", "pack", "@mitodl/smoot-design@^6.12.0"])
+                .with_exec(["sh", "-c", "tar -xvzf mitodl-smoot-design*.tgz"])
+                .with_exec(["mkdir", "-p", "public/static/smoot-design"])
+                .with_exec(["sh", "-c", "cp package/dist/bundles/* public/static/smoot-design/"])
+            )
+        
+        # Install webpack
+        container = container.with_exec(["npm", "install", "webpack"])
+        
+        # Build the MFE
+        container = (
+            container
+            .with_env_variable("NODE_ENV", "production")
+            .with_exec(["npm", "run", "build"])
+        )
+        
+        # Return the dist directory
+        return container.directory("/app/mfe/dist")
+    
+    @function
+    async def watch_mfe(
+        self,
+        mfe_source: dagger.Directory,
+        slot_config: dagger.Directory | None = None,
+        node_version: str = "20.18.0",
+        deployment_name: str = "mitxonline",
+        mfe_name: str = "learning",
+        port: int = 8080,
+    ) -> dagger.Service:
+        """Run MFE dev server with hot reload for local testing
+        
+        This creates a watch container for testing slot config changes locally.
+        
+        Args:
+            mfe_source: Directory containing MFE source code
+            slot_config: Directory containing slot configuration files
+            node_version: Node.js version to use (default: 20.18.0)
+            deployment_name: Deployment name for config file selection
+            mfe_name: MFE name (e.g., 'learning')
+            port: Port to expose the dev server on (default: 8080)
+        
+        Returns:
+            Service running the MFE dev server
+        
+        Note:
+            Set environment variables using with_env_variable() before calling as_service().
+            The service will automatically rebuild when slot config files change.
+        """
+        if slot_config is None:
+            slot_config = dag.current_module().source().directory("mfe_slot_config")
+        
+        # Start with Node.js base image
+        container = (
+            dag.container()
+            .from_(f"node:{node_version}-trixie-slim")
+        )
+        
+        # Install system dependencies
+        container = (
+            container
+            .with_exec(["apt-get", "update"])
+            .with_exec([
+                "apt", "install", "-y", "python3", "python-is-python3",
+                "build-essential", "git"
+            ])
+            .with_exec(["apt", "clean"])
+        )
+        
+        # Set up work directory and mount source
+        container = (
+            container
+            .with_workdir("/app/mfe")
+            .with_directory("/app/mfe", mfe_source)
+        )
+        
+        # Determine config files
+        is_learning_mfe = mfe_name.lower() == "learning"
+        config_file = "learning-mfe-config" if is_learning_mfe else f"{deployment_name}/common-mfe-config"
+        
+        # Mount slot config files
+        footer_file = slot_config.file("Footer.jsx")
+        container = container.with_mounted_file("/app/mfe/Footer.jsx", footer_file)
+        
+        env_config_file = slot_config.file(f"{config_file}.env.jsx")
+        container = container.with_mounted_file("/app/mfe/env.config.jsx", env_config_file)
+        
+        if is_learning_mfe:
+            common_config_file = slot_config.file(f"{deployment_name}/common-mfe-config.env.jsx")
+            container = container.with_mounted_file("/app/mfe/common-mfe-config.env.jsx", common_config_file)
+        
+        # Ensure PORT is set for the dev server
+        container = container.with_env_variable("PORT", str(port))
+        
+        # Install dependencies if package-lock.json exists
+        container = (
+            container
+            .with_exec(["npm", "install"])
+            .with_exec(["npm", "install", "-g", "@edx/openedx-atlas"])
+        )
+        
+        # Expose port and start dev server
+        container = (
+            container
+            .with_exposed_port(port)
+            .with_exec(["npm", "start"])
+        )
+        
+        return container.as_service()
