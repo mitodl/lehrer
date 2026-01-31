@@ -218,6 +218,7 @@ class Lehrer:
         container = (
             container
             .with_workdir("/openedx/edx-platform")
+            .with_env_variable("PATH", "/root/.local/bin:/usr/local/bin:/usr/bin:/bin")
             .with_env_variable("NPM_REGISTRY", "https://registry.npmjs.org/")
             .with_exec([
                 "sh", "-c",
