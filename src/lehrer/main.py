@@ -253,24 +253,26 @@ class Lehrer:
     @function
     def tutor_utils(
         self,
-        container: dagger.Container,
         tutor_version: str = "v19.0.0",
-    ) -> dagger.Container:
+    ) -> dagger.Directory:
         """Get utility scripts from Tutor
         
         Args:
-            container: Base container
             tutor_version: Tutor version tag (default: v19.0.0)
         
         Returns:
-            Container with tutor utils at /openedx/bin
+            Directory with tutor bin scripts
         """
         return (
-            container
+            dag.container()
+            .from_("debian:bookworm-slim")
+            .with_exec(["apt-get", "update"])
+            .with_exec(["apt-get", "install", "-y", "git"])
             .with_exec([
                 "git", "clone", "--depth", "1", "--branch", tutor_version,
                 "https://github.com/overhangio/tutor.git", "/openedx/tutor"
             ])
+            .directory("/openedx/tutor/tutor/templates/build/openedx/bin")
         )
 
     @function
@@ -279,6 +281,7 @@ class Lehrer:
         container: dagger.Container,
         deployment_name: str,
         dockerize_bin: dagger.File,
+        tutor_bin: dagger.Directory,
         custom_settings: dagger.Directory,
         app_user_id: int = 1000,
         include_locales: bool = True,
@@ -289,6 +292,7 @@ class Lehrer:
             container: Container with installed dependencies
             deployment_name: Deployment name
             dockerize_bin: Dockerize binary file
+            tutor_bin: Tutor bin directory with utility scripts
             custom_settings: Directory with custom settings and config files
             app_user_id: User ID for app user (default: 1000)
             include_locales: Include locale files (default: True)
@@ -309,6 +313,7 @@ class Lehrer:
             ])
             .with_user(str(app_user_id))
             .with_mounted_file("/usr/local/bin/dockerize", dockerize_bin)
+            .with_directory("/openedx/bin", tutor_bin)
         )
         
         # Set up PATH
@@ -598,7 +603,7 @@ class Lehrer:
             )
         
         # Step 6: Get tutor utilities
-        container = self.tutor_utils(container)
+        tutor_bin = self.tutor_utils()
         
         # Step 7: Get dockerize binary
         dockerize_bin = self.dockerize()
@@ -608,6 +613,7 @@ class Lehrer:
             container,
             deployment_name=deployment_name,
             dockerize_bin=dockerize_bin,
+            tutor_bin=tutor_bin,
             custom_settings=custom_settings,
             include_locales=include_locales,
         )
