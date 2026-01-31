@@ -45,10 +45,24 @@ class Lehrer:
             "rdfind",
         ]
         
+        # Get uv binary from official image
+        uv_binary = (
+            dag.container()
+            .from_("ghcr.io/astral-sh/uv:latest")
+            .file("/uv")
+        )
+        
         return (
             dag.container()
             .from_(f"python:{python_version}-bookworm")
             .with_env_variable("DEBIAN_FRONTEND", "noninteractive")
+            .with_file("/usr/local/bin/uv", uv_binary)
+            # Set uv environment variables
+            .with_env_variable("UV_NO_MANAGED_PYTHON", "1")
+            .with_env_variable("UV_PYTHON_DOWNLOADS", "never")
+            .with_env_variable("UV_COMPILE_BYTECODE", "1")
+            .with_env_variable("UV_LINK_MODE", "copy")
+            .with_env_variable("PATH", "/root/.local/bin:/usr/local/bin:/usr/bin:/bin")
             .with_exec(["apt", "update"])
             .with_exec(["apt", "install", "-y", "--no-install-recommends"] + apt_packages)
             .with_exec(["apt", "autoremove", "-y"])
@@ -165,7 +179,7 @@ class Lehrer:
         pip_package_overrides: dagger.Directory,
         node_version: str = "20.18.0",
     ) -> dagger.Container:
-        """Install Python and Node.js dependencies
+        """Install Python and Node.js dependencies using uv
         
         Args:
             container: Container with edx-platform source at /openedx/edx-platform
@@ -191,9 +205,9 @@ class Lehrer:
                 "sh", "-c",
                 "cp /openedx/edx-platform/requirements/edx/assets.txt /root/pip_package_lists/edx_assets.txt"
             ])
-            # Install base Python dependencies
+            # Install base Python dependencies using uv (much faster than pip)
             .with_exec([
-                "pip", "install", "--no-warn-script-location", "--user", "--no-cache-dir",
+                "uv", "pip", "install", "--system",
                 "-r", "/root/pip_package_lists/edx_base.txt",
                 "-r", "/root/pip_package_lists/edx_assets.txt",
                 "-r", f"/root/pip_package_lists/{release_name}/{deployment_name}.txt"
@@ -202,14 +216,14 @@ class Lehrer:
         
         # Special handling for mitxonline
         if deployment_name == "mitxonline":
-            container = container.with_exec(["pip", "uninstall", "--yes", "edx-name-affirmation"])
+            container = container.with_exec(["uv", "pip", "uninstall", "edx-name-affirmation"])
         
         # Fix lxml/xmlsec compatibility issues
         container = (
             container
-            .with_exec(["pip", "uninstall", "--yes", "lxml", "xmlsec"])
+            .with_exec(["uv", "pip", "uninstall", "lxml", "xmlsec"])
             .with_exec([
-                "pip", "install", "--no-warn-script-location", "--user", "--no-cache-dir",
+                "uv", "pip", "install", "--system",
                 "-r", f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt"
             ])
         )
@@ -328,11 +342,11 @@ class Lehrer:
             "/openedx/.local/bin:/openedx/bin:/openedx/edx-platform/node_modules/.bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin"
         )
         
-        # Install edx-platform in editable mode
+        # Install edx-platform in editable mode using uv
         container = (
             container
             .with_workdir("/openedx/edx-platform")
-            .with_exec(["pip", "install", "--no-warn-script-location", "--user", "--no-cache-dir", "-e", "."])
+            .with_exec(["uv", "pip", "install", "--system", "-e", "."])
             .with_exec(["mkdir", "-p", "/openedx/config", "./lms/envs/mitol", "./cms/envs/mitol"])
         )
         
@@ -435,19 +449,19 @@ class Lehrer:
         Returns:
             Container with static assets built
         """
-        # Install additional editable dependencies
+        # Install additional editable dependencies using uv
         container = (
             container
             .with_exec([
-                "pip", "install", "--no-warn-script-location", "--user", "--no-cache-dir", "-e",
+                "uv", "pip", "install", "--system", "-e",
                 "git+https://github.com/openedx/codejail.git@babbe784b48bb9888aa159d8b401cbe5e07f0af4#egg=codejail"
             ])
             .with_exec([
-                "pip", "install", "--no-warn-script-location", "--user", "--no-cache-dir", "-e",
+                "uv", "pip", "install", "--system", "-e",
                 "git+https://github.com/openedx/django-wiki.git@0a1d555a1fa2834cc46367968aad907a5667317b#egg=django_wiki"
             ])
             .with_exec([
-                "pip", "install", "--no-warn-script-location", "--user", "--no-cache-dir", "-e",
+                "uv", "pip", "install", "--system", "-e",
                 "git+https://github.com/openedx/olxcleaner.git@2f0d6c7f126cbd69c9724b7b57a0b2565330a297#egg=olxcleaner"
             ])
         )

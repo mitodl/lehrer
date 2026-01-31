@@ -15,10 +15,10 @@ This module replaces the Earthly-based build pipeline with Dagger, providing:
 
 The build pipeline follows these stages:
 
-1. **apt-base** - Base Python container with system dependencies
+1. **apt-base** - Base Python container with system dependencies and uv
 2. **locales** - Download OpenEdx i18n locale files
 3. **get-code** - Get edx-platform source (local or Git)
-4. **install-deps** - Install Python and Node.js dependencies
+4. **install-deps** - Install Python and Node.js dependencies using uv
 5. **themes** - Get theme files (local or Git)
 6. **tutor-utils** - Get utility scripts from Tutor
 7. **collected** - Assemble artifacts and configure container
@@ -27,12 +27,18 @@ The build pipeline follows these stages:
 10. **docker-image** - Finalize for deployment
 11. **publish-platform** - Publish to container registry
 
+### Key Optimizations
+
+- **uv for Python dependencies** - Uses Astral's uv instead of pip for significantly faster dependency resolution and installation
+- **Bytecode compilation** - Pre-compiles Python bytecode during dependency installation for faster startup
+- **Docker caching** - Leverages Dagger's caching for efficient rebuilds
+
 ## Functions
 
 ### Core Build Functions
 
 #### `apt-base`
-Creates base Python container with system dependencies.
+Creates base Python container with system dependencies and uv binary.
 
 ```bash
 dagger call apt-base --python-version 3.11
@@ -53,7 +59,7 @@ dagger call apt-base get-code \
 ```
 
 #### `install-deps`
-Installs Python and Node.js dependencies.
+Installs Python and Node.js dependencies using uv for faster installation.
 
 ```bash
 dagger call apt-base get-code \
