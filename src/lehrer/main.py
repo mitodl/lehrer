@@ -344,10 +344,8 @@ class Lehrer:
             .with_exec(["cp", "/tmp/custom_settings/lms/i18n.py", "/openedx/edx-platform/lms/envs/mitol/i18n.py"])
             .with_exec(["cp", "/tmp/custom_settings/cms/assets.py", "/openedx/edx-platform/cms/envs/mitol/assets.py"])
             .with_exec(["cp", "/tmp/custom_settings/cms/i18n.py", "/openedx/edx-platform/cms/envs/mitol/i18n.py"])
-            .with_exec(["cp", "/tmp/custom_settings/lms_settings.py", "/openedx/edx-platform/lms/envs/lms_settings.py"])
-            .with_exec(["cp", "/tmp/custom_settings/cms_settings.py", "/openedx/edx-platform/cms/envs/cms_settings.py"])
-            .with_exec(["cp", "/tmp/custom_settings/models.py", "/openedx/edx-platform/openedx/core/djangoapps/settings/models.py"])
-            .with_exec(["cp", "/tmp/custom_settings/utils.py", "/openedx/edx-platform/openedx/core/djangoapps/settings/utils.py"])
+            # Note: custom_settings_module files (lms_settings.py, cms_settings.py, models.py, utils.py)
+            # are not currently provided. These would come from a separate directory in a full setup.
             .with_exec(["cp", "/tmp/custom_settings/set_waffle_flags.py", "/openedx/edx-platform/set_waffle_flags.py"])
             .with_exec(["cp", "/tmp/custom_settings/process_scheduled_emails.py", "/openedx/edx-platform/process_scheduled_emails.py"])
             .with_exec(["cp", "/tmp/custom_settings/saml_pull.py", "/openedx/edx-platform/saml_pull.py"])
