@@ -305,6 +305,7 @@ class Lehrer:
         
         # Create app user (needs /usr/sbin in PATH for useradd)
         # Copy tutor bin and set permissions before switching to app user
+        # Then chown directories that were created as root
         container = (
             container
             .with_env_variable("PATH", "/usr/sbin:/root/.local/bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin")
@@ -314,6 +315,7 @@ class Lehrer:
                 "useradd", "--home-dir", "/openedx", "--create-home",
                 "--shell", "/bin/bash", "--uid", str(app_user_id), "app"
             ])
+            .with_exec(["chown", "-R", f"{app_user_id}:{app_user_id}", "/openedx"])
             .with_user(str(app_user_id))
             .with_mounted_file("/usr/local/bin/dockerize", dockerize_bin)
         )
