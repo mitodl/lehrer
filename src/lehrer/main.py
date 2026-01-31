@@ -216,12 +216,12 @@ class Lehrer:
         
         # Special handling for mitxonline
         if deployment_name == "mitxonline":
-            container = container.with_exec(["uv", "pip", "uninstall", "edx-name-affirmation"])
+            container = container.with_exec(["uv", "pip", "uninstall", "--system", "edx-name-affirmation"])
         
         # Fix lxml/xmlsec compatibility issues
         container = (
             container
-            .with_exec(["uv", "pip", "uninstall", "lxml", "xmlsec"])
+            .with_exec(["uv", "pip", "uninstall", "--system", "lxml", "xmlsec"])
             .with_exec([
                 "uv", "pip", "install", "--system",
                 "-r", f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt"
