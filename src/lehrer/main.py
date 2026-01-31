@@ -119,21 +119,20 @@ class Lehrer:
             edx_platform_git_branch: Git branch/tag (required if source not provided)
         
         Returns:
-            Container with edx-platform at /openedx/edx-platform
+            Container with edx-platform at /openedx/edx-platform and venv created
         """
         if source is not None:
-            return container.with_mounted_directory("/openedx/edx-platform", source)
-        
-        if not edx_platform_git_repo or not edx_platform_git_branch:
-            raise ValueError("Must provide either source or both edx_platform_git_repo and edx_platform_git_branch")
-        
-        return (
-            container
-            .with_exec([
+            container = container.with_mounted_directory("/openedx/edx-platform", source)
+        elif edx_platform_git_repo and edx_platform_git_branch:
+            container = container.with_exec([
                 "git", "clone", "--depth", "1", "--branch", edx_platform_git_branch,
                 edx_platform_git_repo, "/openedx/edx-platform"
             ])
-        )
+        else:
+            raise ValueError("Must provide either source or both edx_platform_git_repo and edx_platform_git_branch")
+        
+        # Create the virtual environment now that /openedx exists
+        return container.with_exec(["uv", "venv", "/openedx/venv"])
 
     @function
     def themes(
