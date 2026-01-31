@@ -1,6 +1,6 @@
 # Lehrer - OpenEdx Platform Build Pipeline
 
-A Dagger module for building and deploying Open edX platform images. This module provides composable and reusable functions based on the MIT ODL Earthly build process.
+A Dagger module for building and deploying Open edX platform images and related services. This module provides composable and reusable functions based on the MIT ODL Earthly build process.
 
 ## Overview
 
@@ -8,6 +8,7 @@ This module replaces the Earthly-based build pipeline with Dagger, providing:
 
 - **Composable functions** - Build steps can be used independently or chained together
 - **Flexibility** - Support for multiple deployments with different configurations
+- **Multiple services** - Build platform, codejail, and edx-notes containers
 - **Reproducibility** - Consistent builds across environments
 - **Efficiency** - Leverages Dagger's caching and parallelization
 
@@ -207,6 +208,56 @@ dagger call build-platform \
   --release-name master \
   --python-version 3.11 \
   [...other args...]
+```
+
+### Building Codejail Service
+
+The codejail service provides sandboxed Python execution for running student code:
+
+```bash
+# Build codejail for master (Python 3.12)
+dagger call build-codejail --release-name master
+
+# Build codejail for sumac release (Python 3.11)
+dagger call build-codejail --release-name sumac
+
+# Override Python version
+dagger call build-codejail --release-name master --python-version 3.11
+```
+
+Codejail automatically installs the appropriate edx-platform sandbox requirements based on the release.
+
+### Building edx-notes Service
+
+The edx-notes-api service provides student annotation functionality:
+
+```bash
+# Build notes for master branch
+dagger call build-notes --release-name master
+
+# Build notes for specific release
+dagger call build-notes --release-name open-release/sumac.master
+
+# Use different Python version (default is 3.11)
+dagger call build-notes --release-name master --python-version 3.9
+```
+
+**Note**: edx-notes-api master branch requires Python 3.9+. Older releases may work with Python 3.8.
+
+### Publishing Service Images
+
+Both codejail and notes images can be published using standard container commands:
+
+```bash
+# Build and publish codejail
+dagger call build-codejail --release-name sumac \
+  publish \
+  --address ghcr.io/mitodl/openedx-codejail:sumac
+
+# Build and publish notes
+dagger call build-notes --release-name master \
+  publish \
+  --address ghcr.io/mitodl/openedx-notes:latest
 ```
 
 ## Differences from Earthfile

@@ -666,3 +666,257 @@ class Lehrer:
             container = container.with_registry_auth(registry, username, password)
         
         return await container.publish(image_ref)
+    
+    @function
+    async def build_codejail(
+        self,
+        release_name: str = "master",
+        python_version: str | None = None,
+        codejail_config: dagger.Directory | None = None,
+    ) -> dagger.Container:
+        """Build codejail service container
+        
+        The codejail service provides a sandboxed Python execution environment
+        for Open edX. It runs student-submitted code in a secure container.
+        
+        Args:
+            release_name: Open edX release name (e.g., master, sumac, redwood)
+            python_version: Python version to use (defaults: master=3.12, others=3.11)
+            codejail_config: Directory containing 01-sandbox sudoers file (defaults to ./codejail_config)
+        
+        Returns:
+            Built codejail container
+        """
+        # Default to codejail_config directory if not provided
+        if codejail_config is None:
+            codejail_config = dag.current_module().source().directory("codejail_config")
+        
+        # Auto-detect Python version if not specified
+        if python_version is None:
+            python_version = "3.12" if release_name == "master" else "3.11"
+        
+        # Start with Python slim image
+        container = (
+            dag.container()
+            .from_(f"python:{python_version}-slim-trixie")
+            .with_exec(["bash", "-c", "echo 'shell configured'"], use_entrypoint=True)
+            .with_env_variable("DEBIAN_FRONTEND", "noninteractive")
+            .with_env_variable("DEBCONF_NONINTERACTIVE_SEEN", "true")
+        )
+        
+        # Define codejail environment variables
+        container = (
+            container
+            .with_env_variable("CODEJAIL_GROUP", "sandbox")
+            .with_env_variable("CODEJAIL_SANDBOX_CALLER", "debian")
+            .with_env_variable("CODEJAIL_USER", "sandbox")
+            .with_env_variable("CODEJAIL_VENV", "/sandbox/venv")
+            .with_env_variable("OPEN_EDX_RELEASE", release_name)
+            .with_env_variable("OPEN_EDX_BRANCH", release_name)
+        )
+        
+        # Install system dependencies and create users
+        container = (
+            container
+            .with_exec([
+                "apt-get", "update"
+            ])
+            .with_exec([
+                "apt", "install", "-y", "--no-install-recommends",
+                "build-essential", "python3-virtualenv", "python3-pip",
+                "git", "sudo", "libxslt-dev"
+            ])
+            .with_exec(["apt", "clean"])
+            .with_exec(["rm", "-rf", "/var/lib/apt/lists/*"])
+        )
+        
+        # Create virtualenv
+        container = container.with_exec([
+            "virtualenv", "-p", f"python{python_version}",
+            "--always-copy", "/sandbox/venv"
+        ])
+        
+        # Create sandbox user and group
+        container = (
+            container
+            .with_exec(["addgroup", "sandbox"])
+            .with_exec([
+                "adduser", "--disabled-login", "--disabled-password",
+                "sandbox", "--ingroup", "sandbox"
+            ])
+            .with_exec(["addgroup", "debian"])
+            .with_exec([
+                "adduser", "--disabled-login", "--disabled-password",
+                "debian", "--ingroup", "debian"
+            ])
+            .with_exec(["chown", "-R", "sandbox:sandbox", "/sandbox/venv"])
+        )
+        
+        # Update PATH to use virtualenv
+        container = container.with_env_variable(
+            "PATH",
+            "/sandbox/venv/bin:/usr/local/bin:/usr/bin:/bin"
+        )
+        
+        # Clone codejail service
+        container = (
+            container
+            .with_workdir("/codejail")
+            .with_exec([
+                "git", "clone",
+                "https://github.com/eduNEXT/codejailservice/",
+                "--branch", "main", "--depth", "1",
+                "/codejail"
+            ])
+        )
+        
+        # Copy sudoers configuration
+        sudoers_file = codejail_config.file("01-sandbox")
+        container = container.with_file("/etc/sudoers.d/01-sandbox", sudoers_file)
+        
+        # Install dependencies
+        container = (
+            container
+            .with_exec([
+                "pip", "install", "--no-cache-dir",
+                "-r", "requirements/base.txt"
+            ])
+            .with_exec([
+                "pip", "install", "--no-cache-dir", "gunicorn"
+            ])
+        )
+        
+        # Install edx-platform sandbox requirements in virtualenv
+        # The URL pattern differs based on whether it's a release or master
+        sandbox_req_url = (
+            f"https://raw.githubusercontent.com/openedx/edx-platform/master/requirements/edx-sandbox/releases/{release_name}.txt"
+            if release_name != "master"
+            else "https://raw.githubusercontent.com/openedx/edx-platform/master/requirements/edx-sandbox/base.txt"
+        )
+        
+        container = (
+            container
+            .with_exec([
+                "bash", "-c",
+                f"source /sandbox/venv/bin/activate && "
+                f"pip install --no-cache-dir -r {sandbox_req_url} && "
+                f"deactivate"
+            ])
+        )
+        
+        # Set permissions and ownership
+        container = (
+            container
+            .with_exec(["chmod", "0440", "/etc/sudoers.d/01-sandbox"])
+            .with_exec(["chown", "-R", "debian:debian", "/codejail"])
+        )
+        
+        # Switch to debian user
+        container = container.with_user("debian")
+        
+        # Set entrypoint
+        container = container.with_entrypoint([
+            "gunicorn", "-b", "0.0.0.0:8000",
+            "--workers", "2", "--max-requests=1000",
+            "wsgi"
+        ])
+        
+        return container
+    
+    @function
+    async def build_notes(
+        self,
+        release_name: str = "master",
+        python_version: str = "3.11",
+        notes_config: dagger.Directory | None = None,
+    ) -> dagger.Container:
+        """Build edx-notes-api service container
+        
+        The edx-notes-api service provides student annotation functionality
+        for Open edX courses.
+        
+        Args:
+            release_name: Git branch/tag to use (e.g., master, open-release/sumac.master)
+            python_version: Python version to use (default: 3.11)
+            notes_config: Directory containing env_config.py (defaults to ./notes_config)
+        
+        Returns:
+            Built edx-notes container
+        """
+        # Default to notes_config directory if not provided
+        if notes_config is None:
+            notes_config = dag.current_module().source().directory("notes_config")
+        # Start with Python slim image
+        container = (
+            dag.container()
+            .from_(f"python:{python_version}-slim")
+        )
+        
+        # Install system dependencies
+        container = (
+            container
+            .with_exec(["apt", "update"])
+            .with_exec([
+                "apt", "install", "-y",
+                "git", "mariadb-client", "default-libmysqlclient-dev",
+                "build-essential", "pkg-config"
+            ])
+            .with_exec(["apt", "clean"])
+        )
+        
+        # Create app user
+        container = (
+            container
+            .with_exec([
+                "useradd", "--home-dir", "/app", "--create-home",
+                "--shell", "/bin/bash", "--uid", "1000", "app"
+            ])
+            .with_user("1000")
+        )
+        
+        # Set working directory and PATH
+        container = (
+            container
+            .with_workdir("/app/edx-notes-api")
+            .with_env_variable("PATH", "/app/.local/bin:/usr/local/bin:/usr/bin:/bin")
+        )
+        
+        # Clone edx-notes-api
+        container = container.with_exec([
+            "git", "clone",
+            "https://github.com/edx/edx-notes-api",
+            "--branch", release_name, "--depth", "1",
+            "/app/edx-notes-api"
+        ])
+        
+        # Install Python dependencies
+        container = container.with_exec([
+            "pip", "install", "--no-cache-dir",
+            "-r", "requirements/base.txt"
+        ])
+        
+        # Copy custom env_config.py settings module
+        env_config = notes_config.file("env_config.py")
+        container = container.with_file(
+            "/app/edx-notes-api/notesserver/settings/env_config.py",
+            env_config
+        )
+        
+        # Set environment variables
+        container = (
+            container
+            .with_env_variable("APP_PORT", "8000")
+            .with_exposed_port(8000)
+        )
+        
+        # Set entrypoint
+        container = container.with_entrypoint([
+            "gunicorn",
+            "--workers=2",
+            "--name", "notes",
+            "--bind=0.0.0.0:8000",
+            "--max-requests=1000",
+            "notesserver.wsgi:application"
+        ])
+        
+        return container
