@@ -299,9 +299,10 @@ class Lehrer:
         if app_user_id == 0:
             raise ValueError("app user may not be root")
         
-        # Create app user
+        # Create app user (needs /usr/sbin in PATH for useradd)
         container = (
             container
+            .with_env_variable("PATH", "/usr/sbin:/root/.local/bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin")
             .with_exec([
                 "useradd", "--home-dir", "/openedx", "--create-home",
                 "--shell", "/bin/bash", "--uid", str(app_user_id), "app"
