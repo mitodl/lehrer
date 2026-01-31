@@ -452,18 +452,19 @@ class Lehrer:
             Container with static assets built
         """
         # Install additional editable dependencies using uv
+        # Note: -e flag only works with local directories in uv, not git URLs
         container = (
             container
             .with_exec([
-                "uv", "pip", "install", "-e",
+                "uv", "pip", "install",
                 "git+https://github.com/openedx/codejail.git@babbe784b48bb9888aa159d8b401cbe5e07f0af4#egg=codejail"
             ])
             .with_exec([
-                "uv", "pip", "install", "-e",
+                "uv", "pip", "install",
                 "git+https://github.com/openedx/django-wiki.git@0a1d555a1fa2834cc46367968aad907a5667317b#egg=django_wiki"
             ])
             .with_exec([
-                "uv", "pip", "install", "-e",
+                "uv", "pip", "install",
                 "git+https://github.com/openedx/olxcleaner.git@2f0d6c7f126cbd69c9724b7b57a0b2565330a297#egg=olxcleaner"
             ])
         )
