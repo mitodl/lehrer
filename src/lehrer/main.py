@@ -218,17 +218,19 @@ class Lehrer:
         container = (
             container
             .with_workdir("/openedx/edx-platform")
-            .with_env_variable("PATH", "/root/.local/bin:/openedx/nodeenv/bin:${PATH}")
             .with_env_variable("NPM_REGISTRY", "https://registry.npmjs.org/")
             .with_exec([
-                "nodeenv", "/openedx/nodeenv", f"--node={node_version}", "--prebuilt"
+                "sh", "-c",
+                f"nodeenv /openedx/nodeenv --node={node_version} --prebuilt"
+            ])
+            .with_env_variable("PATH", "/root/.local/bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin")
+            .with_exec([
+                "sh", "-c",
+                "npm clean-install -s --registry=https://registry.npmjs.org/"
             ])
             .with_exec([
-                "npm", "clean-install", "-s", "--registry=https://registry.npmjs.org/"
-            ])
-            .with_exec([
-                "npm", "install",
-                "git+https://git@github.com/verificient/edx-proctoring-proctortrack.git#f0fa9edbd16aa5af5a41ac309d2609e529ea8732"
+                "sh", "-c",
+                "npm install 'git+https://git@github.com/verificient/edx-proctoring-proctortrack.git#f0fa9edbd16aa5af5a41ac309d2609e529ea8732'"
             ])
         )
         
@@ -310,7 +312,7 @@ class Lehrer:
         # Set up PATH
         container = container.with_env_variable(
             "PATH",
-            "/openedx/.local/bin:/openedx/bin:/openedx/edx-platform/node_modules/.bin:/openedx/nodeenv/bin:${PATH}"
+            "/openedx/.local/bin:/openedx/bin:/openedx/edx-platform/node_modules/.bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin"
         )
         
         # Make bin directory executable
