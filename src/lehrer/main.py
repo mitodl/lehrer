@@ -304,16 +304,18 @@ class Lehrer:
             raise ValueError("app user may not be root")
         
         # Create app user (needs /usr/sbin in PATH for useradd)
+        # Copy tutor bin and set permissions before switching to app user
         container = (
             container
             .with_env_variable("PATH", "/usr/sbin:/root/.local/bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin")
+            .with_directory("/openedx/bin", tutor_bin)
+            .with_exec(["chmod", "-R", "a+x", "/openedx/bin"])
             .with_exec([
                 "useradd", "--home-dir", "/openedx", "--create-home",
                 "--shell", "/bin/bash", "--uid", str(app_user_id), "app"
             ])
             .with_user(str(app_user_id))
             .with_mounted_file("/usr/local/bin/dockerize", dockerize_bin)
-            .with_directory("/openedx/bin", tutor_bin)
         )
         
         # Set up PATH
@@ -321,9 +323,6 @@ class Lehrer:
             "PATH",
             "/openedx/.local/bin:/openedx/bin:/openedx/edx-platform/node_modules/.bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin"
         )
-        
-        # Make bin directory executable
-        container = container.with_exec(["chmod", "-R", "a+x", "/openedx/bin"])
         
         # Install edx-platform in editable mode
         container = (
