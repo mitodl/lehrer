@@ -194,6 +194,21 @@ dagger call build-platform \
   [...other args...]
 ```
 
+### Python Version Selection
+
+By default:
+- **master branch**: Uses Python 3.12
+- **Other releases (sumac, redwood, etc.)**: Use Python 3.11
+
+Override with `--python-version`:
+```bash
+dagger call build-platform \
+  --deployment-name mitxonline \
+  --release-name master \
+  --python-version 3.11 \
+  [...other args...]
+```
+
 ## Differences from Earthfile
 
 ### Key Changes

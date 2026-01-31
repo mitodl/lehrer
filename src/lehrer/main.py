@@ -552,7 +552,7 @@ class Lehrer:
         theme_source: dagger.Directory | None = None,
         theme_repo: str | None = None,
         theme_branch: str | None = None,
-        python_version: str = "3.11",
+        python_version: str | None = None,
         node_version: str = "20.18.0",
         locale_version: str = "master",
         translations_repo: str = "mitodl/mitxonline-translations",
@@ -565,7 +565,7 @@ class Lehrer:
         
         Args:
             deployment_name: Deployment name (e.g., mitx, mitxonline)
-            release_name: Release name (e.g., sumac, redwood)
+            release_name: Release name (e.g., master, sumac, redwood)
             pip_package_lists: Directory with pip requirements files
             pip_package_overrides: Directory with pip override requirements
             custom_settings: Directory with custom settings files
@@ -575,7 +575,7 @@ class Lehrer:
             theme_source: Local theme source (optional)
             theme_repo: Theme git repo URL (optional)
             theme_branch: Theme git branch (optional)
-            python_version: Python version (default: 3.11)
+            python_version: Python version (default: 3.12 for master, 3.11 for others)
             node_version: Node.js version (default: 20.18.0)
             locale_version: openedx-i18n version (default: master, repo is archived)
             translations_repo: Translations repo (default: mitodl/mitxonline-translations)
@@ -585,6 +585,10 @@ class Lehrer:
         Returns:
             Container ready to be deployed
         """
+        # Determine Python version based on release if not explicitly provided
+        if python_version is None:
+            python_version = "3.12" if release_name == "master" else "3.11"
+        
         # Step 1: Create base container with apt packages
         container = self.apt_base(python_version=python_version)
         
