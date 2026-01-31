@@ -305,12 +305,14 @@ class Lehrer:
         
         # Create app user (needs /usr/sbin in PATH for useradd)
         # Copy tutor bin and set permissions before switching to app user
+        # Move Python packages from /root/.local to /openedx/.local
         # Then chown directories that were created as root
         container = (
             container
             .with_env_variable("PATH", "/usr/sbin:/root/.local/bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin")
             .with_directory("/openedx/bin", tutor_bin)
             .with_exec(["chmod", "-R", "a+x", "/openedx/bin"])
+            .with_exec(["sh", "-c", "cp -r /root/.local /openedx/.local"])
             .with_exec([
                 "useradd", "--home-dir", "/openedx", "--create-home",
                 "--shell", "/bin/bash", "--uid", str(app_user_id), "app"
