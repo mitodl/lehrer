@@ -57,12 +57,15 @@ class Lehrer:
             .from_(f"python:{python_version}-bookworm")
             .with_env_variable("DEBIAN_FRONTEND", "noninteractive")
             .with_file("/usr/local/bin/uv", uv_binary)
-            # Set uv environment variables
+            # Set uv environment variables for virtual environment
+            # uv will automatically create the venv when first needed
             .with_env_variable("UV_NO_MANAGED_PYTHON", "1")
             .with_env_variable("UV_PYTHON_DOWNLOADS", "never")
             .with_env_variable("UV_COMPILE_BYTECODE", "1")
             .with_env_variable("UV_LINK_MODE", "copy")
-            .with_env_variable("PATH", "/root/.local/bin:/usr/local/bin:/usr/bin:/bin")
+            .with_env_variable("UV_PROJECT_ENVIRONMENT", "/openedx/venv")
+            .with_env_variable("VIRTUAL_ENV", "/openedx/venv")
+            .with_env_variable("PATH", "/openedx/venv/bin:/usr/local/bin:/usr/bin:/bin")
             .with_exec(["apt", "update"])
             .with_exec(["apt", "install", "-y", "--no-install-recommends"] + apt_packages)
             .with_exec(["apt", "autoremove", "-y"])
@@ -206,8 +209,9 @@ class Lehrer:
                 "cp /openedx/edx-platform/requirements/edx/assets.txt /root/pip_package_lists/edx_assets.txt"
             ])
             # Install base Python dependencies using uv (much faster than pip)
+            # uv automatically uses the VIRTUAL_ENV set in apt_base
             .with_exec([
-                "uv", "pip", "install", "--system",
+                "uv", "pip", "install",
                 "-r", "/root/pip_package_lists/edx_base.txt",
                 "-r", "/root/pip_package_lists/edx_assets.txt",
                 "-r", f"/root/pip_package_lists/{release_name}/{deployment_name}.txt"
@@ -216,7 +220,7 @@ class Lehrer:
         
         # Special handling for mitxonline
         if deployment_name == "mitxonline":
-            container = container.with_exec(["uv", "pip", "uninstall", "--system", "edx-name-affirmation"])
+            container = container.with_exec(["uv", "pip", "uninstall", "edx-name-affirmation"])
         
         # Fix lxml/xmlsec compatibility issues
         # Note: Use pip instead of uv here because the override file uses --no-binary flags
@@ -225,7 +229,7 @@ class Lehrer:
             container
             .with_exec(["pip", "uninstall", "--yes", "lxml", "xmlsec"])
             .with_exec([
-                "pip", "install", "--no-warn-script-location", "--user", "--no-cache-dir",
+                "pip", "install", "--no-cache-dir",
                 "-r", f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt"
             ])
         )
@@ -234,13 +238,12 @@ class Lehrer:
         container = (
             container
             .with_workdir("/openedx/edx-platform")
-            .with_env_variable("PATH", "/root/.local/bin:/usr/local/bin:/usr/bin:/bin")
             .with_env_variable("NPM_REGISTRY", "https://registry.npmjs.org/")
             .with_exec([
                 "sh", "-c",
                 f"nodeenv /openedx/nodeenv --node={node_version} --prebuilt"
             ])
-            .with_env_variable("PATH", "/root/.local/bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin")
+            .with_env_variable("PATH", "/openedx/venv/bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin")
             .with_exec([
                 "sh", "-c",
                 "npm clean-install -s --registry=https://registry.npmjs.org/"
@@ -321,14 +324,12 @@ class Lehrer:
         
         # Create app user (needs /usr/sbin in PATH for useradd)
         # Copy tutor bin and set permissions before switching to app user
-        # Move Python packages from /root/.local to /openedx/.local
-        # Then chown directories that were created as root
+        # Then chown entire /openedx directory (includes venv, edx-platform, themes, etc.)
         container = (
             container
-            .with_env_variable("PATH", "/usr/sbin:/root/.local/bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin")
+            .with_env_variable("PATH", "/usr/sbin:/openedx/venv/bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin")
             .with_directory("/openedx/bin", tutor_bin)
             .with_exec(["chmod", "-R", "a+x", "/openedx/bin"])
-            .with_exec(["sh", "-c", "cp -r /root/.local /openedx/.local"])
             .with_exec([
                 "useradd", "--home-dir", "/openedx", "--create-home",
                 "--shell", "/bin/bash", "--uid", str(app_user_id), "app"
@@ -338,17 +339,17 @@ class Lehrer:
             .with_mounted_file("/usr/local/bin/dockerize", dockerize_bin)
         )
         
-        # Set up PATH
+        # Set up PATH for app user
         container = container.with_env_variable(
             "PATH",
-            "/openedx/.local/bin:/openedx/bin:/openedx/edx-platform/node_modules/.bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin"
+            "/openedx/venv/bin:/openedx/bin:/openedx/edx-platform/node_modules/.bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin"
         )
         
         # Install edx-platform in editable mode using uv
         container = (
             container
             .with_workdir("/openedx/edx-platform")
-            .with_exec(["uv", "pip", "install", "--system", "-e", "."])
+            .with_exec(["uv", "pip", "install", "-e", "."])
             .with_exec(["mkdir", "-p", "/openedx/config", "./lms/envs/mitol", "./cms/envs/mitol"])
         )
         
@@ -455,15 +456,15 @@ class Lehrer:
         container = (
             container
             .with_exec([
-                "uv", "pip", "install", "--system", "-e",
+                "uv", "pip", "install", "-e",
                 "git+https://github.com/openedx/codejail.git@babbe784b48bb9888aa159d8b401cbe5e07f0af4#egg=codejail"
             ])
             .with_exec([
-                "uv", "pip", "install", "--system", "-e",
+                "uv", "pip", "install", "-e",
                 "git+https://github.com/openedx/django-wiki.git@0a1d555a1fa2834cc46367968aad907a5667317b#egg=django_wiki"
             ])
             .with_exec([
-                "uv", "pip", "install", "--system", "-e",
+                "uv", "pip", "install", "-e",
                 "git+https://github.com/openedx/olxcleaner.git@2f0d6c7f126cbd69c9724b7b57a0b2565330a297#egg=olxcleaner"
             ])
         )
@@ -519,7 +520,7 @@ class Lehrer:
             container
             .with_env_variable("DJANGO_SETTINGS_MODULE", "invalid")
             # Byte-compile Python files for faster startup
-            .with_exec(["python", "-m", "compileall", "-q", "/openedx/edx-platform", "/openedx/.local"])
+            .with_exec(["python", "-m", "compileall", "-q", "/openedx/edx-platform", "/openedx/venv"])
             # Set up SSH config for GitHub
             .with_exec(["mkdir", "/openedx/.ssh"])
             .with_exec(["chown", "app:app", "/openedx/.ssh"])
