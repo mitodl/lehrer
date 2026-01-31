@@ -451,25 +451,6 @@ class Lehrer:
         Returns:
             Container with static assets built
         """
-        # Install additional editable dependencies
-        # Use pip instead of uv to match Earthfile behavior with -e flag
-        # pip handles editable git installs differently than uv
-        container = (
-            container
-            .with_exec([
-                "pip", "install", "--no-cache-dir", "-e",
-                "git+https://github.com/openedx/codejail.git@babbe784b48bb9888aa159d8b401cbe5e07f0af4#egg=codejail"
-            ])
-            .with_exec([
-                "pip", "install", "--no-cache-dir", "-e",
-                "git+https://github.com/openedx/django-wiki.git@0a1d555a1fa2834cc46367968aad907a5667317b#egg=django_wiki"
-            ])
-            .with_exec([
-                "pip", "install", "--no-cache-dir", "-e",
-                "git+https://github.com/openedx/olxcleaner.git@2f0d6c7f126cbd69c9724b7b57a0b2565330a297#egg=olxcleaner"
-            ])
-        )
-        
         # Set environment for asset building
         container = (
             container
