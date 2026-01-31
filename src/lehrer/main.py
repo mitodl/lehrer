@@ -219,11 +219,13 @@ class Lehrer:
             container = container.with_exec(["uv", "pip", "uninstall", "--system", "edx-name-affirmation"])
         
         # Fix lxml/xmlsec compatibility issues
+        # Note: Use pip instead of uv here because the override file uses --no-binary flags
+        # that need special handling
         container = (
             container
-            .with_exec(["uv", "pip", "uninstall", "--system", "lxml", "xmlsec"])
+            .with_exec(["pip", "uninstall", "--yes", "lxml", "xmlsec"])
             .with_exec([
-                "uv", "pip", "install", "--system",
+                "pip", "install", "--no-warn-script-location", "--user", "--no-cache-dir",
                 "-r", f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt"
             ])
         )
