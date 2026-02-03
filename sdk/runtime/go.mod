@@ -7,7 +7,7 @@ toolchain go1.23.6
 require (
 	github.com/distribution/reference v0.6.0
 	github.com/iancoleman/strcase v0.3.0
-	github.com/pelletier/go-toml/v2 v2.1.1
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/sync v0.15.0
 )
