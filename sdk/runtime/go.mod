@@ -20,7 +20,7 @@ require (
 )
 
 require (
-	github.com/99designs/gqlgen v0.17.75
+	github.com/99designs/gqlgen v0.17.86
 	github.com/Khan/genqlient v0.8.1
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
