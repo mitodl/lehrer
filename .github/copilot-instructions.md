@@ -23,15 +23,17 @@ The `sdk/` directory is a local editable install of the Dagger Python SDK — do
 dagger call apt-base --python-version 3.11 stdout
 
 # Full platform build
-dagger call build-platform \
-  --deployment-name mitxonline \
-  --release-name sumac \
-  --pip-package-lists ./pip_package_lists \
-  --pip-package-overrides ./pip_package_overrides \
-  --custom-settings ./settings \
-  --edx-platform-git-branch open-release/sumac.master \
-  --theme-git-repo https://github.com/mitodl/mitxonline-theme \
-  --theme-git-branch main
+dagger call build-platform  \
+--deployment-name mitxonline  \
+--release-name master \
+--pip-package-lists ./pip_package_lists \
+--pip-package-overrides ./pip_package_overrides \
+--custom-settings ./settings \
+--platform-repo "https://github.com/openedx/edx-platform" \
+--platform-branch master \
+--theme-repo "https://github.com/mitodl/mitxonline-theme" \
+--theme-branch main \
+--python-version 3.12
 ```
 
 There are no automated tests in this repository.
