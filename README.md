@@ -81,14 +81,16 @@ Chains all build steps together for a complete build.
 
 ```bash
 dagger call build-platform \
-  --deployment-name mitxonline \
-  --release-name sumac \
-  --pip-package-lists ./pip_package_lists \
-  --pip-package-overrides ./pip_package_overrides \
-  --custom-settings ./settings \
-  --edx-platform-git-branch "open-release/sumac.master" \
-  --theme-git-repo "https://github.com/mitodl/mitxonline-theme" \
-  --theme-git-branch "main"
+--deployment-name mitxonline \
+--release-name master \
+--pip-package-lists ./pip_package_lists \
+--pip-package-overrides ./pip_package_overrides \
+--custom-settings ./settings \
+--platform-repo "https://github.com/openedx/edx-platform" \
+--platform-branch master \
+--theme-repo "https://github.com/mitodl/mitxonline-theme" \
+--theme-branch main \
+--python-version 3.12
 ```
 
 #### `publish-platform`
