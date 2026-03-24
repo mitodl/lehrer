@@ -1,8 +1,8 @@
 celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules
-granian==2.6.1
+granian==2.7.2
 django-redis==6.0.0
 edx-sga
-edx-sysadmin==0.4.0
+edx-sysadmin==0.4.1
 git+https://github.com/raccoongang/xblock-pdf.git@d8948bf3c7127e23be202d1f8600f1ba293ba978#egg=xblock-pdf
 invideoquiz-xblock
 nodeenv>=1.7.0
@@ -15,7 +15,7 @@ ol-openedx-rapid-response-reports==0.4.0
 ol-openedx-sentry==0.3.0
 openedx-scorm-xblock>=19.0.1,<19.1.0
 pip==25.3
-pydantic-settings==2.12.0
+pydantic-settings==2.13.1
 rapid-response-xblock==0.11.0
 
 # Experimental Plugins for AI features
@@ -34,3 +34,7 @@ opentelemetry-api
 
 # Utilities to help with schema debugging and other common tasks
 django-extensions
+
+# We need to keep this pinned until a string of dependencies terminating on
+# PyFilesystem2 gets updated - https://github.com/PyFilesystem/pyfilesystem2/pull/589
+setuptools==81.0.0
