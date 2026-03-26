@@ -34,3 +34,5 @@ opentelemetry-api
 
 # Utilities to help with schema debugging and other common tasks
 django-extensions
+
+setuptools==81.0.0
