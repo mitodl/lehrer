@@ -122,7 +122,7 @@ class Lehrer:
             Container with edx-platform at /openedx/edx-platform and venv created
         """
         if source is not None:
-            container = container.with_mounted_directory("/openedx/edx-platform", source)
+            container = container.with_directory("/openedx/edx-platform", source)
         elif edx_platform_git_repo and edx_platform_git_branch:
             container = container.with_exec([
                 "git", "clone", "--depth", "1", "--branch", edx_platform_git_branch,
@@ -158,7 +158,7 @@ class Lehrer:
         theme_path = f"/openedx/themes/{deployment_name}"
         
         if theme_source is not None:
-            return container.with_mounted_directory(theme_path, theme_source)
+            return container.with_directory(theme_path, theme_source)
         
         if not theme_git_repo or not theme_git_branch:
             raise ValueError("Must provide either theme_source or both theme_git_repo and theme_git_branch")
@@ -335,7 +335,7 @@ class Lehrer:
             ])
             .with_exec(["chown", "-R", f"{app_user_id}:{app_user_id}", "/openedx"])
             .with_user(str(app_user_id))
-            .with_mounted_file("/usr/local/bin/dockerize", dockerize_bin)
+            .with_file("/usr/local/bin/dockerize", dockerize_bin)
         )
         
         # Set up PATH for app user
@@ -1110,14 +1110,14 @@ class Lehrer:
         
         # Mount slot config files
         footer_file = slot_config.file("Footer.jsx")
-        container = container.with_mounted_file("/app/mfe/Footer.jsx", footer_file)
+        container = container.with_file("/app/mfe/Footer.jsx", footer_file)
         
         env_config_file = slot_config.file(f"{config_file}.env.jsx")
-        container = container.with_mounted_file("/app/mfe/env.config.jsx", env_config_file)
+        container = container.with_file("/app/mfe/env.config.jsx", env_config_file)
         
         if is_learning_mfe:
             common_config_file = slot_config.file(f"{deployment_name}/common-mfe-config.env.jsx")
-            container = container.with_mounted_file("/app/mfe/common-mfe-config.env.jsx", common_config_file)
+            container = container.with_file("/app/mfe/common-mfe-config.env.jsx", common_config_file)
         
         # Ensure PORT is set for the dev server
         container = container.with_env_variable("PORT", str(port))
