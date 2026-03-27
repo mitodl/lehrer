@@ -61,7 +61,7 @@ class Lehrer:
             # uv will automatically create the venv when first needed
             .with_env_variable("UV_NO_MANAGED_PYTHON", "1")
             .with_env_variable("UV_PYTHON_DOWNLOADS", "never")
-            .with_env_variable("UV_COMPILE_BYTECODE", "1")
+            .with_env_variable("UV_NO_CACHE", "1")
             .with_env_variable("UV_LINK_MODE", "copy")
             .with_env_variable("UV_PROJECT_ENVIRONMENT", "/openedx/venv")
             .with_env_variable("VIRTUAL_ENV", "/openedx/venv")
@@ -571,24 +571,20 @@ class Lehrer:
         if python_version is None:
             python_version = "3.12" if release_name == "master" else "3.11"
         
-        # Step 1: Create base container with apt packages
-        container = self.apt_base(python_version=python_version)
-        
-        # Step 2: Get locales if needed
-        if include_locales:
-            container = self.locales(container, locale_version=locale_version)
-        
-        # Step 3: Get source code
-        container = self.get_code(
-            container,
+        # ── Deps chain ────────────────────────────────────────────────────────
+        # Run the heavy install steps on a throw-away chain.  All build caches
+        # (npm ~/.npm, pip /tmp artefacts) accumulate here and are discarded
+        # when we copy only the three needed directories to the clean base
+        # below, mirroring the Earthfile's multi-stage `collected` approach.
+        deps = self.apt_base(python_version=python_version)
+        deps = self.get_code(
+            deps,
             source=source,
             edx_platform_git_repo=platform_repo,
             edx_platform_git_branch=platform_branch,
         )
-        
-        # Step 4: Install dependencies
-        container = self.install_deps(
-            container,
+        deps = self.install_deps(
+            deps,
             deployment_name=deployment_name,
             release_name=release_name,
             pip_package_lists=pip_package_lists,
@@ -596,7 +592,27 @@ class Lehrer:
             node_version=node_version,
         )
         
-        # Step 5: Get themes
+        # ── Clean base ────────────────────────────────────────────────────────
+        # Start fresh (equivalent to Earthfile `collected: FROM +apt-base`).
+        # Copy only the built artefacts; npm/uv/pip caches are left behind.
+        container = self.apt_base(python_version=python_version)
+        container = (
+            container
+            .with_directory("/openedx/venv", deps.directory("/openedx/venv"))
+            .with_directory("/openedx/edx-platform", deps.directory("/openedx/edx-platform"))
+            .with_directory("/openedx/nodeenv", deps.directory("/openedx/nodeenv"))
+            # Carry the PATH that install_deps set so nodeenv is on PATH
+            .with_env_variable(
+                "PATH",
+                "/openedx/venv/bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin",
+            )
+        )
+        
+        # Locales run on the clean base (not the deps chain)
+        if include_locales:
+            container = self.locales(container, locale_version=locale_version)
+        
+        # Themes are a plain directory copy; apply directly to the clean base
         if theme_source or theme_repo:
             container = self.themes(
                 container,
@@ -606,13 +622,10 @@ class Lehrer:
                 theme_git_branch=theme_branch,
             )
         
-        # Step 6: Get tutor utilities
+        # ── Remaining pipeline ────────────────────────────────────────────────
         tutor_bin = self.tutor_utils()
-        
-        # Step 7: Get dockerize binary
         dockerize_bin = self.dockerize()
         
-        # Step 8: Collect all artifacts
         container = self.collected(
             container,
             deployment_name=deployment_name,
@@ -621,18 +634,12 @@ class Lehrer:
             custom_settings=custom_settings,
             include_locales=include_locales,
         )
-        
-        # Step 9: Fetch and compile translations
         container = self.fetch_translations(
             container,
             translations_repository=translations_repo,
             translations_branch=translations_branch,
         )
-        
-        # Step 10: Build static assets
         container = self.build_static_assets(container, deployment_name=deployment_name)
-        
-        # Step 11: Finalize Docker image
         container = self.docker_image(container, deployment_name=deployment_name, release_name=release_name)
         
         return container
