@@ -271,12 +271,17 @@ class Lehrer:
         # Use plain pip (not uv) here because the override file uses inline --no-binary flags
         # that uv does not support in requirements files.
         container = container.with_exec(
-            ["pip", "uninstall", "--yes", "lxml", "xmlsec"]
+            ["uv", "pip", "uninstall", "lxml", "xmlsec"]
         ).with_exec(
             [
+                "uv",
                 "pip",
                 "install",
                 "--no-cache-dir",
+                "--no-binary",
+                "lxml",
+                "--no-binary",
+                "xmlsec",
                 "-r",
                 f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt",
             ]
