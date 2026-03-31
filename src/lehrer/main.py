@@ -271,9 +271,10 @@ class Lehrer:
         # Note: Use pip instead of uv here because the override file uses --no-binary flags
         # that need special handling
         container = container.with_exec(
-            ["pip", "uninstall", "--yes", "lxml", "xmlsec"]
+            ["uv", "pip", "uninstall", "--yes", "lxml", "xmlsec"]
         ).with_exec(
             [
+                "uv",
                 "pip",
                 "install",
                 "--no-cache-dir",
