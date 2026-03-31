@@ -268,13 +268,12 @@ class Lehrer:
             )
 
         # Fix lxml/xmlsec compatibility issues
-        # Note: Use pip instead of uv here because the override file uses --no-binary flags
-        # that need special handling
+        # Use plain pip (not uv) here because the override file uses inline --no-binary flags
+        # that uv does not support in requirements files.
         container = container.with_exec(
-            ["uv", "pip", "uninstall", "lxml", "xmlsec"]
+            ["pip", "uninstall", "--yes", "lxml", "xmlsec"]
         ).with_exec(
             [
-                "uv",
                 "pip",
                 "install",
                 "--no-cache-dir",
