@@ -1088,6 +1088,8 @@ class Lehrer:
         self,
         release_name: str = "master",
         python_version: str = "3.11",
+        notes_code: dagger.Directory | None = None,
+        notes_repo: str | None = None,
         notes_config: dagger.Directory | None = None,
     ) -> dagger.Container:
         """Build edx-notes-api service container
@@ -1098,6 +1100,8 @@ class Lehrer:
         Args:
             release_name: Git branch/tag to use (e.g., master, open-release/sumac.master)
             python_version: Python version to use (default: 3.11)
+            notes_code: Local directory with edx-notes-api source (optional)
+            notes_repo: Git repository URL (required if notes_code not provided)
             notes_config: Directory containing env_config.py (defaults to ./notes_config)
 
         Returns:
@@ -1147,19 +1151,26 @@ class Lehrer:
             "PATH", "/app/.local/bin:/usr/local/bin:/usr/bin:/bin"
         )
 
-        # Clone edx-notes-api
-        container = container.with_exec(
-            [
-                "git",
-                "clone",
-                "https://github.com/edx/edx-notes-api",
-                "--branch",
-                release_name,
-                "--depth",
-                "1",
-                "/app/edx-notes-api",
-            ]
-        )
+        # Get edx-notes-api source from local directory or Git
+        if notes_code is not None:
+            container = container.with_directory("/app/edx-notes-api", notes_code)
+        elif notes_repo:
+            container = container.with_exec(
+                [
+                    "git",
+                    "clone",
+                    notes_repo,
+                    "--branch",
+                    release_name,
+                    "--depth",
+                    "1",
+                    "/app/edx-notes-api",
+                ]
+            )
+        else:
+            raise ValueError(
+                "Must provide either notes_code or notes_repo"
+            )
 
         # Install Python dependencies
         container = container.with_exec(
