@@ -1144,7 +1144,7 @@ class Lehrer:
                 "1000",
                 "app",
             ]
-        ).with_user("1000")
+        )
 
         # Set working directory and PATH
         container = container.with_workdir("/app/edx-notes-api").with_env_variable(
@@ -1168,13 +1168,15 @@ class Lehrer:
                 ]
             )
         else:
-            raise ValueError(
-                "Must provide either notes_code or notes_repo"
-            )
+            raise ValueError("Must provide either notes_code or notes_repo")
 
-        # Install Python dependencies
-        container = container.with_exec(
-            ["pip", "install", "--no-cache-dir", "-r", "requirements/base.txt"]
+        # Install Python dependencies as root (system site-packages), then fix ownership
+        container = (
+            container.with_exec(
+                ["pip", "install", "--no-cache-dir", "-r", "requirements/base.txt"]
+            )
+            .with_exec(["chown", "-R", "app:app", "/app"])
+            .with_user("1000")
         )
 
         # Copy custom env_config.py settings module
