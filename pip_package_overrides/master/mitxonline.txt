@@ -12,4 +12,4 @@ openai==2.15.0
 ol-openedx-course-translations
 ol-openedx-auto-select-language
 
-edx-search==5.0.0
+git+https://github.com/Ardiea/edx-search.git@md/202604_get_to_post#egg=edx-search
