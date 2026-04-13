@@ -11,5 +11,3 @@ openai==2.15.0
 # install at the end to override any dependency issues
 ol-openedx-course-translations
 ol-openedx-auto-select-language
-
-git+https://github.com/Ardiea/edx-search.git@md/202604_get_to_post#egg=edx-search
