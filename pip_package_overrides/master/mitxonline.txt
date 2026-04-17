@@ -11,3 +11,6 @@ openai==2.15.0
 # install at the end to override any dependency issues
 ol-openedx-course-translations
 ol-openedx-auto-select-language
+
+# Install edx-search from mike's fork + branch 
+git+https://github.com/mitodl/edx-search.git@typesense-url-length-scale#egg=edx-search
