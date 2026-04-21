@@ -12,5 +12,5 @@ openai==2.15.0
 ol-openedx-course-translations
 ol-openedx-auto-select-language
 
-# Install edx-search from mike's fork + branch 
+# Install edx-search from mitodl's fork + branch
 git+https://github.com/mitodl/edx-search.git@fix/typesense-url-length-scale#egg=edx-search
