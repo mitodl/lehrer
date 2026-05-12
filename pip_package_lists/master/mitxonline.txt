@@ -23,6 +23,9 @@ ol-openedx-chat-xblock
 # Plugin for LTI related utilities
 ol-openedx-lti-utilities
 
+# Plugin for Open edX events/signals handling
+ol-openedx-events-handler
+
 # Allow for copying courses to children to support UAI
 ol-openedx-course-sync
 
