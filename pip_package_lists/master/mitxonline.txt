@@ -29,6 +29,9 @@ ol-openedx-events-handler
 # Allow for copying courses to children to support UAI
 ol-openedx-course-sync
 
+# Plugin to generate UAI customized courses
+ol-openedx-uai-content-customization
+
 # Open Telemetry support
 opentelemetry-api
 # opentelemetry-distro
