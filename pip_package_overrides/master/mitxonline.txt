@@ -17,4 +17,4 @@ ol-openedx-ai-static-translations
 git+https://github.com/mitodl/edx-search.git@fix/typesense-url-length-scale#egg=edx-search
 
 # Install edx-submissions from mitodl's branch
-git+https://github.com/openedx/edx-submissions.git@mitodl:fix/xqueue-csrf-exempt-session-auth#egg=edx-submissions
+git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-csrf-exempt-session-auth#egg=edx-submissions
