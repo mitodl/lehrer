@@ -440,7 +440,9 @@ class Lehrer:
                     "-p",
                     "/openedx/config",
                     "./lms/envs/mitol",
+                    "./lms/envs/models",
                     "./cms/envs/mitol",
+                    "./cms/envs/models",
                 ]
             )
         )
@@ -490,8 +492,52 @@ class Lehrer:
                     "/openedx/edx-platform/cms/envs/mitol/i18n.py",
                 ]
             )
-            # Note: custom_settings_module files (lms_settings.py, cms_settings.py, models.py, utils.py)
-            # are not currently provided. These would come from a separate directory in a full setup.
+            # django-aqueduct settings:
+            # models/base.py    → shared BaseProductionSettings, copied into both envs
+            # models/aqueduct.py → generated AqueductSettings pydantic model per service
+            # aqueduct.py       → settings module (DJANGO_SETTINGS_MODULE target)
+            .with_exec(
+                [
+                    "cp",
+                    "/tmp/custom_settings/models/base.py",
+                    "/openedx/edx-platform/lms/envs/models/base.py",
+                ]
+            )
+            .with_exec(
+                [
+                    "cp",
+                    "/tmp/custom_settings/lms/models/aqueduct.py",
+                    "/openedx/edx-platform/lms/envs/models/aqueduct.py",
+                ]
+            )
+            .with_exec(
+                [
+                    "cp",
+                    "/tmp/custom_settings/lms/aqueduct.py",
+                    "/openedx/edx-platform/lms/envs/aqueduct.py",
+                ]
+            )
+            .with_exec(
+                [
+                    "cp",
+                    "/tmp/custom_settings/models/base.py",
+                    "/openedx/edx-platform/cms/envs/models/base.py",
+                ]
+            )
+            .with_exec(
+                [
+                    "cp",
+                    "/tmp/custom_settings/cms/models/aqueduct.py",
+                    "/openedx/edx-platform/cms/envs/models/aqueduct.py",
+                ]
+            )
+            .with_exec(
+                [
+                    "cp",
+                    "/tmp/custom_settings/cms/aqueduct.py",
+                    "/openedx/edx-platform/cms/envs/aqueduct.py",
+                ]
+            )
             .with_exec(
                 [
                     "cp",
