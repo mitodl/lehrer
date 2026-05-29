@@ -46,26 +46,26 @@ class LMSProductionSettings(BaseProductionSettings, AqueductSettings):
 
     @model_validator(mode="after")
     def _derive_urlconf(self) -> LMSProductionSettings:
-        if self.ROOT_URLCONF is None:
-            self.ROOT_URLCONF = "lms.urls"
+        if getattr(self, "ROOT_URLCONF", None) is None:
+            self.ROOT_URLCONF = "lms.urls"  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")
     def _derive_segment_key(self) -> LMSProductionSettings:
         """Map env-var SEGMENT_KEY → Django LMS_SEGMENT_KEY."""
         if self.SEGMENT_KEY is not None:
-            self.LMS_SEGMENT_KEY = self.SEGMENT_KEY
+            self.LMS_SEGMENT_KEY = self.SEGMENT_KEY  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")
     def _derive_cors_credentials(self) -> LMSProductionSettings:
         """Enable CORS credentials when the relevant FEATURES flags are on."""
-        features = self.FEATURES or {}
+        features = getattr(self, "FEATURES", None) or {}
         if isinstance(features, dict) and (
             features.get("ENABLE_CORS_HEADERS")
             or features.get("ENABLE_CROSS_DOMAIN_CSRF_COOKIE")
         ):
-            object.__setattr__(self, "CORS_ALLOW_CREDENTIALS", True)
+            self.CORS_ALLOW_CREDENTIALS = True  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")
@@ -76,21 +76,21 @@ class LMSProductionSettings(BaseProductionSettings, AqueductSettings):
         """
         if not self.THIRD_PARTY_AUTH_BACKENDS:
             return self
-        features = self.FEATURES or {}
+        features = getattr(self, "FEATURES", None) or {}
         if isinstance(features, dict) and not features.get(
             "ENABLE_THIRD_PARTY_AUTH", True
         ):
             return self
-        existing = list(self.AUTHENTICATION_BACKENDS or [])
-        self.AUTHENTICATION_BACKENDS = self.THIRD_PARTY_AUTH_BACKENDS + [
+        existing = list(getattr(self, "AUTHENTICATION_BACKENDS", None) or [])
+        self.AUTHENTICATION_BACKENDS = self.THIRD_PARTY_AUTH_BACKENDS + [  # type: ignore[attr-defined]
             b for b in existing if b not in self.THIRD_PARTY_AUTH_BACKENDS
         ]
         return self
 
     @model_validator(mode="after")
     def _derive_social_auth_clean_usernames(self) -> LMSProductionSettings:
-        if self.SOCIAL_AUTH_CLEAN_USERNAMES is None:
-            self.SOCIAL_AUTH_CLEAN_USERNAMES = False  # type: ignore[assignment]
+        if getattr(self, "SOCIAL_AUTH_CLEAN_USERNAMES", None) is None:
+            self.SOCIAL_AUTH_CLEAN_USERNAMES = False  # type: ignore[attr-defined]
         return self
 
 

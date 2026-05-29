@@ -1,11 +1,11 @@
-"""Shared OL Kubernetes production settings base for both LMS and CMS.
+"""Shared production settings base for both LMS and CMS.
 
 Injected by the lehrer Dagger build into both:
-  /openedx/edx-platform/lms/envs/mitol/ol_production_base.py
-  /openedx/edx-platform/cms/envs/mitol/ol_production_base.py
+  /openedx/edx-platform/lms/envs/models/base.py
+  /openedx/edx-platform/cms/envs/models/base.py
 
-Each service's ``ol_production.py`` imports from this module using a relative
-import (``from .ol_production_base import OLBaseProductionSettings``), so the
+Each service's ``aqueduct.py`` imports from this module using a relative
+import (``from .models.base import BaseProductionSettings``), so the
 single source file works correctly in both namespaces without cross-service
 imports.
 
@@ -21,7 +21,8 @@ pydantic-settings sources are ordered highest-to-lowest priority:
 2. **YAML files** (``OL_SETTINGS_DIR``, sorted 00 → 82) — used only for
    settings whose value is a complex type: list, nested dict, etc.
    (``DATABASES``, ``CACHES``, ``JWT_AUTH``, ``FEATURES``, ``MODULESTORE``,
-   ``ALLOWED_HOSTS``, …).
+   ``ALLOWED_HOSTS``, …).  Omitted entirely when no YAML files are present
+   (e.g. during local development without a K8s config directory).
 
 3. **AqueductSettings field defaults** — typed snapshot of common.py
    defaults captured by ``manage.py generate_aqueduct_settings``.
@@ -147,32 +148,39 @@ class BaseProductionSettings(BaseSettings):
            cannot be represented cleanly as individual env vars.  Files are
            deep-merged so ``FEATURES`` from a service-specific ConfigMap is
            merged into, not replaced by, the base ``FEATURES`` dict.
+           Omitted entirely when no YAML files are found so that an absent
+           ``OL_SETTINGS_DIR`` does not cause a runtime validation error.
         """
-        return (
-            env_settings,
-            YamlConfigSettingsSource(
-                settings_cls,
-                yaml_file=_sorted_yaml_files(_SETTINGS_DIR),
-                deep_merge=True,
-            ),
-        )
+        sources: list = [env_settings]
+        yaml_files = _sorted_yaml_files(_SETTINGS_DIR)
+        if yaml_files:
+            sources.append(
+                YamlConfigSettingsSource(
+                    settings_cls,
+                    yaml_file=yaml_files,
+                    deep_merge=True,
+                )
+            )
+        return tuple(sources)
 
     # ------------------------------------------------------------------
     # Shared derived-setting validators
     # ------------------------------------------------------------------
 
     @model_validator(mode="after")
-    def _derive_celery_queue_names(self) -> "BaseProductionSettings":
+    def _derive_celery_queue_names(self) -> BaseProductionSettings:
         """Build CELERY_DEFAULT_* queue names from SERVICE_VARIANT."""
-        if self.CELERY_DEFAULT_QUEUE is None:
-            queue = f"edx.{self.SERVICE_VARIANT}.core.default"
-            self.CELERY_DEFAULT_QUEUE = queue
-            self.CELERY_DEFAULT_ROUTING_KEY = queue  # type: ignore[attr-defined]
-            self.CELERY_DEFAULT_EXCHANGE = queue  # type: ignore[attr-defined]
+        if getattr(self, "CELERY_DEFAULT_QUEUE", None) is None:
+            service_variant = getattr(self, "SERVICE_VARIANT", None)
+            if service_variant:
+                queue = f"edx.{service_variant}.core.default"
+                self.CELERY_DEFAULT_QUEUE = queue  # type: ignore[attr-defined]
+                self.CELERY_DEFAULT_ROUTING_KEY = queue  # type: ignore[attr-defined]
+                self.CELERY_DEFAULT_EXCHANGE = queue  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")
-    def _derive_broker_url(self) -> "BaseProductionSettings":
+    def _derive_broker_url(self) -> BaseProductionSettings:
         """Build BROKER_URL from CELERY_BROKER_* components.
 
         CELERY_BROKER_HOSTNAME and CELERY_BROKER_PASSWORD arrive as flat env
@@ -189,7 +197,7 @@ class BaseProductionSettings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_static_paths(self) -> "BaseProductionSettings":
+    def _derive_static_paths(self) -> BaseProductionSettings:
         """Override STATIC_ROOT / STATIC_URL from *_BASE env-var variants."""
         if self.STATIC_ROOT_BASE:
             self.STATIC_ROOT = self.STATIC_ROOT_BASE  # type: ignore[assignment]
@@ -197,52 +205,56 @@ class BaseProductionSettings(BaseSettings):
             url = self.STATIC_URL_BASE
             if not url.endswith("/"):
                 url += "/"
-            self.STATIC_URL = url
+            self.STATIC_URL = url  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")
-    def _derive_mako_module_dir(self) -> "BaseProductionSettings":
+    def _derive_mako_module_dir(self) -> BaseProductionSettings:
         """MAKO_MODULE_DIR lives in the system temp dir, keyed by service variant."""
-        if self.MAKO_MODULE_DIR is None:
-            self.MAKO_MODULE_DIR = os.path.join(  # type: ignore[assignment]
-                tempfile.gettempdir(), f"edx_mako_{self.SERVICE_VARIANT}"
-            )
+        if getattr(self, "MAKO_MODULE_DIR", None) is None:
+            service_variant = getattr(self, "SERVICE_VARIANT", None)
+            if service_variant:
+                self.MAKO_MODULE_DIR = os.path.join(  # type: ignore[attr-defined]
+                    tempfile.gettempdir(), f"edx_mako_{service_variant}"
+                )
         return self
 
     @model_validator(mode="after")
-    def _derive_statici18n_root(self) -> "BaseProductionSettings":
+    def _derive_statici18n_root(self) -> BaseProductionSettings:
         """STATICI18N_ROOT mirrors STATIC_ROOT."""
-        if self.STATICI18N_ROOT is None and self.STATIC_ROOT:
-            self.STATICI18N_ROOT = self.STATIC_ROOT
+        if getattr(self, "STATICI18N_ROOT", None) is None:
+            static_root = getattr(self, "STATIC_ROOT", None)
+            if static_root:
+                self.STATICI18N_ROOT = static_root  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")
-    def _derive_language_settings(self) -> "BaseProductionSettings":
+    def _derive_language_settings(self) -> BaseProductionSettings:
         """Populate LANGUAGE_COOKIE_NAME (from YAML alias) and LANGUAGE_DICT."""
         if self.LANGUAGE_COOKIE:
-            self.LANGUAGE_COOKIE_NAME = self.LANGUAGE_COOKIE
-        if self.LANGUAGES:
-            self.LANGUAGE_DICT = dict(self.LANGUAGES)  # type: ignore[arg-type, attr-defined]
+            self.LANGUAGE_COOKIE_NAME = self.LANGUAGE_COOKIE  # type: ignore[attr-defined]
+        languages = getattr(self, "LANGUAGES", None)
+        if languages:
+            self.LANGUAGE_DICT = dict(languages)  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")
-    def _derive_elastic_search_config(self) -> "BaseProductionSettings":
+    def _derive_elastic_search_config(self) -> BaseProductionSettings:
         """Use ELASTIC_SEARCH_CONFIG_ES7 as the authoritative search config."""
         if self.ELASTIC_SEARCH_CONFIG_ES7:
-            object.__setattr__(
-                self, "ELASTIC_SEARCH_CONFIG", self.ELASTIC_SEARCH_CONFIG_ES7
-            )
+            self.ELASTIC_SEARCH_CONFIG = self.ELASTIC_SEARCH_CONFIG_ES7  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")
-    def _derive_timezone(self) -> "BaseProductionSettings":
+    def _derive_timezone(self) -> BaseProductionSettings:
         """Align Django TIME_ZONE with Celery's timezone."""
-        if self.CELERY_TIMEZONE:
-            self.TIME_ZONE = self.CELERY_TIMEZONE
+        celery_timezone = getattr(self, "CELERY_TIMEZONE", None)
+        if celery_timezone:
+            self.TIME_ZONE = celery_timezone  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")
-    def _derive_logging(self) -> "BaseProductionSettings":
+    def _derive_logging(self) -> BaseProductionSettings:
         """Build LOGGING from log-dir / environment / loglevel.
 
         All three inputs are flat scalars arriving as env vars; they are
@@ -251,10 +263,11 @@ class BaseProductionSettings(BaseSettings):
         """
         from openedx.core.lib.logsettings import get_logger_config  # noqa: PLC0415
 
+        service_variant = getattr(self, "SERVICE_VARIANT", None)
         self.LOGGING = get_logger_config(  # type: ignore[attr-defined]
             self.LOG_DIR,
             logging_env=self.LOGGING_ENV,
             local_loglevel=self.LOCAL_LOGLEVEL,
-            service_variant=self.SERVICE_VARIANT,
+            service_variant=service_variant,
         )
         return self

@@ -40,8 +40,8 @@ class CMSProductionSettings(BaseProductionSettings, AqueductSettings):
 
     @model_validator(mode="after")
     def _derive_urlconf(self) -> CMSProductionSettings:
-        if self.ROOT_URLCONF is None:
-            self.ROOT_URLCONF = "cms.urls"
+        if getattr(self, "ROOT_URLCONF", None) is None:
+            self.ROOT_URLCONF = "cms.urls"  # type: ignore[attr-defined]
         return self
 
 
