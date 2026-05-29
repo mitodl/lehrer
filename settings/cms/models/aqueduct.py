@@ -9,56 +9,12 @@
 
 from __future__ import annotations
 
-import datetime
-from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-class DatabasesEntry(TypedDict, total=False):
-    ATOMIC_REQUESTS: bool
-    AUTOCOMMIT: bool
-    CONN_HEALTH_CHECKS: bool
-    CONN_MAX_AGE: int
-    ENGINE: str
-    HOST: str
-    NAME: str
-    OPTIONS: dict[str, Any]
-    PASSWORD: str
-    PORT: str
-    TEST: dict[str, Any]
-    TIME_ZONE: None
-    USER: str
-
-
-class ElasticFieldMappingsEntry(TypedDict, total=False):
-    type: str
-
-
-class EventTrackingBackendsEntry(TypedDict, total=False):
-    ENGINE: str
-    OPTIONS: dict[str, Any]
-
-
-class ModulestoreEntry(TypedDict, total=False):
-    ENGINE: str
-    OPTIONS: dict[str, Any]
-
-
-class StoragesEntry(TypedDict, total=False):
-    BACKEND: str
-
-
-class TrackingBackendsEntry(TypedDict, total=False):
-    ENGINE: str
-    OPTIONS: dict[str, Any]
-
-
-class WebpackLoaderEntry(TypedDict, total=False):
-    BUNDLE_DIR_NAME: str
-    STATS_FILE: str
+from path import Path
+import datetime
 
 
 class AqueductSettings(BaseSettings):
@@ -73,828 +29,8 @@ class AqueductSettings(BaseSettings):
         extra="allow",
     )
 
-    # ===== django =====
-    ADMINS: list[Any] = Field(default_factory=lambda: [])
-    ALLOWED_HOSTS: list[Any] = Field(default_factory=lambda: ["*"])
-    AUTHENTICATION_BACKENDS: list[Any] = Field(
-        default_factory=lambda: [
-            "auth_backends.backends.EdXOAuth2",
-            "rules.permissions.ObjectPermissionBackend",
-            "django.contrib.auth.backends.AllowAllUsersModelBackend",
-            "bridgekeeper.backends.RulePermissionBackend",
-        ]
-    )
-    AUTH_PASSWORD_VALIDATORS: list[Any] = Field(
-        default_factory=lambda: [
-            {
-                "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
-            },
-            {
-                "NAME": "common.djangoapps.util.password_policy_validators.MinimumLengthValidator",
-                "OPTIONS": {"min_length": 8},
-            },
-            {
-                "NAME": "common.djangoapps.util.password_policy_validators.MaximumLengthValidator",
-                "OPTIONS": {"max_length": 75},
-            },
-        ]
-    )
-    CACHES: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "course_structure_cache": {
-                "KEY_PREFIX": "course_structure",
-                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
-                "LOCATION": ["localhost:11211"],
-                "TIMEOUT": "604800",
-                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
-                "OPTIONS": {
-                    "no_delay": True,
-                    "ignore_exc": True,
-                    "use_pooling": True,
-                    "connect_timeout": 0.5,
-                },
-            },
-            "celery": {
-                "KEY_PREFIX": "celery",
-                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
-                "LOCATION": ["localhost:11211"],
-                "TIMEOUT": "7200",
-                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
-                "OPTIONS": {
-                    "no_delay": True,
-                    "ignore_exc": True,
-                    "use_pooling": True,
-                    "connect_timeout": 0.5,
-                },
-            },
-            "mongo_metadata_inheritance": {
-                "KEY_PREFIX": "mongo_metadata_inheritance",
-                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
-                "LOCATION": ["localhost:11211"],
-                "TIMEOUT": 300,
-                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
-                "OPTIONS": {
-                    "no_delay": True,
-                    "ignore_exc": True,
-                    "use_pooling": True,
-                    "connect_timeout": 0.5,
-                },
-            },
-            "staticfiles": {
-                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
-                "LOCATION": ["localhost:11211"],
-                "KEY_PREFIX": "staticfiles_general",
-                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
-                "OPTIONS": {
-                    "no_delay": True,
-                    "ignore_exc": True,
-                    "use_pooling": True,
-                    "connect_timeout": 0.5,
-                },
-            },
-            "default": {
-                "VERSION": "1",
-                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
-                "LOCATION": ["localhost:11211"],
-                "KEY_PREFIX": "default",
-                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
-                "OPTIONS": {
-                    "no_delay": True,
-                    "ignore_exc": True,
-                    "use_pooling": True,
-                    "connect_timeout": 0.5,
-                },
-            },
-            "configuration": {
-                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
-                "LOCATION": ["localhost:11211"],
-                "KEY_PREFIX": "configuration",
-                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
-                "OPTIONS": {
-                    "no_delay": True,
-                    "ignore_exc": True,
-                    "use_pooling": True,
-                    "connect_timeout": 0.5,
-                },
-            },
-            "general": {
-                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
-                "LOCATION": ["localhost:11211"],
-                "KEY_PREFIX": "general",
-                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
-                "OPTIONS": {
-                    "no_delay": True,
-                    "ignore_exc": True,
-                    "use_pooling": True,
-                    "connect_timeout": 0.5,
-                },
-            },
-        }
-    )
-    CSRF_COOKIE_AGE: int = Field(default=31449600)
-    CSRF_COOKIE_SECURE: bool = Field(default=False)
-    CSRF_TRUSTED_ORIGINS: list[Any] = Field(default_factory=lambda: [])
-    DATABASES: dict[str, DatabasesEntry] = Field(
-        default_factory=lambda: {
-            "default": {
-                "ATOMIC_REQUESTS": True,
-                "CONN_MAX_AGE": 0,
-                "ENGINE": "django.db.backends.mysql",
-                "HOST": "127.0.0.1",
-                "NAME": "edxapp",
-                "OPTIONS": {},
-                "PASSWORD": "password",  # pragma: allowlist secret
-                "PORT": "3306",
-                "USER": "edxapp001",
-                "AUTOCOMMIT": True,
-                "CONN_HEALTH_CHECKS": False,
-                "TIME_ZONE": None,
-                "TEST": {
-                    "CHARSET": None,
-                    "COLLATION": None,
-                    "MIGRATE": True,
-                    "MIRROR": None,
-                    "NAME": None,
-                },
-            },
-            "read_replica": {
-                "CONN_MAX_AGE": 0,
-                "ENGINE": "django.db.backends.mysql",
-                "HOST": "127.0.0.1",
-                "NAME": "edxapp",
-                "OPTIONS": {},
-                "PASSWORD": "password",  # pragma: allowlist secret
-                "PORT": "3306",
-                "USER": "edxapp001",
-                "ATOMIC_REQUESTS": False,
-                "AUTOCOMMIT": True,
-                "CONN_HEALTH_CHECKS": False,
-                "TIME_ZONE": None,
-                "TEST": {
-                    "CHARSET": None,
-                    "COLLATION": None,
-                    "MIGRATE": True,
-                    "MIRROR": None,
-                    "NAME": None,
-                },
-            },
-            "student_module_history": {
-                "CONN_MAX_AGE": 0,
-                "ENGINE": "django.db.backends.mysql",
-                "HOST": "127.0.0.1",
-                "NAME": "edxapp_csmh",
-                "OPTIONS": {},
-                "PASSWORD": "password",  # pragma: allowlist secret
-                "PORT": "3306",
-                "USER": "edxapp001",
-                "ATOMIC_REQUESTS": False,
-                "AUTOCOMMIT": True,
-                "CONN_HEALTH_CHECKS": False,
-                "TIME_ZONE": None,
-                "TEST": {
-                    "CHARSET": None,
-                    "COLLATION": None,
-                    "MIGRATE": True,
-                    "MIRROR": None,
-                    "NAME": None,
-                },
-            },
-        }
-    )
-    DATABASE_ROUTERS: list[Any] = Field(
-        default_factory=lambda: [
-            "openedx.core.lib.django_courseware_routers.StudentModuleHistoryExtendedRouter"
-        ]
-    )
-    DATA_UPLOAD_MAX_MEMORY_SIZE: Any = Field(default=None)  # TODO: refine type
-    DATA_UPLOAD_MAX_NUMBER_FIELDS: Any = Field(default=None)  # TODO: refine type
-    DEBUG: bool = Field(default=False)
-    DEFAULT_AUTO_FIELD: str = Field(default="django.db.models.AutoField")
-    DEFAULT_FROM_EMAIL: str = Field(default="registration@example.com")
-    INSTALLED_APPS: list[Any] = Field(
-        default_factory=lambda: [
-            "django.contrib.auth",
-            "django.contrib.contenttypes",
-            "django.contrib.humanize",
-            "django.contrib.redirects",
-            "django.contrib.sessions",
-            "django.contrib.sites",
-            "django.contrib.messages",
-            "openedx.core.djangoapps.staticfiles.apps.EdxPlatformStaticFilesConfig",
-            "django_celery_results",
-            "method_override",
-            "openedx.core.djangoapps.common_initialization.apps.CommonInitializationConfig",
-            "openedx.core.djangoapps.common_views",
-            "openedx.core.djangoapps.api_admin",
-            "corsheaders",
-            "openedx.core.djangoapps.cors_csrf",
-            "xss_utils",
-            "simple_history",
-            "config_models",
-            "openedx.core.djangoapps.config_model_utils",
-            "waffle",
-            "openedx.core.djangoapps.service_status",
-            "openedx.core.djangoapps.video_config",
-            "openedx.core.djangoapps.video_pipeline",
-            "cms.djangoapps.contentstore.apps.ContentstoreConfig",
-            "common.djangoapps.split_modulestore_django.apps.SplitModulestoreDjangoBackendAppConfig",
-            "openedx.core.djangoapps.contentserver",
-            "cms.djangoapps.course_creators",
-            "common.djangoapps.student.apps.StudentConfig",
-            "openedx.core.djangoapps.course_groups",
-            "cms.djangoapps.xblock_config.apps.XBlockConfig",
-            "cms.djangoapps.export_course_metadata.apps.ExportCourseMetadataConfig",
-            "cms.djangoapps.modulestore_migrator",
-            "openedx.core.djangoapps.xblock.apps.StudioXBlockAppConfig",
-            "openedx.core.djangoapps.util.apps.UtilConfig",
-            "common.djangoapps.track",
-            "eventtracking.django.apps.EventTrackingConfig",
-            "common.djangoapps.edxmako.apps.EdxMakoConfig",
-            "pipeline",
-            "common.djangoapps.static_replace",
-            "require",
-            "webpack_loader",
-            "openedx.core.djangoapps.site_configuration",
-            "openedx.core.djangoapps.crawlers",
-            "openedx.core.djangoapps.django_comment_common",
-            "openedx.core.djangoapps.notifications",
-            "django.contrib.admin",
-            "common.djangoapps.course_modes.apps.CourseModesConfig",
-            "openedx.core.djangoapps.verified_track_content",
-            "openedx.core.djangoapps.dark_lang",
-            "wiki",
-            "django_notify",
-            "lms.djangoapps.course_wiki",
-            "mptt",
-            "sekizai",
-            "openedx.core.djangoapps.user_api",
-            "openedx.core.djangoapps.embargo",
-            "common.djangoapps.course_action_state",
-            "submissions",
-            "openassessment",
-            "openassessment.assessment",
-            "openassessment.fileupload",
-            "openassessment.staffgrader",
-            "openassessment.workflow",
-            "openassessment.xblock",
-            "edxval",
-            "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
-            "openedx.core.djangoapps.content.block_structure.apps.BlockStructureConfig",
-            "milestones",
-            "openedx.core.djangoapps.credit.apps.CreditConfig",
-            "common.djangoapps.xblock_django",
-            "openedx.core.djangoapps.agreements",
-            "openedx.core.djangoapps.catalog",
-            "openedx.core.djangoapps.programs.apps.ProgramsConfig",
-            "oauth2_provider",
-            "openedx.core.djangoapps.oauth_dispatch.apps.OAuthDispatchAppConfig",
-            "lms.djangoapps.courseware",
-            "lms.djangoapps.coursewarehistoryextended",
-            "lms.djangoapps.survey.apps.SurveyConfig",
-            "lms.djangoapps.verify_student.apps.VerifyStudentConfig",
-            "completion",
-            "openedx.core.djangoapps.system_wide_roles",
-            "statici18n",
-            "cms.lib.xblock.tagging",
-            "django_sites_extensions",
-            "release_util",
-            "rules.apps.AutodiscoverRulesConfig",
-            "bridgekeeper",
-            "user_tasks",
-            "cms.djangoapps.cms_user_tasks.apps.CmsUserTasksConfig",
-            "common.djangoapps.database_fixups",
-            "celery_utils",
-            "openedx.core.djangoapps.waffle_utils",
-            "django_filters",
-            "cms.djangoapps.api",
-            "csrf.apps.CsrfAppConfig",
-            "common.djangoapps.entitlements",
-            "common.djangoapps.pipeline_mako",
-            "drf_yasg",
-            "openedx_tagging",
-            "openedx.core.djangoapps.content_tagging",
-            "openedx.core.djangoapps.content.search",
-            "lms.djangoapps.program_enrollments",
-            "openedx.features.course_duration_limits",
-            "openedx.features.content_type_gating",
-            "openedx.features.discounts",
-            "openedx.features.effort_estimation",
-            "lms.djangoapps.experiments",
-            "openedx.core.djangoapps.external_user_ids",
-            "openedx.core.djangoapps.heartbeat",
-            "openedx.core.djangoapps.course_date_signals",
-            "openedx.core.djangoapps.schedules",
-            "rest_framework_jwt",
-            "openedx.core.djangoapps.content.learning_sequences.apps.LearningSequencesConfig",
-            "organizations",
-            "edx_django_utils.user",
-            "social_django",
-            "pylti1p3.contrib.django.lti1p3_tool_config",
-            "edx_ace",
-            "drf_spectacular",
-            "openedx.core.djangoapps.authz",
-            "openedx_events",
-            "openedx_catalog",
-            "openedx_content",
-            "openedx_content.backcompat.backup_restore",
-            "openedx_content.backcompat.collections",
-            "openedx_content.backcompat.components",
-            "openedx_content.backcompat.contents",
-            "openedx_content.backcompat.publishing",
-            "openedx_content.backcompat.sections",
-            "openedx_content.backcompat.subsections",
-            "openedx_content.backcompat.units",
-            "django_aqueduct",
-            "edx_sga",
-            "integrated_channels.integrated_channel",
-            "integrated_channels.degreed",
-            "integrated_channels.degreed2",
-            "integrated_channels.sap_success_factors",
-            "integrated_channels.cornerstone",
-            "integrated_channels.xapi",
-            "integrated_channels.blackboard",
-            "integrated_channels.canvas",
-            "integrated_channels.moodle",
-            "openedx.core.djangoapps.ace_common.apps.AceCommonConfig",
-            "openedx.core.djangoapps.bookmarks.apps.BookmarksConfig",
-            "openedx.core.djangoapps.content_libraries.apps.ContentLibrariesConfig",
-            "openedx.core.djangoapps.content_staging.apps.ContentStagingAppConfig",
-            "openedx.core.djangoapps.course_apps.apps.CourseAppsConfig",
-            "openedx.core.djangoapps.course_live.apps.CourseLiveConfig",
-            "lms.djangoapps.discussion.apps.DiscussionConfig",
-            "openedx.core.djangoapps.discussions.apps.DiscussionsConfig",
-            "lms.djangoapps.instructor.apps.InstructorConfig",
-            "openedx.core.djangoapps.olx_rest_api.apps.OlxRestApiAppConfig",
-            "openedx.core.djangoapps.password_policy.apps.PasswordPolicyConfig",
-            "openedx.core.djangoapps.plugins.apps.PluginsConfig",
-            "openedx.core.djangoapps.theming.apps.ThemingConfig",
-            "openedx.core.djangoapps.user_authn.apps.UserAuthnConfig",
-            "openedx.core.djangoapps.zendesk_proxy.apps.ZendeskProxyConfig",
-            "edx_name_affirmation.apps.EdxNameAffirmationConfig",
-            "edx_when.apps.EdxWhenConfig",
-            "xblocks_contrib.discussion.apps.DiscussionAppConfig",
-            "xblocks_contrib.problem.capa.apps.CapaAppConfig",
-            "openedx_authz.apps.OpenedxAuthzConfig",
-            "lti_consumer.apps.LTIConsumerApp",
-            "edx_proctoring.apps.EdxProctoringConfig",
-            "consent.apps.ConsentConfig",
-            "enterprise.apps.EnterpriseConfig",
-            "push_notifications",
-            "openedx_authz.engine.apps.CasbinAdapterConfig",
-        ]
-    )
-    LANGUAGES: list[Any] = Field(
-        default_factory=lambda: [
-            ("en", "English"),
-            ("rtl", "Right-to-Left Test Language"),
-            ("eo", "Dummy Language (Esperanto)"),
-            ("am", "አማርኛ"),
-            ("ar", "العربية"),
-            ("az", "azərbaycanca"),
-            ("bg-bg", "български (България)"),
-            ("bn-bd", "বাংলা (বাংলাদেশ)"),
-            ("bn-in", "বাংলা (ভারত)"),
-            ("bs", "bosanski"),
-            ("ca", "Català"),
-            ("ca@valencia", "Català (València)"),
-            ("cs", "Čeština"),
-            ("cy", "Cymraeg"),
-            ("da", "dansk"),
-            ("de-de", "Deutsch (Deutschland)"),
-            ("el", "Ελληνικά"),
-            ("en-uk", "English (United Kingdom)"),
-            ("en@lolcat", "LOLCAT English"),
-            ("en@pirate", "Pirate English"),
-            ("es-419", "Español (Latinoamérica)"),
-            ("es-ar", "Español (Argentina)"),
-            ("es-ec", "Español (Ecuador)"),
-            ("es-es", "Español (España)"),
-            ("es-mx", "Español (México)"),
-            ("es-pe", "Español (Perú)"),
-            ("et-ee", "Eesti (Eesti)"),
-            ("eu-es", "euskara (Espainia)"),
-            ("fa", "فارسی"),
-            ("fa-ir", "فارسی (ایران)"),
-            ("fi-fi", "Suomi (Suomi)"),
-            ("fil", "Filipino"),
-            ("fr", "Français"),
-            ("gl", "Galego"),
-            ("gu", "ગુજરાતી"),
-            ("he", "עברית"),
-            ("hi", "हिन्दी"),
-            ("hr", "hrvatski"),
-            ("hu", "magyar"),
-            ("hy-am", "Հայերեն (Հայաստան)"),
-            ("id", "Bahasa Indonesia"),
-            ("it-it", "Italiano (Italia)"),
-            ("ja-jp", "日本語 (日本)"),
-            ("kk-kz", "қазақ тілі (Қазақстан)"),
-            ("km-kh", "ភាសាខ្មែរ (កម្ពុជា)"),
-            ("kn", "ಕನ್ನಡ"),
-            ("ko-kr", "한국어 (대한민국)"),
-            ("lt-lt", "Lietuvių (Lietuva)"),
-            ("ml", "മലയാളം"),
-            ("mn", "Монгол хэл"),
-            ("mr", "मराठी"),
-            ("ms", "Bahasa Melayu"),
-            ("nb", "Norsk bokmål"),
-            ("ne", "नेपाली"),
-            ("nl-nl", "Nederlands (Nederland)"),
-            ("or", "ଓଡ଼ିଆ"),
-            ("pl", "Polski"),
-            ("pt-br", "Português (Brasil)"),
-            ("pt-pt", "Português (Portugal)"),
-            ("ro", "română"),
-            ("ru", "Русский"),
-            ("si", "සිංහල"),
-            ("sk", "Slovenčina"),
-            ("sl", "Slovenščina"),
-            ("sq", "shqip"),
-            ("sr", "Српски"),
-            ("sv", "svenska"),
-            ("sw", "Kiswahili"),
-            ("ta", "தமிழ்"),
-            ("te", "తెలుగు"),
-            ("th", "ไทย"),
-            ("tr-tr", "Türkçe (Türkiye)"),
-            ("uk", "Українська"),
-            ("ur", "اردو"),
-            ("vi", "Tiếng Việt"),
-            ("uz", "Ўзбек"),
-            ("zh-cn", "中文 (简体)"),
-            ("zh-hk", "中文 (香港)"),
-            ("zh-tw", "中文 (台灣)"),
-        ]
-    )
-    LANGUAGES_BIDI: tuple[Any, ...] = Field(
-        default=("he", "ar", "fa", "ur", "fa-ir", "rtl")
-    )  # TODO: refine type
-    LANGUAGE_CODE: str = Field(default="en")
-    LANGUAGE_COOKIE_NAME: str = Field(default="openedx-language-preference")
-    LOCALE_PATHS: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    LOGIN_REDIRECT_URL: str = Field(default="/home/")
-    LOGIN_URL: str = Field(default="/login/")
-    MANAGERS: list[Any] = Field(default_factory=lambda: [])
-    MEDIA_ROOT: str = Field(default="/edx/var/edxapp/media/")
-    MEDIA_URL: str = Field(default="/media/")
-    MESSAGE_STORAGE: str = Field(
-        default="django.contrib.messages.storage.session.SessionStorage"
-    )
-    MIDDLEWARE: list[Any] = Field(
-        default_factory=lambda: [
-            "openedx.core.lib.x_forwarded_for.middleware.XForwardedForMiddleware",
-            "edx_django_utils.security.csp.middleware.content_security_policy_middleware",
-            "crum.CurrentRequestUserMiddleware",
-            "edx_django_utils.cache.middleware.RequestCacheMiddleware",
-            "edx_django_utils.monitoring.CookieMonitoringMiddleware",
-            "edx_django_utils.monitoring.DeploymentMonitoringMiddleware",
-            "edx_django_utils.monitoring.FrontendMonitoringMiddleware",
-            "edx_django_utils.monitoring.MonitoringMemoryMiddleware",
-            "openedx.core.djangoapps.header_control.middleware.HeaderControlMiddleware",
-            "django.middleware.cache.UpdateCacheMiddleware",
-            "django.middleware.common.CommonMiddleware",
-            "django.contrib.sites.middleware.CurrentSiteMiddleware",
-            "django.middleware.csrf.CsrfViewMiddleware",
-            "corsheaders.middleware.CorsMiddleware",
-            "openedx.core.djangoapps.cors_csrf.middleware.CorsCSRFMiddleware",
-            "openedx.core.djangoapps.cors_csrf.middleware.CsrfCrossDomainCookieMiddleware",
-            "edx_rest_framework_extensions.auth.jwt.middleware.JwtAuthCookieMiddleware",
-            "django_sites_extensions.middleware.RedirectMiddleware",
-            "openedx.core.djangoapps.safe_sessions.middleware.SafeSessionMiddleware",
-            "method_override.middleware.MethodOverrideMiddleware",
-            "openedx.core.djangoapps.cache_toolbox.middleware.CacheBackedAuthenticationMiddleware",
-            "common.djangoapps.student.middleware.UserStandingMiddleware",
-            "django.contrib.messages.middleware.MessageMiddleware",
-            "common.djangoapps.track.middleware.TrackMiddleware",
-            "openedx.core.djangoapps.lang_pref.middleware.LanguagePreferenceMiddleware",
-            "openedx.core.djangoapps.dark_lang.middleware.DarkLangMiddleware",
-            "openedx.core.djangoapps.embargo.middleware.EmbargoMiddleware",
-            "django.middleware.locale.LocaleMiddleware",
-            "codejail.django_integration.ConfigureCodeJailMiddleware",
-            "openedx.core.djangoapps.session_inactivity_timeout.middleware.SessionInactivityTimeout",
-            "openedx.core.djangoapps.theming.middleware.CurrentSiteThemeMiddleware",
-            "django.middleware.clickjacking.XFrameOptionsMiddleware",
-            "waffle.middleware.WaffleMiddleware",
-            "edx_django_utils.cache.middleware.TieredCacheMiddleware",
-            "edx_rest_framework_extensions.middleware.RequestCustomAttributesMiddleware",
-            "edx_rest_framework_extensions.auth.jwt.middleware.EnsureJWTAuthSettingsMiddleware",
-            "simple_history.middleware.HistoryRequestMiddleware",
-            "openedx.core.djangoapps.site_configuration.middleware.SessionCookieDomainOverrideMiddleware",
-        ]
-    )
-    SECRET_KEY: str = Field(default="dev key")
-    SECURE_PROXY_SSL_HEADER: tuple[Any, ...] = Field(
-        default=("HTTP_X_FORWARDED_PROTO", "https")
-    )  # TODO: refine type
-    SERVER_EMAIL: str = Field(default="devops@example.com")
-    SESSION_COOKIE_DOMAIN: Any = Field(default=None)  # TODO: refine type
-    SESSION_COOKIE_HTTPONLY: bool = Field(default=True)
-    SESSION_COOKIE_NAME: str = Field(default="sessionid")
-    SESSION_COOKIE_SECURE: bool = Field(default=False)
-    SESSION_ENGINE: str = Field(default="django.contrib.sessions.backends.cache")
-    SESSION_SAVE_EVERY_REQUEST: bool = Field(default=False)
-    SESSION_SERIALIZER: str = Field(
-        default="openedx.core.lib.session_serializers.PickleSerializer"
-    )
-    STATICFILES_DIRS: list[Any] = Field(
-        default_factory=lambda: [
-            Path("/home/tmacey/code/mit/mitx/mitx-platform/common/static"),
-            Path("/home/tmacey/code/mit/mitx/mitx-platform/cms/static"),
-            Path("/home/tmacey/code/mit/mitx/mitx-platform/xmodule/static"),
-        ]
-    )
-    STATICFILES_FINDERS: list[Any] = Field(
-        default_factory=lambda: [
-            "openedx.core.djangoapps.theming.finders.ThemeFilesFinder",
-            "django.contrib.staticfiles.finders.FileSystemFinder",
-            "django.contrib.staticfiles.finders.AppDirectoriesFinder",
-            "openedx.core.lib.xblock_pipeline.finder.XBlockPipelineFinder",
-            "pipeline.finders.PipelineFinder",
-        ]
-    )
-    STATIC_ROOT: str = Field(
-        default=Path("/home/tmacey/code/mit/mitx/staticfiles/studio")
-    )
-    STATIC_URL: str = Field(default="/static/studio/")
-    STORAGES: dict[str, StoragesEntry] = Field(
-        default_factory=lambda: {
-            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-            "staticfiles": {"BACKEND": "openedx.core.storage.ProductionStorage"},
-        }
-    )
-    TEMPLATES: list[Any] = Field(
-        default_factory=lambda: [
-            {
-                "NAME": "django",
-                "BACKEND": "django.template.backends.django.DjangoTemplates",
-                "APP_DIRS": False,
-                "DIRS": [
-                    Path("/home/tmacey/code/mit/mitx/mitx-platform/cms/templates"),
-                    Path("/home/tmacey/code/mit/mitx/mitx-platform/common/templates"),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/common/djangoapps/pipeline_mako/templates"
-                    ),
-                    Path("/home/tmacey/code/mit/mitx/mitx-platform/common/static"),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/djangoapps/cors_csrf/templates"
-                    ),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/djangoapps/dark_lang/templates"
-                    ),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/lib/license/templates"
-                    ),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/cms/djangoapps/pipeline_js/templates"
-                    ),
-                ],
-                "OPTIONS": {
-                    "loaders": [
-                        "openedx.core.djangoapps.theming.template_loaders.ThemeTemplateLoader",
-                        "common.djangoapps.edxmako.makoloader.MakoFilesystemLoader",
-                        "common.djangoapps.edxmako.makoloader.MakoAppDirectoriesLoader",
-                    ],
-                    "context_processors": [
-                        "django.template.context_processors.request",
-                        "django.template.context_processors.static",
-                        "django.contrib.messages.context_processors.messages",
-                        "django.template.context_processors.i18n",
-                        "django.contrib.auth.context_processors.auth",
-                        "django.template.context_processors.csrf",
-                        "help_tokens.context_processor",
-                        "openedx.core.djangoapps.site_configuration.context_processors.configuration_context",
-                    ],
-                    "debug": False,
-                },
-            },
-            {
-                "NAME": "mako",
-                "BACKEND": "common.djangoapps.edxmako.backend.Mako",
-                "APP_DIRS": False,
-                "DIRS": [
-                    Path("/home/tmacey/code/mit/mitx/mitx-platform/cms/templates"),
-                    Path("/home/tmacey/code/mit/mitx/mitx-platform/common/templates"),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/common/djangoapps/pipeline_mako/templates"
-                    ),
-                    Path("/home/tmacey/code/mit/mitx/mitx-platform/common/static"),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/djangoapps/cors_csrf/templates"
-                    ),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/djangoapps/dark_lang/templates"
-                    ),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/lib/license/templates"
-                    ),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/cms/djangoapps/pipeline_js/templates"
-                    ),
-                ],
-                "OPTIONS": {
-                    "context_processors": [
-                        "django.template.context_processors.request",
-                        "django.template.context_processors.static",
-                        "django.contrib.messages.context_processors.messages",
-                        "django.template.context_processors.i18n",
-                        "django.contrib.auth.context_processors.auth",
-                        "django.template.context_processors.csrf",
-                        "help_tokens.context_processor",
-                        "openedx.core.djangoapps.site_configuration.context_processors.configuration_context",
-                    ],
-                    "debug": False,
-                },
-            },
-            {
-                "NAME": "preview",
-                "BACKEND": "common.djangoapps.edxmako.backend.Mako",
-                "APP_DIRS": False,
-                "DIRS": [
-                    "/home/tmacey/code/mit/mitx/mitx-platform/lms/templates",
-                    Path("/home/tmacey/code/mit/mitx/mitx-platform/common/templates"),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/common/djangoapps/pipeline_mako/templates"
-                    ),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/djangoapps/cors_csrf/templates"
-                    ),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/djangoapps/dark_lang/templates"
-                    ),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/lib/license/templates"
-                    ),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/lms/djangoapps/teams/templates"
-                    ),
-                    Path(
-                        "/home/tmacey/code/mit/mitx/mitx-platform/openedx/features/course_experience/templates"
-                    ),
-                ],
-                "OPTIONS": {
-                    "context_processors": [
-                        "django.template.context_processors.request",
-                        "django.template.context_processors.static",
-                        "django.contrib.messages.context_processors.messages",
-                        "django.template.context_processors.i18n",
-                        "django.contrib.auth.context_processors.auth",
-                        "django.template.context_processors.csrf",
-                        "help_tokens.context_processor",
-                        "openedx.core.djangoapps.site_configuration.context_processors.configuration_context",
-                    ],
-                    "debug": False,
-                    "namespace": "lms.main",
-                },
-            },
-        ]
-    )
-    TIME_ZONE: str = Field(default="UTC")
-    USE_I18N: bool = Field(default=True)
-    USE_TZ: bool = Field(default=True)
-    X_FRAME_OPTIONS: str = Field(default="DENY")
-
-    # ===== boto3 =====
-    AWS_ACCESS_KEY_ID: Any = Field(default=None)  # TODO: refine type
-    AWS_QUERYSTRING_AUTH: bool = Field(default=True)
-    AWS_SECRET_ACCESS_KEY: Any = Field(default=None)  # TODO: refine type
-    AWS_SECURITY_TOKEN: Any = Field(default=None)  # TODO: refine type
-    AWS_SES_REGION_ENDPOINT: str = Field(default="email.us-east-1.amazonaws.com")
-    AWS_SES_REGION_NAME: str = Field(default="us-east-1")
-    AWS_STORAGE_BUCKET_NAME: str = Field(default="edxuploads")
-
-    # ===== celery =====
-    BROKER_HEARTBEAT: float = Field(default=60.0)
-    BROKER_HEARTBEAT_CHECKRATE: int = Field(default=2)
-    BROKER_USE_SSL: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    CELERY_ALWAYS_EAGER: bool = Field(default=False)
-    CELERY_BROKER_HOSTNAME: str = Field(default="")
-    CELERY_BROKER_PASSWORD: str = Field(default="")
-    CELERY_BROKER_TRANSPORT: str = Field(default="")
-    CELERY_BROKER_USER: str = Field(default="")
-    CELERY_BROKER_USE_SSL: bool = Field(default=False)
-    CELERY_BROKER_VHOST: str = Field(default="")
-    CELERY_CREATE_MISSING_QUEUES: bool = Field(default=True)
-    CELERY_DEFAULT_EXCHANGE: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    CELERY_DEFAULT_EXCHANGE_TYPE: str = Field(default="direct")
-    CELERY_DEFAULT_QUEUE: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    CELERY_DEFAULT_ROUTING_KEY: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    CELERY_EVENT_QUEUE_TTL: Any = Field(default=None)  # TODO: refine type
-    CELERY_IGNORE_RESULT: bool = Field(default=False)
-    CELERY_MESSAGE_COMPRESSION: str = Field(default="gzip")
-    CELERY_QUEUES: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "edx.cms.core.high": {},
-            "edx.cms.core.default": {},
-            "edx.cms.core.low": {},
-        }
-    )
-    CELERY_QUEUE_HA_POLICY: str = Field(default="all")
-    CELERY_RESULT_BACKEND: str = Field(default="django-cache")
-    CELERY_RESULT_SERIALIZER: str = Field(default="json")
-    CELERY_SEND_EVENTS: bool = Field(default=True)
-    CELERY_SEND_TASK_SENT_EVENT: bool = Field(default=True)
-    CELERY_STORE_ERRORS_EVEN_IF_IGNORED: bool = Field(default=True)
-    CELERY_TASK_SERIALIZER: str = Field(default="json")
-    CELERY_TIMEZONE: str = Field(default="UTC")
-    CELERY_TRACK_STARTED: bool = Field(default=True)
-
-    # ===== django-cors-headers =====
-    CORS_ALLOW_HEADERS: tuple[Any, ...] = Field(
-        default=(
-            "accept",
-            "authorization",
-            "content-type",
-            "user-agent",
-            "x-csrftoken",
-            "x-requested-with",
-            "use-jwt-cookie",
-            "content-range",
-            "content-disposition",
-        )
-    )  # TODO: refine type
-
-    # ===== django-oauth-toolkit =====
-    OAUTH2_PROVIDER_APPLICATION_MODEL: str = Field(
-        default="oauth2_provider.Application"
-    )
-    OAUTH_ID_TOKEN_EXPIRATION: int = Field(default=300)
-
-    # ===== django-push-notifications =====
-    FCM_APP_NAME: str = Field(default="fcm-edx-platform")
-
-    # ===== django-simple-history =====
-    SIMPLE_HISTORY_DATE_INDEX: bool = Field(default=False)
-
-    # ===== django-statici18n =====
-    STATICI18N_FILENAME_FUNCTION: str = Field(
-        default="statici18n.utils.legacy_filename"
-    )
-    STATICI18N_OUTPUT_DIR: str = Field(default="js/i18n")
-    STATICI18N_ROOT: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-
-    # ===== django-user-tasks =====
-    USER_TASKS_MAX_AGE: Any = Field(
-        default=datetime.timedelta(days=7)
-    )  # TODO: refine type
-
-    # ===== django-webpack-loader =====
-    WEBPACK_LOADER: dict[str, WebpackLoaderEntry] = Field(
-        default_factory=lambda: {
-            "DEFAULT": {
-                "BUNDLE_DIR_NAME": "bundles/",
-                "STATS_FILE": Path(
-                    "/home/tmacey/code/mit/mitx/staticfiles/studio/webpack-stats.json"
-                ),
-            },
-            "WORKERS": {
-                "BUNDLE_DIR_NAME": "bundles/",
-                "STATS_FILE": Path(
-                    "/home/tmacey/code/mit/mitx/staticfiles/studio/webpack-worker-stats.json"
-                ),
-            },
-        }
-    )
-
-    # ===== djangorestframework =====
-    REST_FRAMEWORK: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "DEFAULT_AUTHENTICATION_CLASSES": [
-                "openedx.core.djangolib.default_auth_classes.DefaultJwtAuthentication",
-                "openedx.core.djangolib.default_auth_classes.DefaultSessionAuthentication",
-            ],
-            "DEFAULT_PAGINATION_CLASS": "edx_rest_framework_extensions.paginators.DefaultPagination",
-            "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
-            "EXCEPTION_HANDLER": "openedx.core.lib.request_utils.ignored_error_exception_handler",
-            "PAGE_SIZE": 10,
-            "URL_FORMAT_OVERRIDE": None,
-            "DEFAULT_THROTTLE_RATES": {
-                "user": "60/minute",
-                "service_user": "800/minute",
-                "registration_validation": "30/minute",
-                "high_service_user": "2000/minute",
-            },
-            "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-        }
-    )
-
-    # ===== drf-jwt =====
-    JWT_AUTH: dict[str, Any] = Field(
-        default=None
-    )  # OPAQUE: original dict value is not serialisable
-
-    # ===== edx-ace =====
+    # ===== lehrer_cms_shim =====
+    ACCOUNT_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
     ACE_CHANNEL_DEFAULT_EMAIL: str = Field(default="django_email")
     ACE_CHANNEL_DEFAULT_PUSH: str = Field(default="push_notification")
     ACE_CHANNEL_SAILTHRU_API_KEY: Any = Field(default=None)  # TODO: refine type
@@ -908,72 +44,23 @@ class AqueductSettings(BaseSettings):
     ACE_ENABLED_POLICIES: list[Any] = Field(
         default_factory=lambda: ["bulk_email_optout"]
     )
-
-    # ===== edx-completion =====
-    COMPLETION_VIDEO_COMPLETE_PERCENTAGE: float = Field(default=0.95)
-
-    # ===== edx-django-sites-extensions =====
-    REDIRECT_CACHE_KEY_PREFIX: str = Field(default="redirects")
-    REDIRECT_CACHE_TIMEOUT: Any = Field(default=None)  # TODO: refine type
-    SITE_ID: int = Field(default=1)
-
-    # ===== edx-enterprise =====
-    AWS_S3_CUSTOM_DOMAIN: str = Field(default="edxuploads.s3.amazonaws.com")
-    COURSE_CATALOG_API_URL: str = Field(default="http://localhost:8008/api/v1")
-    ENTERPRISE_CUSTOMER_CATALOG_DEFAULT_CONTENT_FILTER: dict[str, Any] = Field(
-        default_factory=lambda: {}
+    ACE_ROUTING_KEY: str = Field(default="edx.lms.core.default")
+    ACTIVATION_EMAIL_SUPPORT_LINK: str = Field(default="")
+    ADMINS: list[Any] = Field(default_factory=lambda: [])
+    ADMIN_CONSOLE_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
+    ADVANCED_PROBLEM_TYPES: list[Any] = Field(
+        default_factory=lambda: [
+            {"component": "drag-and-drop-v2", "boilerplate_name": None},
+            {"component": "staffgradedxblock", "boilerplate_name": None},
+        ]
     )
-    ENTERPRISE_SERVICE_WORKER_USERNAME: str = Field(default="enterprise_worker")
-    LMS_BASE: Any = Field(default=None)  # TODO: refine type
-    LMS_INTERNAL_ROOT_URL: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    LOGIN_REDIRECT_WHITELIST: list[Any] = Field(default_factory=lambda: [])
-    PLATFORM_DESCRIPTION: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-
-    # ===== edx-organizations =====
-    ORGANIZATIONS_AUTOCREATE: bool = Field(default=True)
-
-    # ===== edx-proctoring =====
-    CONTACT_EMAIL: str = Field(default="info@example.com")
-    ENV_ROOT: str = Field(default=Path("/home/tmacey/code/mit/mitx"))
-    HTTPS: str = Field(default="on")
-    LEARNING_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
-    PROCTORING_BACKENDS: dict[str, Any] = Field(
-        default_factory=lambda: {"DEFAULT": "null", "null": {}}
-    )
-    PROCTORING_SETTINGS: dict[str, Any] = Field(default_factory=lambda: {})
-    SITE_NAME: str = Field(default="localhost")
-
-    # ===== edx-sga =====
-    TECH_SUPPORT_EMAIL: str = Field(default="technical@example.com")
-
-    # ===== edx-when =====
-    COURSE_ID_PATTERN: str = Field(
-        default=None
-    )  # OPAQUE: original str value is not serialisable
-
-    # ===== edxval =====
-    TRANSCRIPT_LANG_CACHE_TIMEOUT: int = Field(default=86400)
-
-    # ===== openedx-authz =====
-    CASBIN_AUTO_LOAD_POLICY_INTERVAL: int = Field(default=0)
-    CASBIN_AUTO_SAVE_POLICY: bool = Field(default=True)
-    CASBIN_LOG_LEVEL: str = Field(default="WARNING")
-    CASBIN_MODEL: str = Field(
-        default="/home/tmacey/code/mit/mitx/mitx-platform/.venv/lib/python3.12/site-packages/openedx_authz/engine/config/model.conf"
-    )
-    ENABLE_AUTOMATIC_AUTHZ_COURSE_AUTHORING_MIGRATION: bool = Field(default=False)
-    OPENEDX_AUTHZ_CONTENT_LIBRARY_MODEL: str = Field(
-        default="content_libraries.ContentLibrary"
-    )
-    OPENEDX_AUTHZ_COURSE_OVERVIEW_MODEL: str = Field(
-        default="course_overviews.CourseOverview"
-    )
-
-    # ===== openedx-core =====
+    AFFILIATE_COOKIE_NAME: str = Field(default="dev_affiliate_id")
+    AI_TRANSLATIONS_API_URL: str = Field(default="http://localhost:18760/api/v1")
+    ALLOWED_HOSTS: list[Any] = Field(default_factory=lambda: ["*"])
+    ALLOW_COURSE_RERUNS: bool = Field(default=True)
+    ALLOW_HIDING_DISCUSSION_TAB: bool = Field(default=False)
+    ALLOW_PUBLIC_ACCOUNT_CREATION: bool = Field(default=True)
+    ALLOW_UNICODE_COURSE_ID: bool = Field(default=False)
     ALL_LANGUAGES: list[Any] = Field(
         default_factory=lambda: [
             ["aa", "Afar"],
@@ -1164,16 +251,697 @@ class AqueductSettings(BaseSettings):
             ["zu", "Zulu"],
         ]
     )
-
-    # ===== openedx-django-require =====
-    REQUIRE_BASE_URL: str = Field(default="./")
-    REQUIRE_BUILD_PROFILE: Any = Field(
+    ALTERNATE_WORKER_QUEUES: str = Field(default="lms")
+    ANALYTICS_DASHBOARD_NAME: str = Field(default="Your Platform Name Here Insights")
+    ANALYTICS_DASHBOARD_URL: str = Field(default="http://localhost:18110/courses")
+    API_ACCESS_FROM_EMAIL: str = Field(default="api-requests@example.com")
+    API_ACCESS_MANAGER_EMAIL: str = Field(default="api-access@example.com")
+    API_DOCUMENTATION_URL: str = Field(
+        default="https://course-catalog-api-guide.readthedocs.io/en/latest/"
+    )
+    ASSET_IGNORE_REGEX: str = Field(default="(^\\._.*$)|(^\\.DS_Store$)|(^.*~$)")
+    ASSET_KEY_PATTERN: str = Field(
+        default=None
+    )  # OPAQUE: original str value is not serialisable
+    AUTHENTICATION_BACKENDS: list[Any] = Field(
+        default_factory=lambda: [
+            "auth_backends.backends.EdXOAuth2",
+            "rules.permissions.ObjectPermissionBackend",
+            "django.contrib.auth.backends.AllowAllUsersModelBackend",
+            "bridgekeeper.backends.RulePermissionBackend",
+        ]
+    )
+    AUTHORING_API_URL: str = Field(default="")
+    AUTH_DOCUMENTATION_URL: str = Field(
+        default="https://course-catalog-api-guide.readthedocs.io/en/latest/authentication/index.html"
+    )
+    AUTH_PASSWORD_VALIDATORS: list[Any] = Field(
+        default_factory=lambda: [
+            {
+                "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+            },
+            {
+                "NAME": "common.djangoapps.util.password_policy_validators.MinimumLengthValidator",
+                "OPTIONS": {"min_length": 8},
+            },
+            {
+                "NAME": "common.djangoapps.util.password_policy_validators.MaximumLengthValidator",
+                "OPTIONS": {"max_length": 75},
+            },
+        ]
+    )
+    AUTOMATIC_AUTH_FOR_TESTING: bool = Field(default=False)
+    AUTOPLAY_VIDEOS: bool = Field(default=False)
+    AUTO_GENERATED_USERNAME_RANDOM_STRING_LENGTH: int = Field(default=4)
+    AUTO_LANGUAGE_SELECTION_EXEMPT_PATHS: list[Any] = Field(
+        default_factory=lambda: ["admin", "sysadmin", "instructor"]
+    )
+    AWS_ACCESS_KEY_ID: Any = Field(default=None)  # TODO: refine type
+    AWS_QUERYSTRING_AUTH: bool = Field(default=True)
+    AWS_S3_CUSTOM_DOMAIN: str = Field(default="edxuploads.s3.amazonaws.com")
+    AWS_SECRET_ACCESS_KEY: Any = Field(default=None)  # TODO: refine type
+    AWS_SECURITY_TOKEN: Any = Field(default=None)  # TODO: refine type
+    AWS_SES_REGION_ENDPOINT: str = Field(default="email.us-east-1.amazonaws.com")
+    AWS_SES_REGION_NAME: str = Field(default="us-east-1")
+    AWS_STORAGE_BUCKET_NAME: str = Field(default="edxuploads")
+    BADGES_ENABLED: bool = Field(default=False)
+    BASE_COOKIE_DOMAIN: str = Field(default="localhost")
+    BEAMER_PRODUCT_ID: str = Field(default="")
+    BLOCK_STRUCTURES_SETTINGS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "COURSE_PUBLISH_TASK_DELAY": 30,
+            "TASK_DEFAULT_RETRY_DELAY": 30,
+            "TASK_MAX_RETRIES": 5,
+        }
+    )
+    BRANCH_IO_KEY: str = Field(default="")
+    BROKER_HEARTBEAT: float = Field(default=60.0)
+    BROKER_HEARTBEAT_CHECKRATE: int = Field(default=2)
+    BROKER_USE_SSL: bool = Field(default=False)
+    BUGS_EMAIL: str = Field(default="bugs@example.com")
+    BULK_EMAIL_DEFAULT_FROM_EMAIL: str = Field(default="no-reply@example.com")
+    BULK_EMAIL_EMAILS_PER_TASK: int = Field(default=500)
+    BULK_EMAIL_LOG_SENT_EMAILS: bool = Field(default=False)
+    CACHES: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "course_structure_cache": {
+                "KEY_PREFIX": "course_structure",
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "TIMEOUT": "604800",
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+            "celery": {
+                "KEY_PREFIX": "celery",
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "TIMEOUT": "7200",
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+            "mongo_metadata_inheritance": {
+                "KEY_PREFIX": "mongo_metadata_inheritance",
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "TIMEOUT": 300,
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+            "staticfiles": {
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "KEY_PREFIX": "staticfiles_general",
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+            "default": {
+                "VERSION": "1",
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "KEY_PREFIX": "default",
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+            "configuration": {
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "KEY_PREFIX": "configuration",
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+            "general": {
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "KEY_PREFIX": "general",
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+        }
+    )
+    CALCULATOR_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/exercise_tools/add_calculator.html"
+    )
+    CANVAS_ACCESS_TOKEN: Any = Field(default=None)  # TODO: refine type
+    CANVAS_BASE_URL: Any = Field(default=None)  # TODO: refine type
+    CASBIN_AUTO_LOAD_POLICY_INTERVAL: int = Field(default=0)
+    CASBIN_AUTO_SAVE_POLICY: bool = Field(default=True)
+    CASBIN_LOG_LEVEL: str = Field(default="WARNING")
+    CASBIN_MODEL: str = Field(
+        default="/openedx/venv/lib/python3.12/site-packages/openedx_authz/engine/config/model.conf"
+    )
+    CELERY_ALWAYS_EAGER: bool = Field(default=False)
+    CELERY_BROKER_HOSTNAME: str = Field(default="")
+    CELERY_BROKER_PASSWORD: str = Field(default="")
+    CELERY_BROKER_TRANSPORT: str = Field(default="")
+    CELERY_BROKER_USER: str = Field(default="")
+    CELERY_BROKER_USE_SSL: bool = Field(default=False)
+    CELERY_BROKER_VHOST: str = Field(default="")
+    CELERY_CREATE_MISSING_QUEUES: bool = Field(default=True)
+    CELERY_DEFAULT_EXCHANGE: str = Field(default="edx.cms.core")
+    CELERY_DEFAULT_EXCHANGE_TYPE: str = Field(default="direct")
+    CELERY_DEFAULT_QUEUE: str = Field(default="edx.cms.core.default")
+    CELERY_DEFAULT_ROUTING_KEY: str = Field(default="edx.cms.core.default")
+    CELERY_EVENT_QUEUE_TTL: Any = Field(default=None)  # TODO: refine type
+    CELERY_IGNORE_RESULT: bool = Field(default=False)
+    CELERY_MESSAGE_COMPRESSION: str = Field(default="gzip")
+    CELERY_QUEUES: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "edx.cms.core.high": {},
+            "edx.cms.core.default": {},
+            "edx.cms.core.low": {},
+        }
+    )
+    CELERY_QUEUE_HA_POLICY: str = Field(default="all")
+    CELERY_RESULT_BACKEND: str = Field(default="django-cache")
+    CELERY_RESULT_SERIALIZER: str = Field(default="json")
+    CELERY_SEND_EVENTS: bool = Field(default=True)
+    CELERY_SEND_TASK_SENT_EVENT: bool = Field(default=True)
+    CELERY_STORE_ERRORS_EVEN_IF_IGNORED: bool = Field(default=True)
+    CELERY_TASK_SERIALIZER: str = Field(default="json")
+    CELERY_TIMEZONE: str = Field(default="UTC")
+    CELERY_TRACK_STARTED: bool = Field(default=True)
+    CERTIFICATES_HTML_VIEW: bool = Field(default=False)
+    CERTIFICATE_TEMPLATE_LANGUAGES: dict[str, Any] = Field(
+        default_factory=lambda: {"en": "English", "es": "Español"}
+    )
+    CERTIFICATE_WEBHOOK_ACCESS_TOKEN: Any = Field(default=None)  # TODO: refine type
+    CERTIFICATE_WEBHOOK_URL: Any = Field(default=None)  # TODO: refine type
+    CERT_QUEUE: str = Field(default="certificates")
+    CHAT_COMPLETION_API: str = Field(default="")
+    CHAT_COMPLETION_API_KEY: str = Field(default="")
+    CLEAR_REQUEST_CACHE_ON_TASK_COMPLETION: bool = Field(default=True)
+    CMS_BASE: Any = Field(default=None)  # TODO: refine type
+    CMS_ROOT: str = Field(default=Path("/openedx/edx-platform/cms"))
+    CMS_ROOT_URL: Any = Field(default=None)  # TODO: refine type
+    CMS_SEGMENT_KEY: Any = Field(default=None)  # TODO: refine type
+    CODE_JAIL: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "python_bin": "/edx/app/edxapp/venvs/edxapp-sandbox/bin/python",
+            "user": "sandbox",
+            "limits": {
+                "CPU": 1,
+                "VMEM": 536870912,
+                "REALTIME": 3,
+                "PROXY": 0,
+                "FSIZE": 1048576,
+            },
+            "limit_overrides": {},
+        }
+    )
+    CODE_JAIL_REST_SERVICE_CONNECT_TIMEOUT: float = Field(default=0.5)
+    CODE_JAIL_REST_SERVICE_HOST: str = Field(default="http://127.0.0.1:8550")
+    CODE_JAIL_REST_SERVICE_READ_TIMEOUT: float = Field(default=3.5)
+    CODE_JAIL_REST_SERVICE_REMOTE_EXEC: str = Field(
+        default="xmodule.capa.safe_exec.remote_exec.send_safe_exec_request_v0"
+    )
+    COMMENTS_SERVICE_KEY: str = Field(default="password")
+    COMMENTS_SERVICE_URL: str = Field(default="http://localhost:18080")
+    COMMON_ROOT: str = Field(default=Path("/openedx/edx-platform/common"))
+    COMPLETION_VIDEO_COMPLETE_PERCENTAGE: float = Field(default=0.95)
+    COMPREHENSIVE_THEME_DIRS: list[Any] = Field(default_factory=lambda: [""])
+    COMPREHENSIVE_THEME_LOCALE_PATHS: list[Any] = Field(default_factory=lambda: [])
+    CONTACT_EMAIL: str = Field(default="info@example.com")
+    CONTACT_MAILING_ADDRESS: Any = Field(
         default=None
     )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    REQUIRE_DEBUG: bool = Field(default=False)
-    REQUIRE_JS: str = Field(default="js/vendor/requiresjs/require.js")
-
-    # ===== openedx-events =====
+    CONTENTSTORE: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "ENGINE": "xmodule.contentstore.mongo.MongoContentStore",
+            "OPTIONS": {
+                "db": "edxapp",
+                "host": "localhost",
+                "password": "password",
+                "port": 27017,
+                "user": "edxapp",
+                "ssl": False,
+                "auth_source": None,
+            },
+            "ADDITIONAL_OPTIONS": {},
+            "DOC_STORE_CONFIG": {
+                "db": "edxapp",
+                "host": "localhost",
+                "replicaSet": "",
+                "port": 27017,
+                "user": "edxapp",
+                "collection": "modulestore",
+                "ssl": False,
+                "socketTimeoutMS": 6000,
+                "connectTimeoutMS": 2000,
+                "auth_source": None,
+                "password": "password",
+                "read_preference": "PRIMARY",
+            },
+        }
+    )
+    CONTENT_TYPE_GATE_GROUP_IDS: dict[str, Any] = Field(
+        default_factory=lambda: {"limited_access": 1, "full_access": 2}
+    )
+    CONTEXT_PROCESSORS: list[Any] = Field(
+        default_factory=lambda: [
+            "django.template.context_processors.request",
+            "django.template.context_processors.static",
+            "django.template.context_processors.i18n",
+            "django.contrib.auth.context_processors.auth",
+            "django.template.context_processors.csrf",
+            "django.template.context_processors.media",
+            "django.template.context_processors.tz",
+            "django.contrib.messages.context_processors.messages",
+            "sekizai.context_processors.sekizai",
+            "common.djangoapps.edxmako.shortcuts.marketing_link_context_processor",
+            "lms.djangoapps.courseware.context_processor.user_timezone_locale_prefs",
+            "help_tokens.context_processor",
+            "openedx.core.djangoapps.site_configuration.context_processors.configuration_context",
+            "lms.djangoapps.mobile_api.context_processor.is_from_mobile_app",
+            "openedx.features.survey_report.context_processors.admin_extra_context",
+            "social_django.context_processors.backends",
+            "social_django.context_processors.login_redirect",
+        ]
+    )
+    CORS_ALLOW_HEADERS: tuple[Any, ...] = Field(
+        default=(
+            "accept",
+            "authorization",
+            "content-type",
+            "user-agent",
+            "x-csrftoken",
+            "x-requested-with",
+            "use-jwt-cookie",
+            "content-range",
+            "content-disposition",
+        )
+    )  # TODO: refine type
+    COURSES_ROOT: str = Field(default=Path("/openedx/data"))
+    COURSES_WITH_UNSAFE_CODE: list[Any] = Field(default_factory=lambda: [])
+    COURSE_ABOUT_VISIBILITY_PERMISSION: str = Field(default="see_exists")
+    COURSE_ACCESS_DURATION_MAX_WEEKS: int = Field(default=18)
+    COURSE_ACCESS_DURATION_MIN_WEEKS: int = Field(default=4)
+    COURSE_AUTHORING_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
+    COURSE_CATALOG_API_URL: str = Field(default="http://localhost:8008/api/v1")
+    COURSE_CATALOG_URL_ROOT: str = Field(default="http://localhost:8008")
+    COURSE_CATALOG_VISIBILITY_PERMISSION: str = Field(default="see_exists")
+    COURSE_ENROLLMENT_MODES: dict[str, Any] = Field(default=None)
+    COURSE_EXPORT_DOWNLOAD_CHUNK_SIZE: int = Field(default=8192)
+    COURSE_ID_PATTERN: str = Field(
+        default=None
+    )  # OPAQUE: original str value is not serialisable
+    COURSE_IMPORT_EXPORT_BUCKET: str = Field(default="")
+    COURSE_IMPORT_EXPORT_STORAGE: str = Field(
+        default="django.core.files.storage.FileSystemStorage"
+    )
+    COURSE_KEY_PATTERN: str = Field(
+        default=None
+    )  # OPAQUE: original str value is not serialisable
+    COURSE_KEY_REGEX: str = Field(default="(?:[^/+]+(/|\\+)[^/+]+(/|\\+)[^/?]+)")
+    COURSE_LIVE_GLOBAL_CREDENTIALS: dict[str, Any] = Field(default_factory=lambda: {})
+    COURSE_LIVE_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/add_course_live.html"
+    )
+    COURSE_METADATA_EXPORT_BUCKET: str = Field(default="")
+    COURSE_METADATA_EXPORT_STORAGE: str = Field(
+        default="django.core.files.storage.FileSystemStorage"
+    )
+    COURSE_MODE_DEFAULTS: dict[str, Any] = Field(default=None)
+    COURSE_OLX_VALIDATION_IGNORE_LIST: Any = Field(default=None)  # TODO: refine type
+    COURSE_OLX_VALIDATION_STAGE: int = Field(default=1)
+    COURSE_TRANSLATIONS_BASE_DIR: str = Field(
+        default="/openedx/data/course_translations/"
+    )
+    COURSE_TRANSLATIONS_SUPPORTED_ARCHIVE_EXTENSIONS: list[Any] = Field(
+        default_factory=lambda: [".tar.gz", ".tgz", ".tar"]
+    )
+    COURSE_TRANSLATIONS_SUPPORTED_LANGUAGES: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "ar": "Arabic",
+            "de": "German",
+            "de_DE": "German (Germany)",
+            "el": "Greek",
+            "en": "English",
+            "es_ES": "Spanish (Spain)",
+            "es_419": "Spanish (Latin America)",
+            "fr": "French",
+            "hi": "Hindi",
+            "ja": "Japanese",
+            "pt": "Portuguese",
+            "pt_BR": "Portuguese (Brazil)",
+            "ru": "Russian",
+            "sw": "Swahili",
+            "zh": "Chinese",
+            "zh_HANS": "Chinese (Simplified)",
+            "zh_HANT": "Chinese (Traditional)",
+        }
+    )
+    COURSE_TRANSLATIONS_TARGET_DIRECTORIES: list[Any] = Field(
+        default_factory=lambda: [
+            "about",
+            "course",
+            "chapter",
+            "drafts",
+            "html",
+            "info",
+            "problem",
+            "sequential",
+            "vertical",
+            "video",
+            "static",
+            "tabs",
+        ]
+    )
+    COURSE_TRANSLATIONS_TRANSLATABLE_EXTENSIONS: list[Any] = Field(
+        default_factory=lambda: [".html", ".xml", ".srt"]
+    )
+    CREDENTIALS_INTERNAL_SERVICE_URL: str = Field(default="http://localhost:8005")
+    CREDENTIALS_PUBLIC_SERVICE_URL: str = Field(default="http://localhost:8005")
+    CREDENTIALS_SERVICE_USERNAME: str = Field(default="credentials_service_user")
+    CREDIT_PROVIDER_SECRET_KEYS: dict[str, Any] = Field(default_factory=lambda: {})
+    CREDIT_PROVIDER_TIMESTAMP_EXPIRATION: int = Field(default=900)
+    CREDIT_TASK_DEFAULT_RETRY_DELAY: int = Field(default=30)
+    CREDIT_TASK_MAX_RETRIES: int = Field(default=5)
+    CROSS_DOMAIN_CSRF_COOKIE_DOMAIN: str = Field(default="")
+    CROSS_DOMAIN_CSRF_COOKIE_NAME: str = Field(default="")
+    CSRF_COOKIE_AGE: int = Field(default=31449600)
+    CSRF_COOKIE_SECURE: bool = Field(default=False)
+    CSRF_TRUSTED_ORIGINS: list[Any] = Field(default_factory=lambda: [])
+    CUSTOM_COURSES_EDX: bool = Field(default=False)
+    CUSTOM_PAGES_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/manage_custom_page.html"
+    )
+    CUSTOM_RESOURCE_TEMPLATES_DIRECTORY: Any = Field(default=None)  # TODO: refine type
+    DATABASES: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "default": {
+                "ATOMIC_REQUESTS": True,
+                "CONN_MAX_AGE": 0,
+                "ENGINE": "django.db.backends.mysql",
+                "HOST": "127.0.0.1",
+                "NAME": "edxapp",
+                "OPTIONS": {},
+                "PASSWORD": "password",
+                "PORT": "3306",
+                "USER": "edxapp001",
+            },
+            "read_replica": {
+                "CONN_MAX_AGE": 0,
+                "ENGINE": "django.db.backends.mysql",
+                "HOST": "127.0.0.1",
+                "NAME": "edxapp",
+                "OPTIONS": {},
+                "PASSWORD": "password",
+                "PORT": "3306",
+                "USER": "edxapp001",
+            },
+            "student_module_history": {
+                "CONN_MAX_AGE": 0,
+                "ENGINE": "django.db.backends.mysql",
+                "HOST": "127.0.0.1",
+                "NAME": "edxapp_csmh",
+                "OPTIONS": {},
+                "PASSWORD": "password",
+                "PORT": "3306",
+                "USER": "edxapp001",
+            },
+        }
+    )
+    DATABASE_ROUTERS: list[Any] = Field(
+        default_factory=lambda: [
+            "openedx.core.lib.django_courseware_routers.StudentModuleHistoryExtendedRouter",
+            "edx_django_utils.db.read_replica.ReadReplicaRouter",
+        ]
+    )
+    DATA_DIR: str = Field(default=Path("/openedx/data"))
+    DATA_UPLOAD_MAX_MEMORY_SIZE: Any = Field(default=None)  # TODO: refine type
+    DATA_UPLOAD_MAX_NUMBER_FIELDS: Any = Field(default=None)  # TODO: refine type
+    DEBUG: bool = Field(default=False)
+    DEBUG_TOOLBAR_PATCH_SETTINGS: bool = Field(default=False)
+    DEFAULT_AUTO_FIELD: str = Field(default="django.db.models.AutoField")
+    DEFAULT_COURSE_ABOUT_IMAGE_URL: str = Field(default="images/pencils.jpg")
+    DEFAULT_COURSE_LANGUAGE: str = Field(default="en")
+    DEFAULT_COURSE_VISIBILITY_IN_CATALOG: str = Field(default="both")
+    DEFAULT_EMAIL_LOGO_URL: str = Field(
+        default="https://edx-cdn.org/v3/default/logo.png"
+    )
+    DEFAULT_FEEDBACK_EMAIL: str = Field(default="feedback@example.com")
+    DEFAULT_FROM_EMAIL: str = Field(default="registration@example.com")
+    DEFAULT_GRADE_DESIGNATIONS: list[Any] = Field(
+        default_factory=lambda: ["A", "B", "C", "D"]
+    )
+    DEFAULT_HASHING_ALGORITHM: str = Field(default="sha256")
+    DEFAULT_MOBILE_AVAILABLE: bool = Field(default=False)
+    DEFAULT_NOTIFICATION_ICON_URL: str = Field(default="")
+    DEFAULT_ORG_LOGO_URL: str = Field(default="/static/studio/images/logo.png")
+    DEFAULT_PRIORITY_QUEUE: str = Field(default="edx.cms.core.default")
+    DEFAULT_SITE_THEME: Any = Field(default=None)  # TODO: refine type
+    DEFAULT_TEMPLATE_ENGINE: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "NAME": "django",
+            "BACKEND": "django.template.backends.django.DjangoTemplates",
+            "APP_DIRS": False,
+            "DIRS": [
+                Path("/openedx/edx-platform/cms/templates"),
+                Path("/openedx/edx-platform/common/templates"),
+                Path("/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"),
+                Path("/openedx/edx-platform/common/static"),
+                Path(
+                    "/openedx/edx-platform/openedx/core/djangoapps/cors_csrf/templates"
+                ),
+                Path(
+                    "/openedx/edx-platform/openedx/core/djangoapps/dark_lang/templates"
+                ),
+                Path("/openedx/edx-platform/openedx/core/lib/license/templates"),
+                Path("/openedx/edx-platform/cms/djangoapps/pipeline_js/templates"),
+            ],
+            "OPTIONS": {
+                "loaders": [
+                    "openedx.core.djangoapps.theming.template_loaders.ThemeTemplateLoader",
+                    "common.djangoapps.edxmako.makoloader.MakoFilesystemLoader",
+                    "common.djangoapps.edxmako.makoloader.MakoAppDirectoriesLoader",
+                ],
+                "context_processors": [
+                    "django.template.context_processors.request",
+                    "django.template.context_processors.static",
+                    "django.template.context_processors.i18n",
+                    "django.contrib.auth.context_processors.auth",
+                    "django.template.context_processors.csrf",
+                    "django.template.context_processors.media",
+                    "django.template.context_processors.tz",
+                    "django.contrib.messages.context_processors.messages",
+                    "sekizai.context_processors.sekizai",
+                    "common.djangoapps.edxmako.shortcuts.marketing_link_context_processor",
+                    "lms.djangoapps.courseware.context_processor.user_timezone_locale_prefs",
+                    "help_tokens.context_processor",
+                    "openedx.core.djangoapps.site_configuration.context_processors.configuration_context",
+                    "lms.djangoapps.mobile_api.context_processor.is_from_mobile_app",
+                    "openedx.features.survey_report.context_processors.admin_extra_context",
+                    "social_django.context_processors.backends",
+                    "social_django.context_processors.login_redirect",
+                ],
+                "debug": False,
+            },
+        }
+    )
+    DEPRECATED_ADVANCED_COMPONENT_TYPES: list[Any] = Field(default_factory=lambda: [])
+    DEPRECATE_OLD_COURSE_KEYS_IN_STUDIO: bool = Field(default=True)
+    DISABLE_ACCOUNT_ACTIVATION_REQUIREMENT_SWITCH: str = Field(
+        default="verify_student_disable_account_activation_requirement"
+    )
+    DISABLE_ADVANCED_SETTINGS: bool = Field(default=False)
+    DISABLE_COURSE_CREATION: bool = Field(default=False)
+    DISABLE_DEPRECATED_SIGNIN_URL: bool = Field(default=False)
+    DISABLE_DEPRECATED_SIGNUP_URL: bool = Field(default=False)
+    DISABLE_MOBILE_COURSE_AVAILABLE: bool = Field(default=False)
+    DISABLE_START_DATES: bool = Field(default=False)
+    DISABLE_UNENROLLMENT: bool = Field(default=False)
+    DISCUSSIONS_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/concepts/communication/about_course_discussions.html"
+    )
+    DISCUSSIONS_INCONTEXT_FEEDBACK_URL: str = Field(default="")
+    DISCUSSIONS_INCONTEXT_LEARNMORE_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/concepts/communication/about_course_discussions.html"
+    )
+    DISCUSSIONS_MFE_FEEDBACK_URL: Any = Field(default=None)  # TODO: refine type
+    DISCUSSIONS_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
+    DISCUSSION_RATELIMIT: str = Field(default="100/m")
+    DISCUSSION_SETTINGS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "MAX_COMMENT_DEPTH": 2,
+            "COURSE_PUBLISH_TASK_DELAY": 30,
+        }
+    )
+    DJFS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "type": "osfs",
+            "directory_root": "/edx/var/edxapp/django-pyfs/static/django-pyfs",
+            "url_root": "/static/django-pyfs",
+        }
+    )
+    DOC_STORE_CONFIG: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "db": "edxapp",
+            "host": "localhost",
+            "replicaSet": "",
+            "port": 27017,
+            "user": "edxapp",
+            "collection": "modulestore",
+            "ssl": False,
+            "socketTimeoutMS": 6000,
+            "connectTimeoutMS": 2000,
+            "auth_source": None,
+            "password": "password",
+            "read_preference": "PRIMARY",
+        }
+    )
+    ECOMMERCE_API_SIGNING_KEY: str = Field(default="SET-ME-PLEASE")
+    ECOMMERCE_API_URL: str = Field(default="http://localhost:8002/api/v2")
+    ECOMMERCE_PUBLIC_URL_ROOT: str = Field(default="http://localhost:8002")
+    EDITABLE_SHORT_DESCRIPTION: bool = Field(default=True)
+    EDXAPP_PARSE_KEYS: dict[str, Any] = Field(default_factory=lambda: {})
+    EDXMKTG_LOGGED_IN_COOKIE_NAME: str = Field(default="edxloggedin")
+    EDXMKTG_USER_INFO_COOKIE_NAME: str = Field(default="edx-user-info")
+    EDXMKTG_USER_INFO_COOKIE_VERSION: int = Field(default=1)
+    EDXNOTES_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/exercise_tools/enable_notes.html"
+    )
+    EDX_DRF_EXTENSIONS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "JWT_PAYLOAD_USER_ATTRIBUTE_MAPPING": {},
+            "VERIFY_LMS_USER_ID_PROPERTY_NAME": "id",
+        }
+    )
+    EDX_PLATFORM_REVISION: str = Field(default="release")
+    EDX_ROOT_URL: str = Field(default="")
+    ELASTIC_FIELD_MAPPINGS: dict[str, Any] = Field(
+        default_factory=lambda: {"start_date": {"type": "date"}}
+    )
+    ELASTIC_SEARCH_CONFIG: list[Any] = Field(
+        default_factory=lambda: [{"use_ssl": False, "host": "localhost", "port": 9200}]
+    )
+    EMAIL_CHANGE_RATE_LIMIT: str = Field(default="")
+    EMAIL_FILE_PATH: str = Field(default=Path("/openedx/data/emails/studio"))
+    EMBARGO: bool = Field(default=False)
+    EMBARGO_SITE_REDIRECT_URL: Any = Field(default=None)  # TODO: refine type
+    ENABLE_AUTOADVANCE_VIDEOS: bool = Field(default=False)
+    ENABLE_AUTOMATIC_AUTHZ_COURSE_AUTHORING_MIGRATION: bool = Field(default=False)
+    ENABLE_AUTO_GITHUB_REPO_CREATION: bool = Field(default=False)
+    ENABLE_AUTO_LANGUAGE_SELECTION: bool = Field(default=False)
+    ENABLE_CHANGE_USER_PASSWORD_ADMIN: bool = Field(default=False)
+    ENABLE_CODEJAIL_REST_SERVICE: bool = Field(default=False)
+    ENABLE_COMPREHENSIVE_THEMING: bool = Field(default=False)
+    ENABLE_CONTENT_LIBRARIES: bool = Field(default=True)
+    ENABLE_COPPA_COMPLIANCE: bool = Field(default=False)
+    ENABLE_CORS_HEADERS: bool = Field(default=False)
+    ENABLE_COUNTRY_ACCESS: bool = Field(default=False)
+    ENABLE_COURSEWARE_INDEX: bool = Field(default=False)
+    ENABLE_COURSE_OLX_VALIDATION: bool = Field(default=False)
+    ENABLE_CREATOR_GROUP: bool = Field(default=True)
+    ENABLE_CREDIT_API: bool = Field(default=False)
+    ENABLE_CREDIT_ELIGIBILITY: bool = Field(default=True)
+    ENABLE_CROSS_DOMAIN_CSRF_COOKIE: bool = Field(default=False)
+    ENABLE_CSMH_EXTENDED: bool = Field(default=True)
+    ENABLE_DATES_COURSE_APP: bool = Field(default=False)
+    ENABLE_DISCUSSION_HOME_PANEL: bool = Field(default=True)
+    ENABLE_DISCUSSION_SERVICE: bool = Field(default=True)
+    ENABLE_DYNAMIC_REGISTRATION_FIELDS: bool = Field(default=False)
+    ENABLE_EDXNOTES: bool = Field(default=False)
+    ENABLE_ENROLLMENT_RESET: bool = Field(default=False)
+    ENABLE_ENROLLMENT_TRACK_USER_PARTITION: bool = Field(default=True)
+    ENABLE_GIT_AUTO_EXPORT: bool = Field(default=True)
+    ENABLE_GRADE_DOWNLOADS: bool = Field(default=True)
+    ENABLE_HELP_LINK: bool = Field(default=True)
+    ENABLE_HIDE_FROM_TOC_UI: bool = Field(default=False)
+    ENABLE_INTEGRITY_SIGNATURE: bool = Field(default=False)
+    ENABLE_JASMINE: bool = Field(default=False)
+    ENABLE_LIBRARY_INDEX: bool = Field(default=False)
+    ENABLE_LTI_PII_ACKNOWLEDGEMENT: bool = Field(default=False)
+    ENABLE_MAX_FAILED_LOGIN_ATTEMPTS: bool = Field(default=False)
+    ENABLE_MKTG_SITE: bool = Field(default=False)
+    ENABLE_MOBILE_REST_API: bool = Field(default=False)
+    ENABLE_ORA_ALL_FILE_URLS: bool = Field(default=False)
+    ENABLE_ORA_USER_STATE_UPLOAD_DATA: bool = Field(default=False)
+    ENABLE_ORGANIZATION_STAFF_ACCESS_FOR_CONTENT_LIBRARIES: bool = Field(default=True)
+    ENABLE_OTHER_COURSE_SETTINGS: bool = Field(default=False)
+    ENABLE_PASSWORD_RESET_FAILURE_EMAIL: bool = Field(default=False)
+    ENABLE_PREREQUISITE_COURSES: bool = Field(default=False)
+    ENABLE_PUBLISHER: bool = Field(default=False)
+    ENABLE_RAPID_RESPONSE_AUTHOR_VIEW: bool = Field(default=False)
+    ENABLE_READING_FROM_MULTIPLE_HISTORY_TABLES: bool = Field(default=True)
+    ENABLE_SEND_XBLOCK_LIFECYCLE_EVENTS_OVER_BUS: bool = Field(default=False)
+    ENABLE_SEPARATE_ARCHIVED_COURSES: bool = Field(default=True)
+    ENABLE_SERVICE_STATUS: bool = Field(default=False)
+    ENABLE_SPECIAL_EXAMS: bool = Field(default=False)
+    ENABLE_TEAMS: bool = Field(default=True)
+    ENABLE_TEXTBOOK: bool = Field(default=True)
+    ENABLE_VIDEO_BUMPER: bool = Field(default=False)
+    ENABLE_VIDEO_UPLOAD_PIPELINE: bool = Field(default=False)
+    ENROLLMENT_COURSE_ACCESS_ROLES: list[Any] = Field(
+        default_factory=lambda: ["instructor", "staff"]
+    )
+    ENROLLMENT_WEBHOOK_ACCESS_TOKEN: Any = Field(default=None)  # TODO: refine type
+    ENROLLMENT_WEBHOOK_URL: Any = Field(default=None)  # TODO: refine type
+    ENTERPRISE_API_CACHE_TIMEOUT: int = Field(default=3600)
+    ENTERPRISE_API_URL: str = Field(default="http://localhost:18000/enterprise/api/v1/")
+    ENTERPRISE_BACKEND_SERVICE_EDX_OAUTH2_KEY: str = Field(
+        default="enterprise-backend-service-key"
+    )
+    ENTERPRISE_BACKEND_SERVICE_EDX_OAUTH2_PROVIDER_URL: str = Field(
+        default="http://127.0.0.1:8000/oauth2"
+    )
+    ENTERPRISE_BACKEND_SERVICE_EDX_OAUTH2_SECRET: str = Field(
+        default="enterprise-backend-service-secret"
+    )
+    ENTERPRISE_CATALOG_INTERNAL_ROOT_URL: str = Field(
+        default="http://enterprise.catalog.app:18160"
+    )
+    ENTERPRISE_CONSENT_API_URL: str = Field(
+        default="http://localhost:18000/consent/api/v1/"
+    )
+    ENTERPRISE_CUSTOMER_CATALOG_DEFAULT_CONTENT_FILTER: dict[str, Any] = Field(
+        default_factory=lambda: {}
+    )
+    ENTERPRISE_ENROLLMENT_API_URL: str = Field(
+        default="http://localhost:18000/api/enrollment/v1/"
+    )
+    ENTERPRISE_MARKETING_FOOTER_QUERY_PARAMS: dict[str, Any] = Field(
+        default_factory=lambda: {}
+    )
+    ENTERPRISE_SERVICE_WORKER_USERNAME: str = Field(default="enterprise_worker")
+    ENTRANCE_EXAMS: bool = Field(default=False)
+    ENTRANCE_EXAM_MIN_SCORE_PCT: int = Field(default=50)
+    ENV_ROOT: str = Field(default=Path("/openedx"))
     EVENT_BUS_PRODUCER_CONFIG: dict[str, Any] = Field(
         default_factory=lambda: {
             "org.openedx.learning.course.passing.status.updated.v1": {
@@ -1185,6 +953,54 @@ class AqueductSettings(BaseSettings):
             "org.openedx.learning.ccx.course.passing.status.updated.v1": {
                 "learning-badges-lifecycle": {
                     "event_key_field": "course_passing_status.course.ccx_course_key",
+                    "enabled": False,
+                }
+            },
+            "org.openedx.learning.certificate.created.v1": {
+                "learning-certificate-lifecycle": {
+                    "event_key_field": "certificate.course.course_key",
+                    "enabled": False,
+                }
+            },
+            "org.openedx.learning.certificate.revoked.v1": {
+                "learning-certificate-lifecycle": {
+                    "event_key_field": "certificate.course.course_key",
+                    "enabled": False,
+                }
+            },
+            "org.openedx.learning.course.unenrollment.completed.v1": {
+                "course-unenrollment-lifecycle": {
+                    "event_key_field": "enrollment.course.course_key",
+                    "enabled": False,
+                }
+            },
+            "org.openedx.learning.xblock.skill.verified.v1": {
+                "learning-xblock-skill-verified": {
+                    "event_key_field": "xblock_info.usage_key",
+                    "enabled": False,
+                }
+            },
+            "org.openedx.learning.user.course_access_role.added.v1": {
+                "learning-course-access-role-lifecycle": {
+                    "event_key_field": "course_access_role_data.course_key",
+                    "enabled": False,
+                }
+            },
+            "org.openedx.learning.user.course_access_role.removed.v1": {
+                "learning-course-access-role-lifecycle": {
+                    "event_key_field": "course_access_role_data.course_key",
+                    "enabled": False,
+                }
+            },
+            "org.openedx.enterprise.learner_credit_course_enrollment.revoked.v1": {
+                "learner-credit-course-enrollment-lifecycle": {
+                    "event_key_field": "learner_credit_course_enrollment.uuid",
+                    "enabled": False,
+                }
+            },
+            "org.openedx.learning.external_grader.score.submitted.v1": {
+                "learning-external-grader-score-lifecycle": {
+                    "event_key_field": "score.submission_id",
                     "enabled": False,
                 }
             },
@@ -1214,10 +1030,517 @@ class AqueductSettings(BaseSettings):
             },
         }
     )
-    SERVICE_VARIANT: str = Field(default="cms")
-
-    # ===== openedx-learning =====
-    LANGUAGE_DICT: dict[str, str] = Field(
+    EVENT_TRACKING_BACKENDS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "tracking_logs": {
+                "ENGINE": "eventtracking.backends.routing.RoutingBackend",
+                "OPTIONS": {
+                    "backends": {
+                        "logger": {
+                            "ENGINE": "eventtracking.backends.logger.LoggerBackend",
+                            "OPTIONS": {"name": "tracking", "max_event_size": 50000},
+                        }
+                    },
+                    "processors": [
+                        {
+                            "ENGINE": "common.djangoapps.track.shim.LegacyFieldMappingProcessor"
+                        },
+                        {
+                            "ENGINE": "common.djangoapps.track.shim.PrefixedEventProcessor"
+                        },
+                    ],
+                },
+            },
+            "segmentio": {
+                "ENGINE": "eventtracking.backends.routing.RoutingBackend",
+                "OPTIONS": {
+                    "backends": {
+                        "segment": {
+                            "ENGINE": "eventtracking.backends.segment.SegmentBackend"
+                        }
+                    },
+                    "processors": [
+                        {
+                            "ENGINE": "eventtracking.processors.whitelist.NameWhitelistProcessor",
+                            "OPTIONS": {"whitelist": []},
+                        },
+                        {
+                            "ENGINE": "common.djangoapps.track.shim.GoogleAnalyticsProcessor"
+                        },
+                    ],
+                },
+            },
+            "rapid_response": {
+                "ENGINE": "rapid_response_xblock.logger.SubmissionRecorder",
+                "OPTIONS": {"name": "rapid_response"},
+            },
+        }
+    )
+    EVENT_TRACKING_ENABLED: bool = Field(default=True)
+    EVENT_TRACKING_PROCESSORS: list[Any] = Field(default_factory=lambda: [])
+    EVENT_TRACKING_SEGMENTIO_EMIT_WHITELIST: list[Any] = Field(
+        default_factory=lambda: []
+    )
+    EXAMS_SERVICE_URL: str = Field(default="http://localhost:18740/api/v1")
+    EXAMS_SERVICE_USERNAME: str = Field(default="edx_exams_worker")
+    EXPIRED_NOTIFICATIONS_DELETE_BATCH_SIZE: int = Field(default=10000)
+    EXTENDED_VIDEO_TRANSCRIPT_LANGUAGES: list[Any] = Field(default_factory=lambda: [])
+    EXTRA_MIDDLEWARE_CLASSES: list[Any] = Field(default_factory=lambda: [])
+    FACEBOOK_API_VERSION: str = Field(default="v2.1")
+    FACEBOOK_APP_ID: str = Field(default="FACEBOOK_APP_ID")
+    FACEBOOK_APP_SECRET: str = Field(default="FACEBOOK_APP_SECRET")
+    FALLBACK_TO_ENGLISH_TRANSCRIPTS: bool = Field(default=True)
+    FAVICON_PATH: str = Field(default="images/favicon.ico")
+    FAVICON_URL: Any = Field(default=None)  # TODO: refine type
+    FCM_APP_NAME: str = Field(default="fcm-edx-platform")
+    FEATURES: Any = Field(
+        default=None
+    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
+    FEEDBACK_SUBMISSION_EMAIL: str = Field(default="")
+    FERNET_KEYS: list[Any] = Field(
+        default_factory=lambda: ["DUMMY KEY CHANGE BEFORE GOING TO PRODUCTION"]
+    )
+    FILES_AND_UPLOAD_TYPE_FILTERS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "Images": [
+                "image/png",
+                "image/jpeg",
+                "image/jpg",
+                "image/gif",
+                "image/tiff",
+                "image/tif",
+                "image/x-icon",
+                "image/svg+xml",
+                "image/bmp",
+                "image/x-ms-bmp",
+            ],
+            "Documents": [
+                "application/pdf",
+                "text/plain",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+                "application/vnd.openxmlformats-officedocument.presentationml.template",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+                "application/msword",
+                "application/vnd.ms-excel",
+                "application/vnd.ms-powerpoint",
+                "application/csv",
+                "application/vnd.ms-excel.sheet.macroEnabled.12",
+                "text/x-tex",
+                "application/x-pdf",
+                "application/vnd.ms-excel.sheet.macroenabled.12",
+                "file/pdf",
+                "image/pdf",
+                "text/csv",
+                "text/pdf",
+                "text/x-sh",
+                '"application/pdf"',
+            ],
+            "Audio": [
+                "audio/mpeg",
+                "audio/mp3",
+                "audio/x-wav",
+                "audio/ogg",
+                "audio/wav",
+                "audio/aac",
+                "audio/x-m4a",
+                "audio/mp4",
+                "audio/x-ms-wma",
+            ],
+            "Code": [
+                "application/json",
+                "text/html",
+                "text/javascript",
+                "application/javascript",
+                "text/css",
+                "text/x-python",
+                "application/x-java-jnlp-file",
+                "application/xml",
+                "application/postscript",
+                "application/x-javascript",
+                "application/java-vm",
+                "text/x-c++src",
+                "text/xml",
+                "text/x-scss",
+                "application/x-python-code",
+                "application/java-archive",
+                "text/x-python-script",
+                "application/x-ruby",
+                "application/mathematica",
+                "text/coffeescript",
+                "text/x-matlab",
+                "application/sql",
+                "text/php",
+            ],
+        }
+    )
+    FILE_UPLOAD_STORAGE_BUCKET_NAME: str = Field(
+        default="SET-ME-PLEASE (ex. bucket-name)"
+    )
+    FILE_UPLOAD_STORAGE_PREFIX: str = Field(default="submissions_attachments")
+    FINANCIAL_REPORTS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "STORAGE_TYPE": "localfs",
+            "BUCKET": None,
+            "ROOT_PATH": "sandbox",
+        }
+    )
+    FIREBASE_APP: Any = Field(default=None)  # TODO: refine type
+    FIREBASE_CREDENTIALS: Any = Field(default=None)  # TODO: refine type
+    FIREBASE_CREDENTIALS_PATH: Any = Field(default=None)  # TODO: refine type
+    FRONTEND_LOGIN_URL: str = Field(default="/login/")
+    FRONTEND_LOGOUT_URL: str = Field(default="/logout/")
+    FRONTEND_REGISTER_URL: str = Field(default="http://localhost:18000/register")
+    GENERATE_PROFILE_SCORES: bool = Field(default=False)
+    GEOIP_PATH: str = Field(
+        default=Path(
+            "/openedx/edx-platform/common/static/data/geoip/GeoLite2-Country.mmdb"
+        )
+    )
+    GITHUB_ACCESS_TOKEN: Any = Field(default=None)  # TODO: refine type
+    GITHUB_ORG_API_URL: str = Field(default="")
+    GITHUB_PUSH: bool = Field(default=False)
+    GITHUB_REPO_ROOT: str = Field(default=Path("/openedx/data"))
+    GIT_EXPORT_DEFAULT_IDENT: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "name": "STUDIO_EXPORT_TO_GIT",
+            "email": "STUDIO_EXPORT_TO_GIT@example.com",
+        }
+    )
+    GIT_REPO_EXPORT_DIR: str = Field(default="/openedx/export_course_repos")
+    GOOGLE_ANALYTICS_ACCOUNT: Any = Field(default=None)  # TODO: refine type
+    GRADES_DOWNLOAD: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "STORAGE_CLASS": "django.core.files.storage.FileSystemStorage",
+            "STORAGE_KWARGS": {"location": "/tmp/edx-s3/grades"},
+            "STORAGE_TYPE": None,
+            "BUCKET": None,
+            "ROOT_PATH": None,
+        }
+    )
+    HEARTBEAT_CELERY_ROUTING_KEY: str = Field(default="edx.cms.core.high")
+    HEARTBEAT_CELERY_TIMEOUT: int = Field(default=5)
+    HEARTBEAT_CHECKS: list[Any] = Field(
+        default_factory=lambda: [
+            "openedx.core.djangoapps.heartbeat.default_checks.check_modulestore",
+            "openedx.core.djangoapps.heartbeat.default_checks.check_database",
+        ]
+    )
+    HEARTBEAT_EXTENDED_CHECKS: tuple[Any, ...] = Field(
+        default=("openedx.core.djangoapps.heartbeat.default_checks.check_celery",)
+    )  # TODO: refine type
+    HELP_TOKENS_BOOKS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "learner": "https://docs.openedx.org/en/latest/learners",
+            "course_author": "https://docs.openedx.org/en/latest/educators",
+        }
+    )
+    HELP_TOKENS_INI_FILE: str = Field(
+        default=Path("/openedx/edx-platform/cms/envs/help_tokens.ini")
+    )
+    HELP_TOKENS_LANGUAGE_CODE: str = Field(default="en")
+    HELP_TOKENS_VERSION: str = Field(default="latest")
+    HIGH_PRIORITY_QUEUE: str = Field(default="edx.cms.core.high")
+    HOTJAR_ID: int = Field(default=0)
+    HTTPS: str = Field(default="on")
+    ICP_LICENSE: Any = Field(default=None)  # TODO: refine type
+    ICP_LICENSE_INFO: dict[str, Any] = Field(default_factory=lambda: {})
+    IDA_LOGOUT_URI_LIST: list[Any] = Field(default_factory=lambda: [])
+    ID_VERIFICATION_SUPPORT_LINK: str = Field(default="")
+    INACTIVE_USER_LOGIN: bool = Field(default=True)
+    INACTIVE_USER_URL: str = Field(default="http://None")
+    INSTALLED_APPS: list[Any] = Field(
+        default_factory=lambda: [
+            "django.contrib.auth",
+            "django.contrib.contenttypes",
+            "django.contrib.humanize",
+            "django.contrib.redirects",
+            "django.contrib.sessions",
+            "django.contrib.sites",
+            "django.contrib.messages",
+            "openedx.core.djangoapps.staticfiles.apps.EdxPlatformStaticFilesConfig",
+            "django_celery_results",
+            "method_override",
+            "openedx.core.djangoapps.common_initialization.apps.CommonInitializationConfig",
+            "openedx.core.djangoapps.common_views",
+            "openedx.core.djangoapps.api_admin",
+            "corsheaders",
+            "openedx.core.djangoapps.cors_csrf",
+            "xss_utils",
+            "simple_history",
+            "config_models",
+            "openedx.core.djangoapps.config_model_utils",
+            "waffle",
+            "openedx.core.djangoapps.service_status",
+            "openedx.core.djangoapps.video_config",
+            "openedx.core.djangoapps.video_pipeline",
+            "cms.djangoapps.contentstore.apps.ContentstoreConfig",
+            "common.djangoapps.split_modulestore_django.apps.SplitModulestoreDjangoBackendAppConfig",
+            "openedx.core.djangoapps.contentserver",
+            "cms.djangoapps.course_creators",
+            "common.djangoapps.student.apps.StudentConfig",
+            "openedx.core.djangoapps.course_groups",
+            "cms.djangoapps.xblock_config.apps.XBlockConfig",
+            "cms.djangoapps.export_course_metadata.apps.ExportCourseMetadataConfig",
+            "cms.djangoapps.modulestore_migrator",
+            "openedx.core.djangoapps.xblock.apps.StudioXBlockAppConfig",
+            "openedx.core.djangoapps.util.apps.UtilConfig",
+            "common.djangoapps.track",
+            "eventtracking.django.apps.EventTrackingConfig",
+            "common.djangoapps.edxmako.apps.EdxMakoConfig",
+            "pipeline",
+            "common.djangoapps.static_replace",
+            "require",
+            "webpack_loader",
+            "openedx.core.djangoapps.site_configuration",
+            "openedx.core.djangoapps.crawlers",
+            "openedx.core.djangoapps.django_comment_common",
+            "openedx.core.djangoapps.notifications",
+            "django.contrib.admin",
+            "common.djangoapps.course_modes.apps.CourseModesConfig",
+            "openedx.core.djangoapps.verified_track_content",
+            "openedx.core.djangoapps.dark_lang",
+            "wiki",
+            "django_notify",
+            "lms.djangoapps.course_wiki",
+            "mptt",
+            "sekizai",
+            "openedx.core.djangoapps.user_api",
+            "openedx.core.djangoapps.embargo",
+            "common.djangoapps.course_action_state",
+            "submissions",
+            "openassessment",
+            "openassessment.assessment",
+            "openassessment.fileupload",
+            "openassessment.staffgrader",
+            "openassessment.workflow",
+            "openassessment.xblock",
+            "edxval",
+            "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
+            "openedx.core.djangoapps.content.block_structure.apps.BlockStructureConfig",
+            "milestones",
+            "openedx.core.djangoapps.credit.apps.CreditConfig",
+            "common.djangoapps.xblock_django",
+            "openedx.core.djangoapps.agreements",
+            "openedx.core.djangoapps.catalog",
+            "openedx.core.djangoapps.programs.apps.ProgramsConfig",
+            "oauth2_provider",
+            "openedx.core.djangoapps.oauth_dispatch.apps.OAuthDispatchAppConfig",
+            "lms.djangoapps.courseware",
+            "lms.djangoapps.coursewarehistoryextended",
+            "lms.djangoapps.survey.apps.SurveyConfig",
+            "lms.djangoapps.verify_student.apps.VerifyStudentConfig",
+            "completion",
+            "openedx.core.djangoapps.system_wide_roles",
+            "statici18n",
+            "cms.lib.xblock.tagging",
+            "django_sites_extensions",
+            "release_util",
+            "rules.apps.AutodiscoverRulesConfig",
+            "bridgekeeper",
+            "user_tasks",
+            "cms.djangoapps.cms_user_tasks.apps.CmsUserTasksConfig",
+            "common.djangoapps.database_fixups",
+            "celery_utils",
+            "openedx.core.djangoapps.waffle_utils",
+            "django_filters",
+            "cms.djangoapps.api",
+            "csrf.apps.CsrfAppConfig",
+            "common.djangoapps.entitlements",
+            "common.djangoapps.pipeline_mako",
+            "drf_yasg",
+            "openedx_tagging",
+            "openedx.core.djangoapps.content_tagging",
+            "openedx.core.djangoapps.content.search",
+            "lms.djangoapps.program_enrollments",
+            "openedx.features.course_duration_limits",
+            "openedx.features.content_type_gating",
+            "openedx.features.discounts",
+            "openedx.features.effort_estimation",
+            "lms.djangoapps.experiments",
+            "openedx.core.djangoapps.external_user_ids",
+            "openedx.core.djangoapps.heartbeat",
+            "openedx.core.djangoapps.course_date_signals",
+            "openedx.core.djangoapps.schedules",
+            "rest_framework_jwt",
+            "openedx.core.djangoapps.content.learning_sequences.apps.LearningSequencesConfig",
+            "organizations",
+            "edx_django_utils.user",
+            "social_django",
+            "pylti1p3.contrib.django.lti1p3_tool_config",
+            "edx_ace",
+            "drf_spectacular",
+            "openedx.core.djangoapps.authz",
+            "openedx_events",
+            "openedx_catalog",
+            "openedx_content",
+            "openedx_content.backcompat.backup_restore",
+            "openedx_content.backcompat.collections",
+            "openedx_content.backcompat.components",
+            "openedx_content.backcompat.contents",
+            "openedx_content.backcompat.publishing",
+            "openedx_content.backcompat.sections",
+            "openedx_content.backcompat.subsections",
+            "openedx_content.backcompat.units",
+            "edx_sga",
+            "integrated_channels.integrated_channel",
+            "integrated_channels.degreed",
+            "integrated_channels.degreed2",
+            "integrated_channels.sap_success_factors",
+            "integrated_channels.cornerstone",
+            "integrated_channels.xapi",
+            "integrated_channels.blackboard",
+            "integrated_channels.canvas",
+            "integrated_channels.moodle",
+            "channel_integrations.integrated_channel",
+            "channel_integrations.degreed2",
+            "channel_integrations.sap_success_factors",
+            "channel_integrations.cornerstone",
+            "channel_integrations.xapi",
+            "channel_integrations.blackboard",
+            "channel_integrations.canvas",
+            "channel_integrations.moodle",
+            "django_object_actions",
+            "openedx.core.djangoapps.ace_common.apps.AceCommonConfig",
+            "openedx.core.djangoapps.bookmarks.apps.BookmarksConfig",
+            "openedx.core.djangoapps.content_libraries.apps.ContentLibrariesConfig",
+            "openedx.core.djangoapps.content_staging.apps.ContentStagingAppConfig",
+            "openedx.core.djangoapps.course_apps.apps.CourseAppsConfig",
+            "openedx.core.djangoapps.course_live.apps.CourseLiveConfig",
+            "lms.djangoapps.discussion.apps.DiscussionConfig",
+            "openedx.core.djangoapps.discussions.apps.DiscussionsConfig",
+            "lms.djangoapps.instructor.apps.InstructorConfig",
+            "openedx.core.djangoapps.olx_rest_api.apps.OlxRestApiAppConfig",
+            "openedx.core.djangoapps.password_policy.apps.PasswordPolicyConfig",
+            "openedx.core.djangoapps.plugins.apps.PluginsConfig",
+            "openedx.core.djangoapps.theming.apps.ThemingConfig",
+            "openedx.core.djangoapps.user_authn.apps.UserAuthnConfig",
+            "openedx.core.djangoapps.zendesk_proxy.apps.ZendeskProxyConfig",
+            "ol_openedx_auto_select_language.apps.OLOpenEdxAutoSelectLanguageConfig",
+            "ol_openedx_course_translations.apps.OLOpenedXCourseTranslationsConfig",
+            "ol_openedx_ai_static_translations.apps.OLOpenedXAIStaticTranslationsConfig",
+            "ol_openedx_chat.apps.OLOpenedxChatConfig",
+            "edx_when.apps.EdxWhenConfig",
+            "ol_openedx_canvas_integration.app.CanvasIntegrationConfig",
+            "ol_openedx_git_auto_export.app.GitAutoExportConfig",
+            "edx_username_changer.apps.EdxUsernameChangerConfig",
+            "ol_openedx_chat_xblock.apps.OLOpenedxChatXBlockConfig",
+            "ol_openedx_uai_content_customization.apps.OLOpenEdxUaiContentCustomizationConfig",
+            "openedx_authz.apps.OpenedxAuthzConfig",
+            "ol_openedx_course_sync.apps.OLOpenEdxCourseSyncConfig",
+            "lti_consumer.apps.LTIConsumerApp",
+            "ol_openedx_events_handler.apps.OlOpenedxEventsHandlerConfig",
+            "edx_proctoring.apps.EdxProctoringConfig",
+            "ol_openedx_sentry.app.EdxSentry",
+            "ol_openedx_logging.app.EdxLoggingCMS",
+            "consent.apps.ConsentConfig",
+            "enterprise.apps.EnterpriseConfig",
+            "ol_openedx_course_export.app.CourseExportConfig",
+            "rapid_response_xblock.apps.RapidResponseAppConfig",
+            "edx_sysadmin.apps.EdxSysAdminConfig",
+            "push_notifications",
+            "openedx_authz.engine.apps.CasbinAdapterConfig",
+        ]
+    )
+    INTEGRATED_CHANNELS_API_CHUNK_TRANSMISSION_LIMIT: dict[str, Any] = Field(
+        default_factory=lambda: {}
+    )
+    IN_CONTEXT_DISCUSSION_ENABLED_DEFAULT: bool = Field(default=True)
+    JWT_AUTH: dict[str, Any] = Field(
+        default=None
+    )  # OPAQUE: original dict value is not serialisable
+    LANGUAGES: list[Any] = Field(
+        default_factory=lambda: [
+            ("en", "English"),
+            ("rtl", "Right-to-Left Test Language"),
+            ("eo", "Dummy Language (Esperanto)"),
+            ("am", "አማርኛ"),
+            ("ar", "العربية"),
+            ("az", "azərbaycanca"),
+            ("bg-bg", "български (България)"),
+            ("bn-bd", "বাংলা (বাংলাদেশ)"),
+            ("bn-in", "বাংলা (ভারত)"),
+            ("bs", "bosanski"),
+            ("ca", "Català"),
+            ("ca@valencia", "Català (València)"),
+            ("cs", "Čeština"),
+            ("cy", "Cymraeg"),
+            ("da", "dansk"),
+            ("de-de", "Deutsch (Deutschland)"),
+            ("el", "Ελληνικά"),
+            ("en-uk", "English (United Kingdom)"),
+            ("en@lolcat", "LOLCAT English"),
+            ("en@pirate", "Pirate English"),
+            ("es-419", "Español (Latinoamérica)"),
+            ("es-ar", "Español (Argentina)"),
+            ("es-ec", "Español (Ecuador)"),
+            ("es-es", "Español (España)"),
+            ("es-mx", "Español (México)"),
+            ("es-pe", "Español (Perú)"),
+            ("et-ee", "Eesti (Eesti)"),
+            ("eu-es", "euskara (Espainia)"),
+            ("fa", "فارسی"),
+            ("fa-ir", "فارسی (ایران)"),
+            ("fi-fi", "Suomi (Suomi)"),
+            ("fil", "Filipino"),
+            ("fr", "Français"),
+            ("gl", "Galego"),
+            ("gu", "ગુજરાતી"),
+            ("he", "עברית"),
+            ("hi", "हिन्दी"),
+            ("hr", "hrvatski"),
+            ("hu", "magyar"),
+            ("hy-am", "Հայերեն (Հայաստան)"),
+            ("id", "Bahasa Indonesia"),
+            ("it-it", "Italiano (Italia)"),
+            ("ja-jp", "日本語 (日本)"),
+            ("kk-kz", "қазақ тілі (Қазақстан)"),
+            ("km-kh", "ភាសាខ្មែរ (កម្ពុជា)"),
+            ("kn", "ಕನ್ನಡ"),
+            ("ko-kr", "한국어 (대한민국)"),
+            ("lt-lt", "Lietuvių (Lietuva)"),
+            ("ml", "മലയാളം"),
+            ("mn", "Монгол хэл"),
+            ("mr", "मराठी"),
+            ("ms", "Bahasa Melayu"),
+            ("nb", "Norsk bokmål"),
+            ("ne", "नेपाली"),
+            ("nl-nl", "Nederlands (Nederland)"),
+            ("or", "ଓଡ଼ିଆ"),
+            ("pl", "Polski"),
+            ("pt-br", "Português (Brasil)"),
+            ("pt-pt", "Português (Portugal)"),
+            ("ro", "română"),
+            ("ru", "Русский"),
+            ("si", "සිංහල"),
+            ("sk", "Slovenčina"),
+            ("sl", "Slovenščina"),
+            ("sq", "shqip"),
+            ("sr", "Српски"),
+            ("sv", "svenska"),
+            ("sw", "Kiswahili"),
+            ("ta", "தமிழ்"),
+            ("te", "తెలుగు"),
+            ("th", "ไทย"),
+            ("tr-tr", "Türkçe (Türkiye)"),
+            ("uk", "Українська"),
+            ("ur", "اردو"),
+            ("vi", "Tiếng Việt"),
+            ("uz", "Ўзбек"),
+            ("zh-cn", "中文 (简体)"),
+            ("zh-hk", "中文 (香港)"),
+            ("zh-tw", "中文 (台灣)"),
+        ]
+    )
+    LANGUAGES_BIDI: tuple[Any, ...] = Field(
+        default=("he", "ar", "fa", "ur", "fa-ir", "rtl")
+    )  # TODO: refine type
+    LANGUAGE_CODE: str = Field(default="en")
+    LANGUAGE_COOKIE_NAME: str = Field(default="openedx-language-preference")
+    LANGUAGE_DICT: dict[str, Any] = Field(
         default_factory=lambda: {
             "en": "English",
             "rtl": "Right-to-Left Test Language",
@@ -1300,31 +1623,350 @@ class AqueductSettings(BaseSettings):
             "zh-tw": "中文 (台灣)",
         }
     )
-
-    # ===== openedx-platform =====
-    ASSET_KEY_PATTERN: str = Field(
-        default=None
-    )  # OPAQUE: original str value is not serialisable
-    COURSE_KEY_PATTERN: str = Field(
-        default=None
-    )  # OPAQUE: original str value is not serialisable
-    CROSS_DOMAIN_CSRF_COOKIE_DOMAIN: str = Field(default="")
-    CROSS_DOMAIN_CSRF_COOKIE_NAME: str = Field(default="")
-    DEFAULT_FEEDBACK_EMAIL: str = Field(default="feedback@example.com")
-    DISABLE_DEPRECATED_SIGNIN_URL: bool = Field(default=False)
-    DISABLE_DEPRECATED_SIGNUP_URL: bool = Field(default=False)
-    EDX_ROOT_URL: str = Field(default="")
-    FEATURES: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    LMS_ROOT_URL: Any = Field(default=None)  # TODO: refine type
-    MAKO_MODULE_DIR: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
+    LEARNER_ENGAGEMENT_PROMPT_FOR_ACTIVE_CONTRACT: str = Field(default="")
+    LEARNER_ENGAGEMENT_PROMPT_FOR_NON_ACTIVE_CONTRACT: str = Field(default="")
+    LEARNER_HOME_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
+    LEARNER_PORTAL_URL_ROOT: str = Field(
+        default="https://learner-portal-localhost:18000"
+    )
+    LEARNER_PROGRESS_PROMPT_FOR_ACTIVE_CONTRACT: str = Field(default="")
+    LEARNER_PROGRESS_PROMPT_FOR_NON_ACTIVE_CONTRACT: str = Field(default="")
+    LEARNING_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
+    LIBRARY_BLOCK_TYPES: list[Any] = Field(
+        default_factory=lambda: [
+            {"component": "library_content", "boilerplate_name": None}
+        ]
+    )
+    LIBRARY_ENABLED_BLOCKS: list[Any] = Field(
+        default_factory=lambda: [
+            "problem",
+            "video",
+            "html",
+            "drag-and-drop-v2",
+            "openassessment",
+            "conditional",
+            "done",
+            "edx_sga",
+            "freetextresponse",
+            "google-calendar",
+            "google-document",
+            "invideoquiz",
+            "lti",
+            "lti_consumer",
+            "pdf",
+            "poll",
+            "survey",
+            "word_cloud",
+        ]
+    )
+    LICENSING: bool = Field(default=False)
+    LITE_LLM_REQUEST_TIMEOUT: int = Field(default=300)
+    LLM_HTMLXML_MAX_CHARS_PER_REQUEST: int = Field(default=6000)
+    LLM_HTMLXML_MAX_CHARS_PER_UNIT: int = Field(default=800)
+    LLM_HTMLXML_MAX_UNITS_PER_REQUEST: int = Field(default=40)
+    LLM_TRANSLATION_CACHE_MAX_ENTRIES: int = Field(default=5000)
+    LMS_BASE: Any = Field(default=None)  # TODO: refine type
+    LMS_ENROLLMENT_API_PATH: str = Field(default="/api/enrollment/v1/")
+    LMS_INTERNAL_ROOT_URL: str = Field(default="http://localhost:18000")
+    LMS_ROOT: str = Field(default=Path("/openedx/edx-platform/lms"))
+    LMS_ROOT_URL: str = Field(default="http://localhost:18000")
+    LOCALE_PATHS: list[Any] = Field(
+        default_factory=lambda: [Path("/openedx/edx-platform/conf/locale")]
+    )
+    LOCAL_LOGLEVEL: str = Field(default="INFO")
+    LOGGING_ENV: str = Field(default="sandbox")
+    LOGIN_AND_REGISTER_FORM_RATELIMIT: str = Field(default="100/5m")
+    LOGIN_ISSUE_SUPPORT_LINK: str = Field(default="")
+    LOGIN_REDIRECT_URL: str = Field(default="/home/")
+    LOGIN_REDIRECT_WHITELIST: list[Any] = Field(default_factory=lambda: [])
+    LOGIN_URL: str = Field(default="/login/")
+    LOGISTRATION_API_RATELIMIT: str = Field(default="20/m")
+    LOGISTRATION_PER_EMAIL_RATELIMIT_RATE: str = Field(default="30/5m")
+    LOGISTRATION_RATELIMIT_RATE: str = Field(default="100/5m")
+    LOGO_IMAGE_EXTRA_TEXT: str = Field(default="")
+    LOGO_TRADEMARK_URL: Any = Field(default=None)  # TODO: refine type
+    LOGO_URL: Any = Field(default=None)  # TODO: refine type
+    LOGO_URL_PNG: Any = Field(default=None)  # TODO: refine type
+    LOG_DIR: str = Field(default="/edx/var/log/edx")
+    LOW_PRIORITY_QUEUE: str = Field(default="edx.cms.core.low")
+    MAINTENANCE_BANNER_TEXT: str = Field(default="Sample banner message")
+    MAKO_MODULE_DIR: str = Field(default="/tmp/mako_cms")
+    MAKO_TEMPLATE_DIRS_BASE: list[Any] = Field(
+        default_factory=lambda: [
+            Path("/openedx/edx-platform/cms/templates"),
+            Path("/openedx/edx-platform/common/templates"),
+            Path("/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"),
+            Path("/openedx/edx-platform/common/static"),
+            Path("/openedx/edx-platform/openedx/core/djangoapps/cors_csrf/templates"),
+            Path("/openedx/edx-platform/openedx/core/djangoapps/dark_lang/templates"),
+            Path("/openedx/edx-platform/openedx/core/lib/license/templates"),
+            Path("/openedx/edx-platform/cms/djangoapps/pipeline_js/templates"),
+        ]
+    )
+    MANAGERS: list[Any] = Field(default_factory=lambda: [])
+    MARKETING_EMAILS_OPT_IN: bool = Field(default=False)
+    MARK_LIBRARY_CONTENT_BLOCK_COMPLETE_ON_VIEW: bool = Field(default=False)
+    MAX_ASSET_UPLOAD_FILE_SIZE_IN_MB: int = Field(default=20)
+    MAX_ASSET_UPLOAD_FILE_SIZE_URL: str = Field(default="")
+    MAX_BLOCKS_PER_CONTENT_LIBRARY: int = Field(default=100000)
+    MAX_FAILED_LOGIN_ATTEMPTS_ALLOWED: int = Field(default=6)
+    MAX_FAILED_LOGIN_ATTEMPTS_LOCKOUT_PERIOD_SECS: int = Field(default=1800)
+    MEDIA_ROOT: str = Field(default="/edx/var/edxapp/media/")
+    MEDIA_URL: str = Field(default="/media/")
+    MEILISEARCH_API_KEY: str = Field(default="devkey")
+    MEILISEARCH_ENABLED: bool = Field(default=False)
+    MEILISEARCH_INDEX_PREFIX: str = Field(default="")
+    MEILISEARCH_PUBLIC_URL: str = Field(default="http://meilisearch.example.com")
+    MEILISEARCH_URL: str = Field(default="http://meilisearch")
+    MESSAGE_STORAGE: str = Field(
+        default="django.contrib.messages.storage.session.SessionStorage"
+    )
+    MIDDLEWARE: list[Any] = Field(
+        default_factory=lambda: [
+            "openedx.core.lib.x_forwarded_for.middleware.XForwardedForMiddleware",
+            "edx_django_utils.security.csp.middleware.content_security_policy_middleware",
+            "crum.CurrentRequestUserMiddleware",
+            "edx_django_utils.cache.middleware.RequestCacheMiddleware",
+            "edx_django_utils.monitoring.CookieMonitoringMiddleware",
+            "edx_django_utils.monitoring.DeploymentMonitoringMiddleware",
+            "edx_django_utils.monitoring.FrontendMonitoringMiddleware",
+            "edx_django_utils.monitoring.MonitoringMemoryMiddleware",
+            "openedx.core.djangoapps.header_control.middleware.HeaderControlMiddleware",
+            "django.middleware.cache.UpdateCacheMiddleware",
+            "django.middleware.common.CommonMiddleware",
+            "django.contrib.sites.middleware.CurrentSiteMiddleware",
+            "django.middleware.csrf.CsrfViewMiddleware",
+            "corsheaders.middleware.CorsMiddleware",
+            "openedx.core.djangoapps.cors_csrf.middleware.CorsCSRFMiddleware",
+            "openedx.core.djangoapps.cors_csrf.middleware.CsrfCrossDomainCookieMiddleware",
+            "edx_rest_framework_extensions.auth.jwt.middleware.JwtAuthCookieMiddleware",
+            "django_sites_extensions.middleware.RedirectMiddleware",
+            "openedx.core.djangoapps.safe_sessions.middleware.SafeSessionMiddleware",
+            "method_override.middleware.MethodOverrideMiddleware",
+            "openedx.core.djangoapps.cache_toolbox.middleware.CacheBackedAuthenticationMiddleware",
+            "common.djangoapps.student.middleware.UserStandingMiddleware",
+            "django.contrib.messages.middleware.MessageMiddleware",
+            "common.djangoapps.track.middleware.TrackMiddleware",
+            "openedx.core.djangoapps.lang_pref.middleware.LanguagePreferenceMiddleware",
+            "openedx.core.djangoapps.dark_lang.middleware.DarkLangMiddleware",
+            "openedx.core.djangoapps.embargo.middleware.EmbargoMiddleware",
+            "django.middleware.locale.LocaleMiddleware",
+            "codejail.django_integration.ConfigureCodeJailMiddleware",
+            "openedx.core.djangoapps.session_inactivity_timeout.middleware.SessionInactivityTimeout",
+            "openedx.core.djangoapps.theming.middleware.CurrentSiteThemeMiddleware",
+            "django.middleware.clickjacking.XFrameOptionsMiddleware",
+            "waffle.middleware.WaffleMiddleware",
+            "edx_django_utils.cache.middleware.TieredCacheMiddleware",
+            "edx_rest_framework_extensions.middleware.RequestCustomAttributesMiddleware",
+            "edx_rest_framework_extensions.auth.jwt.middleware.EnsureJWTAuthSettingsMiddleware",
+            "simple_history.middleware.HistoryRequestMiddleware",
+            "openedx.core.djangoapps.site_configuration.middleware.SessionCookieDomainOverrideMiddleware",
+            "ol_openedx_auto_select_language.middleware.CourseLanguageCookieResetMiddleware",
+        ]
+    )
+    MILESTONES_APP: bool = Field(default=False)
+    MIT_LEARN_AI_API_URL: str = Field(default="")
+    MIT_LEARN_AI_XBLOCK_CHAT_API_TOKEN: str = Field(default="")
+    MIT_LEARN_AI_XBLOCK_CHAT_API_URL: str = Field(default="")
+    MIT_LEARN_AI_XBLOCK_CHAT_RATING_URL: str = Field(default="")
+    MIT_LEARN_AI_XBLOCK_PROBLEM_SET_LIST_URL: str = Field(default="")
+    MIT_LEARN_AI_XBLOCK_TUTOR_CHAT_API_URL: str = Field(default="")
+    MIT_LEARN_API_BASE_URL: str = Field(default="")
+    MIT_LEARN_SUMMARY_FLASHCARD_URL: str = Field(default="")
     MKTG_URLS: dict[str, Any] = Field(default_factory=lambda: {})
-    MKTG_URL_LINK_MAP: dict[str, Any] = Field(default_factory=lambda: {})
+    MKTG_URL_LINK_MAP: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "ABOUT": "about",
+            "CONTACT": "contact",
+            "FAQ": "help",
+            "COURSES": "courses",
+            "ROOT": "root",
+            "TOS": "tos",
+            "HONOR": "honor",
+            "TOS_AND_HONOR": "edx-terms-service",
+            "PRIVACY": "privacy",
+            "PRESS": "press",
+            "BLOG": "blog",
+            "DONATE": "donate",
+            "SITEMAP.XML": "sitemap_xml",
+            "WHAT_IS_VERIFIED_CERT": "verified-certificate",
+        }
+    )
     MKTG_URL_OVERRIDES: dict[str, Any] = Field(default_factory=lambda: {})
+    MODULESTORE: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "default": {
+                "ENGINE": "xmodule.modulestore.mixed.MixedModuleStore",
+                "OPTIONS": {
+                    "mappings": {},
+                    "stores": [
+                        {
+                            "NAME": "split",
+                            "ENGINE": "xmodule.modulestore.split_mongo.split_draft.DraftVersioningModuleStore",
+                            "DOC_STORE_CONFIG": {
+                                "db": "edxapp",
+                                "host": "localhost",
+                                "replicaSet": "",
+                                "port": 27017,
+                                "user": "edxapp",
+                                "collection": "modulestore",
+                                "ssl": False,
+                                "socketTimeoutMS": 6000,
+                                "connectTimeoutMS": 2000,
+                                "auth_source": None,
+                                "password": "password",
+                                "read_preference": "PRIMARY",
+                            },
+                            "OPTIONS": {
+                                "default_class": "xmodule.hidden_block.HiddenBlock",
+                                "fs_root": "/edx/var/edxapp/data",
+                                "render_template": "common.djangoapps.edxmako.shortcuts.render_to_string",
+                            },
+                        },
+                        {
+                            "NAME": "draft",
+                            "ENGINE": "xmodule.modulestore.mongo.DraftMongoModuleStore",
+                            "DOC_STORE_CONFIG": {
+                                "db": "edxapp",
+                                "host": "localhost",
+                                "replicaSet": "",
+                                "port": 27017,
+                                "user": "edxapp",
+                                "collection": "modulestore",
+                                "ssl": False,
+                                "socketTimeoutMS": 6000,
+                                "connectTimeoutMS": 2000,
+                                "auth_source": None,
+                                "password": "password",
+                                "read_preference": "PRIMARY",
+                            },
+                            "OPTIONS": {
+                                "default_class": "xmodule.hidden_block.HiddenBlock",
+                                "fs_root": "/edx/var/edxapp/data",
+                                "render_template": "common.djangoapps.edxmako.shortcuts.render_to_string",
+                            },
+                        },
+                    ],
+                },
+            }
+        }
+    )
+    MODULESTORE_BRANCH: str = Field(default="draft-preferred")
+    MODULESTORE_FIELD_OVERRIDE_PROVIDERS: tuple[Any, ...] = Field(
+        default=()
+    )  # TODO: refine type
+    NOTIFICATIONS_DEFAULT_FROM_EMAIL: str = Field(default="no-reply@example.com")
+    NOTIFICATIONS_EXPIRY: int = Field(default=60)
+    NOTIFICATION_APPS_OVERRIDE: dict[str, Any] = Field(default_factory=lambda: {})
+    NOTIFICATION_CREATION_BATCH_SIZE: int = Field(default=76)
+    NOTIFICATION_DAILY_DIGEST_DELIVERY_HOUR: int = Field(default=17)
+    NOTIFICATION_DAILY_DIGEST_DELIVERY_MINUTE: int = Field(default=0)
+    NOTIFICATION_DIGEST_LOGO: str = Field(
+        default="https://edx-cdn.org/v3/default/logo.png"
+    )
+    NOTIFICATION_IMMEDIATE_EMAIL_BUFFER_MINUTES: int = Field(default=15)
+    NOTIFICATION_TYPES_OVERRIDE: dict[str, Any] = Field(default_factory=lambda: {})
+    NOTIFICATION_TYPE_ICONS: dict[str, Any] = Field(default_factory=lambda: {})
+    NOTIFICATION_WEEKLY_DIGEST_DELIVERY_DAY: int = Field(default=0)
+    NOTIFICATION_WEEKLY_DIGEST_DELIVERY_HOUR: int = Field(default=17)
+    NOTIFICATION_WEEKLY_DIGEST_DELIVERY_MINUTE: int = Field(default=0)
+    NOTIFY_CREDENTIALS_FREQUENCY: int = Field(default=14400)
+    OAUTH2_PROVIDER_APPLICATION_MODEL: str = Field(
+        default="oauth2_provider.Application"
+    )
+    OAUTH_ID_TOKEN_EXPIRATION: int = Field(default=300)
+    OL_OPENEDX_COURSE_SYNC_SERVICE_WORKER_USERNAME: str = Field(default="")
+    ONE_CLICK_UNSUBSCRIBE_RATE_LIMIT: str = Field(default="100/m")
+    OPENAPI_CACHE_TIMEOUT: int = Field(default=3600)
+    OPENEDX_AUTHZ_CONTENT_LIBRARY_MODEL: str = Field(
+        default="content_libraries.ContentLibrary"
+    )
+    OPENEDX_AUTHZ_COURSE_OVERVIEW_MODEL: str = Field(
+        default="course_overviews.CourseOverview"
+    )
+    OPENEDX_ROOT: str = Field(default=Path("/openedx/edx-platform/openedx"))
+    OPEN_EDX_FILTERS_CONFIG: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "org.openedx.learning.xblock.render.started.v1": {
+                "pipeline": [
+                    "ol_openedx_chat_xblock.filters.DisableMathJaxForOLChatBlock"
+                ],
+                "fail_silently": False,
+            }
+        }
+    )
+    OPTIMIZELY_FULLSTACK_SDK_KEY: Any = Field(default=None)  # TODO: refine type
+    OPTIMIZELY_PROJECT_ID: Any = Field(default=None)  # TODO: refine type
+    OPTIONAL_APPS: list[Any] = Field(
+        default_factory=lambda: [
+            (
+                "problem_builder",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
+            ),
+            ("edx_sga", None),
+            (
+                "submissions",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
+            ),
+            (
+                "openassessment",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
+            ),
+            (
+                "openassessment.assessment",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
+            ),
+            (
+                "openassessment.fileupload",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
+            ),
+            (
+                "openassessment.staffgrader",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
+            ),
+            (
+                "openassessment.workflow",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
+            ),
+            (
+                "openassessment.xblock",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
+            ),
+            (
+                "edxval",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
+            ),
+            ("integrated_channels.integrated_channel", None),
+            ("integrated_channels.degreed", None),
+            ("integrated_channels.degreed2", None),
+            ("integrated_channels.sap_success_factors", None),
+            ("integrated_channels.cornerstone", None),
+            ("integrated_channels.xapi", None),
+            ("integrated_channels.blackboard", None),
+            ("integrated_channels.canvas", None),
+            ("integrated_channels.moodle", None),
+            ("channel_integrations.integrated_channel", None),
+            ("channel_integrations.degreed2", None),
+            ("channel_integrations.sap_success_factors", None),
+            ("channel_integrations.cornerstone", None),
+            ("channel_integrations.xapi", None),
+            ("channel_integrations.blackboard", None),
+            ("channel_integrations.canvas", None),
+            ("channel_integrations.moodle", None),
+            ("django_object_actions", None),
+        ]
+    )
+    OPTIONAL_FIELD_API_RATELIMIT: str = Field(default="10/h")
+    ORA2_FILE_PREFIX: str = Field(default="default_env-default_deployment/ora2")
+    ORA_SETTINGS_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/exercise_tools/Manage_ORA_Assignment.html"
+    )
+    ORGANIZATIONS_AUTOCREATE: bool = Field(default=True)
+    P3P_HEADER: str = Field(default='CP="Open EdX does not have a P3P policy."')
+    PARENTAL_CONSENT_AGE_LIMIT: int = Field(default=13)
+    PARSE_KEYS: dict[str, Any] = Field(default_factory=lambda: {})
     PARTNER_SUPPORT_EMAIL: str = Field(default="")
+    PASSWORD_POLICY_COMPLIANCE_API_TIMEOUT: int = Field(default=5)
     PASSWORD_POLICY_COMPLIANCE_ROLLOUT_CONFIG: dict[str, Any] = Field(
         default_factory=lambda: {
             "ENFORCE_COMPLIANCE_ON_LOGIN": False,
@@ -1333,62 +1975,10 @@ class AqueductSettings(BaseSettings):
             "GENERAL_USER_COMPLIANCE_DEADLINE": None,
         }
     )
-    PLATFORM_NAME: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    ROOT_URLCONF: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    SESSION_INACTIVITY_TIMEOUT_IN_SECONDS: Any = Field(
-        default=None
-    )  # TODO: refine type
-    SOCIAL_SHARING_SETTINGS: dict[str, bool] = Field(
-        default_factory=lambda: {
-            "CUSTOM_COURSE_URLS": False,
-            "DASHBOARD_FACEBOOK": False,
-            "CERTIFICATE_FACEBOOK": False,
-            "CERTIFICATE_TWITTER": False,
-            "DASHBOARD_TWITTER": False,
-        }
-    )
-    TRACKING_IGNORE_URL_PATTERNS: list[Any] = Field(
-        default_factory=lambda: ["^/event", "^/login", "^/heartbeat"]
-    )
-    USAGE_KEY_PATTERN: str = Field(
-        default=None
-    )  # OPAQUE: original str value is not serialisable
-    VIDEO_IMAGE_SETTINGS: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "VIDEO_IMAGE_MAX_BYTES": 2097152,
-            "VIDEO_IMAGE_MIN_BYTES": 2048,
-            "STORAGE_KWARGS": {"location": "/edx/var/edxapp/media/"},
-            "DIRECTORY_PREFIX": "video-images/",
-            "BASE_URL": "/media/",
-        }
-    )
-    VIDEO_TRANSCRIPTS_SETTINGS: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "VIDEO_TRANSCRIPTS_MAX_BYTES": 3145728,
-            "STORAGE_KWARGS": {"location": "/edx/var/edxapp/media/"},
-            "DIRECTORY_PREFIX": "video-transcripts/",
-            "BASE_URL": "/media/",
-        }
-    )
-
-    # ===== social-auth-app-django =====
-    SOCIAL_AUTH_SAML_SP_PRIVATE_KEY: str = Field(default="")
-    SOCIAL_AUTH_SAML_SP_PRIVATE_KEY_DICT: dict[str, Any] = Field(
-        default_factory=lambda: {}
-    )
-    SOCIAL_AUTH_SAML_SP_PUBLIC_CERT: str = Field(default="")
-    SOCIAL_AUTH_SAML_SP_PUBLIC_CERT_DICT: dict[str, Any] = Field(
-        default_factory=lambda: {}
-    )
-    SOCIAL_AUTH_STRATEGY: str = Field(
-        default="auth_backends.strategies.EdxDjangoStrategy"
-    )
-
-    # ===== xblocks-contrib =====
+    PASSWORD_RESET_EMAIL_RATE: str = Field(default="2/h")
+    PASSWORD_RESET_IP_RATE: str = Field(default="1/m")
+    PASSWORD_RESET_SUPPORT_LINK: str = Field(default="")
+    PAYMENT_SUPPORT_EMAIL: str = Field(default="billing@example.com")
     PIPELINE: dict[str, Any] = Field(
         default_factory=lambda: {
             "PIPELINE_ENABLED": True,
@@ -1396,8 +1986,6 @@ class AqueductSettings(BaseSettings):
             "DISABLE_WRAPPER": True,
             "UGLIFYJS_BINARY": "node_modules/.bin/uglifyjs",
             "JS_COMPRESSOR": None,
-            "COMPILERS": (),
-            "YUI_BINARY": "yui-compressor",
             "STYLESHEETS": {
                 "style-vendor": {
                     "source_filenames": [
@@ -1504,961 +2092,29 @@ class AqueductSettings(BaseSettings):
                     "output_filename": "js/lms-proctoring.js",
                 },
             },
+            "COMPILERS": (),
+            "YUI_BINARY": "yui-compressor",
         }
     )
-
-    # ===== project =====
-    ACCOUNT_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
-    ACE_ROUTING_KEY: str = Field(default="edx.lms.core.default")
-    ACTIVATION_EMAIL_SUPPORT_LINK: Any = Field(
+    PLATFORM_DESCRIPTION: Any = Field(
         default=None
     )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    ADMIN_CONSOLE_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
-    ADVANCED_PROBLEM_TYPES: list[Any] = Field(
-        default_factory=lambda: [
-            {"component": "drag-and-drop-v2", "boilerplate_name": None},
-            {"component": "staffgradedxblock", "boilerplate_name": None},
-        ]
-    )
-    AFFILIATE_COOKIE_NAME: str = Field(default="dev_affiliate_id")
-    AI_TRANSLATIONS_API_URL: str = Field(default="http://localhost:18760/api/v1")
-    ALLOW_COURSE_RERUNS: bool = Field(default=True)
-    ALLOW_HIDING_DISCUSSION_TAB: bool = Field(default=False)
-    ALLOW_PUBLIC_ACCOUNT_CREATION: bool = Field(default=True)
-    ALLOW_UNICODE_COURSE_ID: bool = Field(default=False)
-    ALTERNATE_WORKER_QUEUES: str = Field(default="lms")
-    ANALYTICS_DASHBOARD_NAME: str = Field(default="Your Platform Name Here Insights")
-    ANALYTICS_DASHBOARD_URL: str = Field(default="http://localhost:18110/courses")
-    API_ACCESS_FROM_EMAIL: str = Field(default="api-requests@example.com")
-    API_ACCESS_MANAGER_EMAIL: str = Field(default="api-access@example.com")
-    API_DOCUMENTATION_URL: str = Field(
-        default="https://course-catalog-api-guide.readthedocs.io/en/latest/"
-    )
-    ASSET_IGNORE_REGEX: str = Field(default="(^\\._.*$)|(^\\.DS_Store$)|(^.*~$)")
-    AUTHORING_API_URL: str = Field(default="")
-    AUTH_DOCUMENTATION_URL: str = Field(
-        default="https://course-catalog-api-guide.readthedocs.io/en/latest/authentication/index.html"
-    )
-    AUTOMATIC_AUTH_FOR_TESTING: bool = Field(default=False)
-    AUTOPLAY_VIDEOS: bool = Field(default=False)
-    AUTO_GENERATED_USERNAME_RANDOM_STRING_LENGTH: int = Field(default=4)
-    BADGES_ENABLED: bool = Field(default=False)
-    BASE_COOKIE_DOMAIN: str = Field(default="localhost")
-    BEAMER_PRODUCT_ID: str = Field(default="")
-    BLOCK_STRUCTURES_SETTINGS: dict[str, int] = Field(
-        default_factory=lambda: {
-            "COURSE_PUBLISH_TASK_DELAY": 30,
-            "TASK_DEFAULT_RETRY_DELAY": 30,
-            "TASK_MAX_RETRIES": 5,
-        }
-    )
-    BRANCH_IO_KEY: str = Field(default="")
-    BUGS_EMAIL: str = Field(default="bugs@example.com")
-    BULK_EMAIL_DEFAULT_FROM_EMAIL: str = Field(default="no-reply@example.com")
-    BULK_EMAIL_EMAILS_PER_TASK: int = Field(default=500)
-    BULK_EMAIL_LOG_SENT_EMAILS: bool = Field(default=False)
-    CALCULATOR_HELP_URL: str = Field(
-        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/exercise_tools/add_calculator.html"
-    )
-    CERTIFICATES_HTML_VIEW: bool = Field(default=False)
-    CERTIFICATE_TEMPLATE_LANGUAGES: dict[str, str] = Field(
-        default_factory=lambda: {"en": "English", "es": "Español"}
-    )
-    CERT_QUEUE: str = Field(default="certificates")
-    CHAT_COMPLETION_API: str = Field(default="")
-    CHAT_COMPLETION_API_KEY: str = Field(default="")
-    CLEAR_REQUEST_CACHE_ON_TASK_COMPLETION: bool = Field(default=True)
-    CMS_BASE: Any = Field(default=None)  # TODO: refine type
-    CMS_ROOT: str = Field(default=Path("/home/tmacey/code/mit/mitx/mitx-platform/cms"))
-    CMS_ROOT_URL: Any = Field(default=None)  # TODO: refine type
-    CMS_SEGMENT_KEY: Any = Field(default=None)  # TODO: refine type
-    CODE_JAIL: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "python_bin": "/edx/app/edxapp/venvs/edxapp-sandbox/bin/python",
-            "user": "sandbox",
-            "limits": {
-                "CPU": 1,
-                "VMEM": 536870912,
-                "REALTIME": 3,
-                "PROXY": 0,
-                "FSIZE": 1048576,
-            },
-            "limit_overrides": {},
-        }
-    )
-    CODE_JAIL_REST_SERVICE_CONNECT_TIMEOUT: float = Field(default=0.5)
-    CODE_JAIL_REST_SERVICE_HOST: str = Field(default="http://127.0.0.1:8550")
-    CODE_JAIL_REST_SERVICE_READ_TIMEOUT: float = Field(default=3.5)
-    CODE_JAIL_REST_SERVICE_REMOTE_EXEC: str = Field(
-        default="xmodule.capa.safe_exec.remote_exec.send_safe_exec_request_v0"
-    )
-    COMMENTS_SERVICE_KEY: str = Field(default="password")
-    COMMENTS_SERVICE_URL: str = Field(default="http://localhost:18080")
-    COMMON_ROOT: str = Field(
-        default=Path("/home/tmacey/code/mit/mitx/mitx-platform/common")
-    )
-    COMPREHENSIVE_THEME_DIRS: list[Any] = Field(default_factory=lambda: [""])
-    COMPREHENSIVE_THEME_LOCALE_PATHS: list[Any] = Field(default_factory=lambda: [])
-    CONTACT_MAILING_ADDRESS: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    CONTENTSTORE: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "ENGINE": "xmodule.contentstore.mongo.MongoContentStore",
-            "OPTIONS": {
-                "db": "edxapp",
-                "host": "localhost",
-                "password": "password",  # pragma: allowlist secret
-                "port": 27017,
-                "user": "edxapp",
-                "ssl": False,
-                "auth_source": None,
-            },
-            "ADDITIONAL_OPTIONS": {},
-            "DOC_STORE_CONFIG": {
-                "db": "edxapp",
-                "host": "localhost",
-                "replicaSet": "",
-                "port": 27017,
-                "user": "edxapp",
-                "collection": "modulestore",
-                "ssl": False,
-                "socketTimeoutMS": 6000,
-                "connectTimeoutMS": 2000,
-                "auth_source": None,
-                "read_preference": "PRIMARY",
-            },
-        }
-    )
-    CONTENT_TYPE_GATE_GROUP_IDS: dict[str, int] = Field(
-        default_factory=lambda: {"limited_access": 1, "full_access": 2}
-    )
-    CONTEXT_PROCESSORS: list[Any] = Field(
-        default_factory=lambda: [
-            "django.template.context_processors.request",
-            "django.template.context_processors.static",
-            "django.contrib.messages.context_processors.messages",
-            "django.template.context_processors.i18n",
-            "django.contrib.auth.context_processors.auth",
-            "django.template.context_processors.csrf",
-            "help_tokens.context_processor",
-            "openedx.core.djangoapps.site_configuration.context_processors.configuration_context",
-        ]
-    )
-    COURSES_ROOT: str = Field(default=Path("/home/tmacey/code/mit/mitx/data"))
-    COURSES_WITH_UNSAFE_CODE: list[Any] = Field(default_factory=lambda: [])
-    COURSE_ABOUT_VISIBILITY_PERMISSION: str = Field(default="see_exists")
-    COURSE_ACCESS_DURATION_MAX_WEEKS: int = Field(default=18)
-    COURSE_ACCESS_DURATION_MIN_WEEKS: int = Field(default=4)
-    COURSE_AUTHORING_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
-    COURSE_CATALOG_URL_ROOT: str = Field(default="http://localhost:8008")
-    COURSE_CATALOG_VISIBILITY_PERMISSION: str = Field(default="see_exists")
-    COURSE_ENROLLMENT_MODES: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "audit": {
-                "id": 1,
-                "slug": "audit",
-                "display_name": "Audit",
-                "min_price": 0,
-            },
-            "verified": {
-                "id": 2,
-                "slug": "verified",
-                "display_name": "Verified",
-                "min_price": 1,
-            },
-            "professional": {
-                "id": 3,
-                "slug": "professional",
-                "display_name": "Professional",
-                "min_price": 1,
-            },
-            "no-id-professional": {
-                "id": 4,
-                "slug": "no-id-professional",
-                "display_name": "No-Id-Professional",
-                "min_price": 0,
-            },
-            "credit": {
-                "id": 5,
-                "slug": "credit",
-                "display_name": "Credit",
-                "min_price": 0,
-            },
-            "honor": {
-                "id": 6,
-                "slug": "honor",
-                "display_name": "Honor",
-                "min_price": 0,
-            },
-            "masters": {
-                "id": 7,
-                "slug": "masters",
-                "display_name": "Master's",
-                "min_price": 0,
-            },
-            "executive-education": {
-                "id": 8,
-                "slug": "executive-educations",
-                "display_name": "Executive Education",
-                "min_price": 1,
-            },
-            "unpaid-executive-education": {
-                "id": 9,
-                "slug": "unpaid-executive-education",
-                "display_name": "Unpaid Executive Education",
-                "min_price": 0,
-            },
-            "paid-executive-education": {
-                "id": 10,
-                "slug": "paid-executive-education",
-                "display_name": "Paid Executive Education",
-                "min_price": 1,
-            },
-            "unpaid-bootcamp": {
-                "id": 11,
-                "slug": "unpaid-bootcamp",
-                "display_name": "Unpaid Bootcamp",
-                "min_price": 0,
-            },
-            "paid-bootcamp": {
-                "id": 12,
-                "slug": "paid-bootcamp",
-                "display_name": "Paid Bootcamp",
-                "min_price": 1,
-            },
-        }
-    )
-    COURSE_EXPORT_DOWNLOAD_CHUNK_SIZE: int = Field(default=8192)
-    COURSE_IMPORT_EXPORT_BUCKET: str = Field(default="")
-    COURSE_IMPORT_EXPORT_STORAGE: str = Field(
-        default="django.core.files.storage.FileSystemStorage"
-    )
-    COURSE_KEY_REGEX: str = Field(default="(?:[^/+]+(/|\\+)[^/+]+(/|\\+)[^/?]+)")
-    COURSE_LIVE_GLOBAL_CREDENTIALS: dict[str, Any] = Field(default_factory=lambda: {})
-    COURSE_LIVE_HELP_URL: str = Field(
-        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/add_course_live.html"
-    )
-    COURSE_METADATA_EXPORT_BUCKET: str = Field(default="")
-    COURSE_METADATA_EXPORT_STORAGE: str = Field(
-        default="django.core.files.storage.FileSystemStorage"
-    )
-    COURSE_MODE_DEFAULTS: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "android_sku": None,
-            "bulk_sku": None,
-            "currency": "usd",
-            "description": None,
-            "expiration_datetime": None,
-            "ios_sku": None,
-            "min_price": 0,
-            "name": "Audit",
-            "sku": None,
-            "slug": "audit",
-            "suggested_prices": "",
-        }
-    )
-    COURSE_OLX_VALIDATION_IGNORE_LIST: Any = Field(default=None)  # TODO: refine type
-    COURSE_OLX_VALIDATION_STAGE: int = Field(default=1)
-    CREDENTIALS_INTERNAL_SERVICE_URL: str = Field(default="http://localhost:8005")
-    CREDENTIALS_PUBLIC_SERVICE_URL: str = Field(default="http://localhost:8005")
-    CREDENTIALS_SERVICE_USERNAME: str = Field(default="credentials_service_user")
-    CREDIT_PROVIDER_SECRET_KEYS: dict[str, Any] = Field(default_factory=lambda: {})
-    CREDIT_PROVIDER_TIMESTAMP_EXPIRATION: int = Field(default=900)
-    CREDIT_TASK_DEFAULT_RETRY_DELAY: int = Field(default=30)
-    CREDIT_TASK_MAX_RETRIES: int = Field(default=5)
-    CUSTOM_COURSES_EDX: bool = Field(default=False)
-    CUSTOM_PAGES_HELP_URL: str = Field(
-        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/manage_custom_page.html"
-    )
-    CUSTOM_RESOURCE_TEMPLATES_DIRECTORY: Any = Field(default=None)  # TODO: refine type
-    DATA_DIR: str = Field(default=Path("/home/tmacey/code/mit/mitx/data"))
-    DEBUG_TOOLBAR_PATCH_SETTINGS: bool = Field(default=False)
-    DEFAULT_COURSE_ABOUT_IMAGE_URL: str = Field(default="images/pencils.jpg")
-    DEFAULT_COURSE_LANGUAGE: str = Field(default="en")
-    DEFAULT_COURSE_VISIBILITY_IN_CATALOG: str = Field(default="both")
-    DEFAULT_EMAIL_LOGO_URL: str = Field(
-        default="https://edx-cdn.org/v3/default/logo.png"
-    )
-    DEFAULT_GRADE_DESIGNATIONS: list[Any] = Field(
-        default_factory=lambda: ["A", "B", "C", "D"]
-    )
-    DEFAULT_HASHING_ALGORITHM: str = Field(default="sha256")
-    DEFAULT_MOBILE_AVAILABLE: bool = Field(default=False)
-    DEFAULT_NOTIFICATION_ICON_URL: str = Field(default="")
-    DEFAULT_ORG_LOGO_URL: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    DEFAULT_PRIORITY_QUEUE: str = Field(default="edx.cms.core.default")
-    DEFAULT_SITE_THEME: Any = Field(default=None)  # TODO: refine type
-    DEFAULT_TEMPLATE_ENGINE: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "NAME": "django",
-            "BACKEND": "django.template.backends.django.DjangoTemplates",
-            "APP_DIRS": False,
-            "DIRS": [
-                Path("/home/tmacey/code/mit/mitx/mitx-platform/cms/templates"),
-                Path("/home/tmacey/code/mit/mitx/mitx-platform/common/templates"),
-                Path(
-                    "/home/tmacey/code/mit/mitx/mitx-platform/common/djangoapps/pipeline_mako/templates"
-                ),
-                Path("/home/tmacey/code/mit/mitx/mitx-platform/common/static"),
-                Path(
-                    "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/djangoapps/cors_csrf/templates"
-                ),
-                Path(
-                    "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/djangoapps/dark_lang/templates"
-                ),
-                Path(
-                    "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/lib/license/templates"
-                ),
-                Path(
-                    "/home/tmacey/code/mit/mitx/mitx-platform/cms/djangoapps/pipeline_js/templates"
-                ),
-            ],
-            "OPTIONS": {
-                "loaders": [
-                    "openedx.core.djangoapps.theming.template_loaders.ThemeTemplateLoader",
-                    "common.djangoapps.edxmako.makoloader.MakoFilesystemLoader",
-                    "common.djangoapps.edxmako.makoloader.MakoAppDirectoriesLoader",
-                ],
-                "context_processors": [
-                    "django.template.context_processors.request",
-                    "django.template.context_processors.static",
-                    "django.contrib.messages.context_processors.messages",
-                    "django.template.context_processors.i18n",
-                    "django.contrib.auth.context_processors.auth",
-                    "django.template.context_processors.csrf",
-                    "help_tokens.context_processor",
-                    "openedx.core.djangoapps.site_configuration.context_processors.configuration_context",
-                ],
-                "debug": False,
-            },
-        }
-    )
-    DEPRECATED_ADVANCED_COMPONENT_TYPES: list[Any] = Field(default_factory=lambda: [])
-    DEPRECATE_OLD_COURSE_KEYS_IN_STUDIO: bool = Field(default=True)
-    DISABLE_ACCOUNT_ACTIVATION_REQUIREMENT_SWITCH: str = Field(
-        default="verify_student_disable_account_activation_requirement"
-    )
-    DISABLE_ADVANCED_SETTINGS: bool = Field(default=False)
-    DISABLE_COURSE_CREATION: bool = Field(default=False)
-    DISABLE_MOBILE_COURSE_AVAILABLE: bool = Field(default=False)
-    DISABLE_START_DATES: bool = Field(default=False)
-    DISABLE_UNENROLLMENT: bool = Field(default=False)
-    DISCUSSIONS_HELP_URL: str = Field(
-        default="https://docs.openedx.org/en/latest/educators/concepts/communication/about_course_discussions.html"
-    )
-    DISCUSSIONS_INCONTEXT_FEEDBACK_URL: str = Field(default="")
-    DISCUSSIONS_INCONTEXT_LEARNMORE_URL: str = Field(
-        default="https://docs.openedx.org/en/latest/educators/concepts/communication/about_course_discussions.html"
-    )
-    DISCUSSIONS_MFE_FEEDBACK_URL: Any = Field(default=None)  # TODO: refine type
-    DISCUSSIONS_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
-    DISCUSSION_RATELIMIT: str = Field(default="100/m")
-    DISCUSSION_SETTINGS: dict[str, int] = Field(
-        default_factory=lambda: {
-            "MAX_COMMENT_DEPTH": 2,
-            "COURSE_PUBLISH_TASK_DELAY": 30,
-        }
-    )
-    DJFS: dict[str, str] = Field(
-        default_factory=lambda: {
-            "type": "osfs",
-            "directory_root": "/edx/var/edxapp/django-pyfs/static/django-pyfs",
-            "url_root": "/static/django-pyfs",
-        }
-    )
-    DOC_STORE_CONFIG: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "db": "edxapp",
-            "host": "localhost",
-            "replicaSet": "",
-            "port": 27017,
-            "user": "edxapp",
-            "collection": "modulestore",
-            "ssl": False,
-            "socketTimeoutMS": 6000,
-            "connectTimeoutMS": 2000,
-            "auth_source": None,
-            "read_preference": "PRIMARY",
-        }
-    )
-    ECOMMERCE_API_SIGNING_KEY: str = Field(default="SET-ME-PLEASE")
-    ECOMMERCE_API_URL: str = Field(default="http://localhost:8002/api/v2")
-    ECOMMERCE_PUBLIC_URL_ROOT: str = Field(default="http://localhost:8002")
-    EDITABLE_SHORT_DESCRIPTION: bool = Field(default=True)
-    EDXAPP_PARSE_KEYS: dict[str, Any] = Field(default_factory=lambda: {})
-    EDXMKTG_LOGGED_IN_COOKIE_NAME: str = Field(default="edxloggedin")
-    EDXMKTG_USER_INFO_COOKIE_NAME: str = Field(default="edx-user-info")
-    EDXMKTG_USER_INFO_COOKIE_VERSION: int = Field(default=1)
-    EDXNOTES_HELP_URL: str = Field(
-        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/exercise_tools/enable_notes.html"
-    )
-    EDX_DRF_EXTENSIONS: dict[str, Any] = Field(
-        default_factory=lambda: {"JWT_PAYLOAD_USER_ATTRIBUTE_MAPPING": {}}
-    )
-    EDX_PLATFORM_REVISION: str = Field(default="release")
-    ELASTIC_FIELD_MAPPINGS: dict[str, ElasticFieldMappingsEntry] = Field(
-        default_factory=lambda: {"start_date": {"type": "date"}}
-    )
-    ELASTIC_SEARCH_CONFIG: list[Any] = Field(
-        default_factory=lambda: [{"use_ssl": False, "host": "localhost", "port": 9200}]
-    )
-    EMAIL_CHANGE_RATE_LIMIT: str = Field(default="")
-    EMAIL_FILE_PATH: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    EMBARGO: bool = Field(default=False)
-    EMBARGO_SITE_REDIRECT_URL: Any = Field(default=None)  # TODO: refine type
-    ENABLE_AUTOADVANCE_VIDEOS: bool = Field(default=False)
-    ENABLE_CHANGE_USER_PASSWORD_ADMIN: bool = Field(default=False)
-    ENABLE_CODEJAIL_REST_SERVICE: bool = Field(default=False)
-    ENABLE_COMPREHENSIVE_THEMING: bool = Field(default=False)
-    ENABLE_CONTENT_LIBRARIES: bool = Field(default=True)
-    ENABLE_COPPA_COMPLIANCE: bool = Field(default=False)
-    ENABLE_CORS_HEADERS: bool = Field(default=False)
-    ENABLE_COUNTRY_ACCESS: bool = Field(default=False)
-    ENABLE_COURSEWARE_INDEX: bool = Field(default=False)
-    ENABLE_COURSE_OLX_VALIDATION: bool = Field(default=False)
-    ENABLE_CREATOR_GROUP: bool = Field(default=True)
-    ENABLE_CREDIT_API: bool = Field(default=False)
-    ENABLE_CREDIT_ELIGIBILITY: bool = Field(default=True)
-    ENABLE_CROSS_DOMAIN_CSRF_COOKIE: bool = Field(default=False)
-    ENABLE_CSMH_EXTENDED: bool = Field(default=True)
-    ENABLE_DATES_COURSE_APP: bool = Field(default=False)
-    ENABLE_DISCUSSION_HOME_PANEL: bool = Field(default=True)
-    ENABLE_DISCUSSION_SERVICE: bool = Field(default=True)
-    ENABLE_DYNAMIC_REGISTRATION_FIELDS: bool = Field(default=False)
-    ENABLE_EDXNOTES: bool = Field(default=False)
-    ENABLE_ENROLLMENT_RESET: bool = Field(default=False)
-    ENABLE_ENROLLMENT_TRACK_USER_PARTITION: bool = Field(default=True)
-    ENABLE_GRADE_DOWNLOADS: bool = Field(default=True)
-    ENABLE_HELP_LINK: bool = Field(default=True)
-    ENABLE_HIDE_FROM_TOC_UI: bool = Field(default=False)
-    ENABLE_INTEGRITY_SIGNATURE: bool = Field(default=False)
-    ENABLE_JASMINE: bool = Field(default=False)
-    ENABLE_LIBRARY_INDEX: bool = Field(default=False)
-    ENABLE_LTI_PII_ACKNOWLEDGEMENT: bool = Field(default=False)
-    ENABLE_MAX_FAILED_LOGIN_ATTEMPTS: bool = Field(default=False)
-    ENABLE_MKTG_SITE: bool = Field(default=False)
-    ENABLE_MOBILE_REST_API: bool = Field(default=False)
-    ENABLE_ORA_ALL_FILE_URLS: bool = Field(default=False)
-    ENABLE_ORA_USER_STATE_UPLOAD_DATA: bool = Field(default=False)
-    ENABLE_ORGANIZATION_STAFF_ACCESS_FOR_CONTENT_LIBRARIES: bool = Field(default=True)
-    ENABLE_OTHER_COURSE_SETTINGS: bool = Field(default=False)
-    ENABLE_PASSWORD_RESET_FAILURE_EMAIL: bool = Field(default=False)
-    ENABLE_PREREQUISITE_COURSES: bool = Field(default=False)
-    ENABLE_PUBLISHER: bool = Field(default=False)
-    ENABLE_READING_FROM_MULTIPLE_HISTORY_TABLES: bool = Field(default=True)
-    ENABLE_SEND_XBLOCK_LIFECYCLE_EVENTS_OVER_BUS: bool = Field(default=False)
-    ENABLE_SEPARATE_ARCHIVED_COURSES: bool = Field(default=True)
-    ENABLE_SERVICE_STATUS: bool = Field(default=False)
-    ENABLE_SPECIAL_EXAMS: bool = Field(default=False)
-    ENABLE_TEAMS: bool = Field(default=True)
-    ENABLE_TEXTBOOK: bool = Field(default=True)
-    ENABLE_VIDEO_BUMPER: bool = Field(default=False)
-    ENABLE_VIDEO_UPLOAD_PIPELINE: bool = Field(default=False)
-    ENTERPRISE_API_CACHE_TIMEOUT: int = Field(default=3600)
-    ENTERPRISE_API_URL: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    ENTERPRISE_BACKEND_SERVICE_EDX_OAUTH2_KEY: str = Field(
-        default="enterprise-backend-service-key"
-    )
-    ENTERPRISE_BACKEND_SERVICE_EDX_OAUTH2_PROVIDER_URL: str = Field(
-        default="http://127.0.0.1:8000/oauth2"
-    )
-    ENTERPRISE_BACKEND_SERVICE_EDX_OAUTH2_SECRET: str = Field(
-        default="enterprise-backend-service-secret"
-    )
-    ENTERPRISE_CATALOG_INTERNAL_ROOT_URL: str = Field(
-        default="http://enterprise.catalog.app:18160"
-    )
-    ENTERPRISE_CONSENT_API_URL: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    ENTERPRISE_ENROLLMENT_API_URL: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    ENTERPRISE_MARKETING_FOOTER_QUERY_PARAMS: dict[str, Any] = Field(
-        default_factory=lambda: {}
-    )
-    ENTRANCE_EXAMS: bool = Field(default=False)
-    ENTRANCE_EXAM_MIN_SCORE_PCT: int = Field(default=50)
-    EVENT_TRACKING_BACKENDS: dict[str, EventTrackingBackendsEntry] = Field(
-        default_factory=lambda: {
-            "tracking_logs": {
-                "ENGINE": "eventtracking.backends.routing.RoutingBackend",
-                "OPTIONS": {
-                    "backends": {
-                        "logger": {
-                            "ENGINE": "eventtracking.backends.logger.LoggerBackend",
-                            "OPTIONS": {"name": "tracking", "max_event_size": 50000},
-                        }
-                    },
-                    "processors": [
-                        {
-                            "ENGINE": "common.djangoapps.track.shim.LegacyFieldMappingProcessor"
-                        },
-                        {
-                            "ENGINE": "common.djangoapps.track.shim.PrefixedEventProcessor"
-                        },
-                    ],
-                },
-            },
-            "segmentio": {
-                "ENGINE": "eventtracking.backends.routing.RoutingBackend",
-                "OPTIONS": {
-                    "backends": {
-                        "segment": {
-                            "ENGINE": "eventtracking.backends.segment.SegmentBackend"
-                        }
-                    },
-                    "processors": [
-                        {
-                            "ENGINE": "eventtracking.processors.whitelist.NameWhitelistProcessor",
-                            "OPTIONS": {"whitelist": []},
-                        },
-                        {
-                            "ENGINE": "common.djangoapps.track.shim.GoogleAnalyticsProcessor"
-                        },
-                    ],
-                },
-            },
-        }
-    )
-    EVENT_TRACKING_ENABLED: bool = Field(default=True)
-    EVENT_TRACKING_PROCESSORS: list[Any] = Field(default_factory=lambda: [])
-    EVENT_TRACKING_SEGMENTIO_EMIT_WHITELIST: list[Any] = Field(
-        default_factory=lambda: []
-    )
-    EXAMS_SERVICE_URL: str = Field(default="http://localhost:18740/api/v1")
-    EXAMS_SERVICE_USERNAME: str = Field(default="edx_exams_worker")
-    EXPIRED_NOTIFICATIONS_DELETE_BATCH_SIZE: int = Field(default=10000)
-    EXTENDED_VIDEO_TRANSCRIPT_LANGUAGES: list[Any] = Field(default_factory=lambda: [])
-    EXTRA_MIDDLEWARE_CLASSES: list[Any] = Field(default_factory=lambda: [])
-    FACEBOOK_API_VERSION: str = Field(default="v2.1")
-    FACEBOOK_APP_ID: str = Field(default="FACEBOOK_APP_ID")
-    FACEBOOK_APP_SECRET: str = Field(default="FACEBOOK_APP_SECRET")
-    FALLBACK_TO_ENGLISH_TRANSCRIPTS: bool = Field(default=True)
-    FAVICON_PATH: str = Field(default="images/favicon.ico")
-    FAVICON_URL: Any = Field(default=None)  # TODO: refine type
-    FEEDBACK_SUBMISSION_EMAIL: str = Field(default="")
-    FERNET_KEYS: list[Any] = Field(
-        default_factory=lambda: ["DUMMY KEY CHANGE BEFORE GOING TO PRODUCTION"]
-    )
-    FILES_AND_UPLOAD_TYPE_FILTERS: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "Images": [
-                "image/png",
-                "image/jpeg",
-                "image/jpg",
-                "image/gif",
-                "image/tiff",
-                "image/tif",
-                "image/x-icon",
-                "image/svg+xml",
-                "image/bmp",
-                "image/x-ms-bmp",
-            ],
-            "Documents": [
-                "application/pdf",
-                "text/plain",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
-                "application/vnd.openxmlformats-officedocument.presentationml.template",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
-                "application/msword",
-                "application/vnd.ms-excel",
-                "application/vnd.ms-powerpoint",
-                "application/csv",
-                "application/vnd.ms-excel.sheet.macroEnabled.12",
-                "text/x-tex",
-                "application/x-pdf",
-                "application/vnd.ms-excel.sheet.macroenabled.12",
-                "file/pdf",
-                "image/pdf",
-                "text/csv",
-                "text/pdf",
-                "text/x-sh",
-                '"application/pdf"',
-            ],
-            "Audio": [
-                "audio/mpeg",
-                "audio/mp3",
-                "audio/x-wav",
-                "audio/ogg",
-                "audio/wav",
-                "audio/aac",
-                "audio/x-m4a",
-                "audio/mp4",
-                "audio/x-ms-wma",
-            ],
-            "Code": [
-                "application/json",
-                "text/html",
-                "text/javascript",
-                "application/javascript",
-                "text/css",
-                "text/x-python",
-                "application/x-java-jnlp-file",
-                "application/xml",
-                "application/postscript",
-                "application/x-javascript",
-                "application/java-vm",
-                "text/x-c++src",
-                "text/xml",
-                "text/x-scss",
-                "application/x-python-code",
-                "application/java-archive",
-                "text/x-python-script",
-                "application/x-ruby",
-                "application/mathematica",
-                "text/coffeescript",
-                "text/x-matlab",
-                "application/sql",
-                "text/php",
-            ],
-        }
-    )
-    FILE_UPLOAD_STORAGE_BUCKET_NAME: str = Field(
-        default="SET-ME-PLEASE (ex. bucket-name)"
-    )
-    FILE_UPLOAD_STORAGE_PREFIX: str = Field(default="submissions_attachments")
-    FINANCIAL_REPORTS: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "STORAGE_TYPE": "localfs",
-            "BUCKET": None,
-            "ROOT_PATH": "sandbox",
-        }
-    )
-    FIREBASE_APP: Any = Field(default=None)  # TODO: refine type
-    FIREBASE_CREDENTIALS: Any = Field(default=None)  # TODO: refine type
-    FIREBASE_CREDENTIALS_PATH: Any = Field(default=None)  # TODO: refine type
-    FRONTEND_LOGIN_URL: str = Field(default="/login/")
-    FRONTEND_LOGOUT_URL: str = Field(default="/logout/")
-    FRONTEND_REGISTER_URL: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    GENERATE_PROFILE_SCORES: bool = Field(default=False)
-    GEOIP_PATH: str = Field(
-        default=Path(
-            "/home/tmacey/code/mit/mitx/mitx-platform/common/static/data/geoip/GeoLite2-Country.mmdb"
-        )
-    )
-    GITHUB_PUSH: bool = Field(default=False)
-    GITHUB_REPO_ROOT: str = Field(default=Path("/home/tmacey/code/mit/mitx/data"))
-    GIT_EXPORT_DEFAULT_IDENT: dict[str, str] = Field(
-        default_factory=lambda: {
-            "name": "STUDIO_EXPORT_TO_GIT",
-            "email": "STUDIO_EXPORT_TO_GIT@example.com",
-        }
-    )
-    GIT_REPO_EXPORT_DIR: str = Field(default="/edx/var/edxapp/export_course_repos")
-    GOOGLE_ANALYTICS_ACCOUNT: Any = Field(default=None)  # TODO: refine type
-    GRADES_DOWNLOAD: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "STORAGE_CLASS": "django.core.files.storage.FileSystemStorage",
-            "STORAGE_KWARGS": {"location": "/tmp/edx-s3/grades"},
-            "STORAGE_TYPE": None,
-            "BUCKET": None,
-            "ROOT_PATH": None,
-        }
-    )
-    HEARTBEAT_CELERY_ROUTING_KEY: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    HEARTBEAT_CELERY_TIMEOUT: int = Field(default=5)
-    HEARTBEAT_CHECKS: list[Any] = Field(
-        default_factory=lambda: [
-            "openedx.core.djangoapps.heartbeat.default_checks.check_modulestore",
-            "openedx.core.djangoapps.heartbeat.default_checks.check_database",
-        ]
-    )
-    HEARTBEAT_EXTENDED_CHECKS: tuple[Any, ...] = Field(
-        default=("openedx.core.djangoapps.heartbeat.default_checks.check_celery",)
-    )  # TODO: refine type
-    HELP_TOKENS_BOOKS: dict[str, str] = Field(
-        default_factory=lambda: {
-            "learner": "https://docs.openedx.org/en/latest/learners",
-            "course_author": "https://docs.openedx.org/en/latest/educators",
-        }
-    )
-    HELP_TOKENS_INI_FILE: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    HELP_TOKENS_LANGUAGE_CODE: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    HELP_TOKENS_VERSION: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    HIGH_PRIORITY_QUEUE: str = Field(default="edx.cms.core.high")
-    HOTJAR_ID: int = Field(default=0)
-    ICP_LICENSE: Any = Field(default=None)  # TODO: refine type
-    ICP_LICENSE_INFO: dict[str, Any] = Field(default_factory=lambda: {})
-    IDA_LOGOUT_URI_LIST: list[Any] = Field(default_factory=lambda: [])
-    ID_VERIFICATION_SUPPORT_LINK: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    INACTIVE_USER_LOGIN: bool = Field(default=True)
-    INACTIVE_USER_URL: str = Field(default="http://None")
-    INTEGRATED_CHANNELS_API_CHUNK_TRANSMISSION_LIMIT: dict[str, Any] = Field(
-        default_factory=lambda: {}
-    )
-    IN_CONTEXT_DISCUSSION_ENABLED_DEFAULT: bool = Field(default=True)
-    LEARNER_ENGAGEMENT_PROMPT_FOR_ACTIVE_CONTRACT: str = Field(default="")
-    LEARNER_ENGAGEMENT_PROMPT_FOR_NON_ACTIVE_CONTRACT: str = Field(default="")
-    LEARNER_HOME_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
-    LEARNER_PORTAL_URL_ROOT: str = Field(
-        default="https://learner-portal-localhost:18000"
-    )
-    LEARNER_PROGRESS_PROMPT_FOR_ACTIVE_CONTRACT: str = Field(default="")
-    LEARNER_PROGRESS_PROMPT_FOR_NON_ACTIVE_CONTRACT: str = Field(default="")
-    LIBRARY_BLOCK_TYPES: list[Any] = Field(
-        default_factory=lambda: [
-            {"component": "library_content", "boilerplate_name": None}
-        ]
-    )
-    LIBRARY_ENABLED_BLOCKS: list[Any] = Field(
-        default_factory=lambda: [
-            "problem",
-            "video",
-            "html",
-            "drag-and-drop-v2",
-            "openassessment",
-            "conditional",
-            "done",
-            "edx_sga",
-            "freetextresponse",
-            "google-calendar",
-            "google-document",
-            "invideoquiz",
-            "lti",
-            "lti_consumer",
-            "pdf",
-            "poll",
-            "survey",
-            "word_cloud",
-        ]
-    )
-    LICENSING: bool = Field(default=False)
-    LMS_ENROLLMENT_API_PATH: str = Field(default="/api/enrollment/v1/")
-    LMS_ROOT: str = Field(default=Path("/home/tmacey/code/mit/mitx/mitx-platform/lms"))
-    LOCAL_LOGLEVEL: str = Field(default="INFO")
-    LOGGING_ENV: str = Field(default="sandbox")
-    LOGIN_AND_REGISTER_FORM_RATELIMIT: str = Field(default="100/5m")
-    LOGIN_ISSUE_SUPPORT_LINK: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    LOGISTRATION_API_RATELIMIT: str = Field(default="20/m")
-    LOGISTRATION_PER_EMAIL_RATELIMIT_RATE: str = Field(default="30/5m")
-    LOGISTRATION_RATELIMIT_RATE: str = Field(default="100/5m")
-    LOGO_IMAGE_EXTRA_TEXT: str = Field(default="")
-    LOGO_TRADEMARK_URL: Any = Field(default=None)  # TODO: refine type
-    LOGO_URL: Any = Field(default=None)  # TODO: refine type
-    LOGO_URL_PNG: Any = Field(default=None)  # TODO: refine type
-    LOG_DIR: str = Field(default="/edx/var/log/edx")
-    LOW_PRIORITY_QUEUE: str = Field(default="edx.cms.core.low")
-    MAINTENANCE_BANNER_TEXT: str = Field(default="Sample banner message")
-    MAKO_TEMPLATE_DIRS_BASE: list[Any] = Field(
-        default_factory=lambda: [
-            Path("/home/tmacey/code/mit/mitx/mitx-platform/cms/templates"),
-            Path("/home/tmacey/code/mit/mitx/mitx-platform/common/templates"),
-            Path(
-                "/home/tmacey/code/mit/mitx/mitx-platform/common/djangoapps/pipeline_mako/templates"
-            ),
-            Path("/home/tmacey/code/mit/mitx/mitx-platform/common/static"),
-            Path(
-                "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/djangoapps/cors_csrf/templates"
-            ),
-            Path(
-                "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/djangoapps/dark_lang/templates"
-            ),
-            Path(
-                "/home/tmacey/code/mit/mitx/mitx-platform/openedx/core/lib/license/templates"
-            ),
-            Path(
-                "/home/tmacey/code/mit/mitx/mitx-platform/cms/djangoapps/pipeline_js/templates"
-            ),
-        ]
-    )
-    MARKETING_EMAILS_OPT_IN: bool = Field(default=False)
-    MARK_LIBRARY_CONTENT_BLOCK_COMPLETE_ON_VIEW: bool = Field(default=False)
-    MAX_ASSET_UPLOAD_FILE_SIZE_IN_MB: int = Field(default=20)
-    MAX_ASSET_UPLOAD_FILE_SIZE_URL: str = Field(default="")
-    MAX_BLOCKS_PER_CONTENT_LIBRARY: int = Field(default=100000)
-    MAX_FAILED_LOGIN_ATTEMPTS_ALLOWED: int = Field(default=6)
-    MAX_FAILED_LOGIN_ATTEMPTS_LOCKOUT_PERIOD_SECS: int = Field(default=1800)
-    MEILISEARCH_API_KEY: str = Field(default="devkey")
-    MEILISEARCH_ENABLED: bool = Field(default=False)
-    MEILISEARCH_INDEX_PREFIX: str = Field(default="")
-    MEILISEARCH_PUBLIC_URL: str = Field(default="http://meilisearch.example.com")
-    MEILISEARCH_URL: str = Field(default="http://meilisearch")
-    MILESTONES_APP: bool = Field(default=False)
-    MODULESTORE: dict[str, ModulestoreEntry] = Field(
-        default_factory=lambda: {
-            "default": {
-                "ENGINE": "xmodule.modulestore.mixed.MixedModuleStore",
-                "OPTIONS": {
-                    "mappings": {},
-                    "stores": [
-                        {
-                            "NAME": "split",
-                            "ENGINE": "xmodule.modulestore.split_mongo.split_draft.DraftVersioningModuleStore",
-                            "DOC_STORE_CONFIG": {
-                                "db": "edxapp",
-                                "host": "localhost",
-                                "replicaSet": "",
-                                "port": 27017,
-                                "user": "edxapp",
-                                "collection": "modulestore",
-                                "ssl": False,
-                                "socketTimeoutMS": 6000,
-                                "connectTimeoutMS": 2000,
-                                "auth_source": None,
-                                "read_preference": "PRIMARY",
-                            },
-                            "OPTIONS": {
-                                "default_class": "xmodule.hidden_block.HiddenBlock",
-                                "fs_root": Path("/home/tmacey/code/mit/mitx/data"),
-                                "render_template": "common.djangoapps.edxmako.shortcuts.render_to_string",
-                            },
-                        },
-                        {
-                            "NAME": "draft",
-                            "ENGINE": "xmodule.modulestore.mongo.DraftMongoModuleStore",
-                            "DOC_STORE_CONFIG": {
-                                "db": "edxapp",
-                                "host": "localhost",
-                                "replicaSet": "",
-                                "port": 27017,
-                                "user": "edxapp",
-                                "collection": "modulestore",
-                                "ssl": False,
-                                "socketTimeoutMS": 6000,
-                                "connectTimeoutMS": 2000,
-                                "auth_source": None,
-                                "read_preference": "PRIMARY",
-                            },
-                            "OPTIONS": {
-                                "default_class": "xmodule.hidden_block.HiddenBlock",
-                                "fs_root": Path("/home/tmacey/code/mit/mitx/data"),
-                                "render_template": "common.djangoapps.edxmako.shortcuts.render_to_string",
-                            },
-                        },
-                    ],
-                },
-            }
-        }
-    )
-    MODULESTORE_BRANCH: str = Field(default="draft-preferred")
-    MODULESTORE_FIELD_OVERRIDE_PROVIDERS: tuple[Any, ...] = Field(
-        default=()
-    )  # TODO: refine type
-    NOTIFICATIONS_DEFAULT_FROM_EMAIL: str = Field(default="no-reply@example.com")
-    NOTIFICATIONS_EXPIRY: int = Field(default=60)
-    NOTIFICATION_APPS_OVERRIDE: dict[str, Any] = Field(default_factory=lambda: {})
-    NOTIFICATION_CREATION_BATCH_SIZE: int = Field(default=76)
-    NOTIFICATION_DAILY_DIGEST_DELIVERY_HOUR: int = Field(default=17)
-    NOTIFICATION_DAILY_DIGEST_DELIVERY_MINUTE: int = Field(default=0)
-    NOTIFICATION_DIGEST_LOGO: str = Field(
-        default="https://edx-cdn.org/v3/default/logo.png"
-    )
-    NOTIFICATION_IMMEDIATE_EMAIL_BUFFER_MINUTES: int = Field(default=15)
-    NOTIFICATION_TYPES_OVERRIDE: dict[str, Any] = Field(default_factory=lambda: {})
-    NOTIFICATION_TYPE_ICONS: dict[str, Any] = Field(default_factory=lambda: {})
-    NOTIFICATION_WEEKLY_DIGEST_DELIVERY_DAY: int = Field(default=0)
-    NOTIFICATION_WEEKLY_DIGEST_DELIVERY_HOUR: int = Field(default=17)
-    NOTIFICATION_WEEKLY_DIGEST_DELIVERY_MINUTE: int = Field(default=0)
-    NOTIFY_CREDENTIALS_FREQUENCY: int = Field(default=14400)
-    ONE_CLICK_UNSUBSCRIBE_RATE_LIMIT: str = Field(default="100/m")
-    OPENAPI_CACHE_TIMEOUT: int = Field(default=3600)
-    OPENEDX_ROOT: str = Field(
-        default=Path("/home/tmacey/code/mit/mitx/mitx-platform/openedx")
-    )
-    OPTIMIZELY_FULLSTACK_SDK_KEY: Any = Field(default=None)  # TODO: refine type
-    OPTIMIZELY_PROJECT_ID: Any = Field(default=None)  # TODO: refine type
-    OPTIONAL_APPS: list[Any] = Field(
-        default_factory=lambda: [
-            (
-                "problem_builder",
-                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
-            ),
-            ("edx_sga", None),
-            (
-                "submissions",
-                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
-            ),
-            (
-                "openassessment",
-                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
-            ),
-            (
-                "openassessment.assessment",
-                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
-            ),
-            (
-                "openassessment.fileupload",
-                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
-            ),
-            (
-                "openassessment.staffgrader",
-                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
-            ),
-            (
-                "openassessment.workflow",
-                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
-            ),
-            (
-                "openassessment.xblock",
-                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
-            ),
-            (
-                "edxval",
-                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",
-            ),
-            ("integrated_channels.integrated_channel", None),
-            ("integrated_channels.degreed", None),
-            ("integrated_channels.degreed2", None),
-            ("integrated_channels.sap_success_factors", None),
-            ("integrated_channels.cornerstone", None),
-            ("integrated_channels.xapi", None),
-            ("integrated_channels.blackboard", None),
-            ("integrated_channels.canvas", None),
-            ("integrated_channels.moodle", None),
-        ]
-    )
-    OPTIONAL_FIELD_API_RATELIMIT: str = Field(default="10/h")
-    ORA2_FILE_PREFIX: str = Field(default="default_env-default_deployment/ora2")
-    ORA_SETTINGS_HELP_URL: str = Field(
-        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/exercise_tools/Manage_ORA_Assignment.html"
-    )
-    P3P_HEADER: str = Field(default='CP="Open EdX does not have a P3P policy."')
-    PARENTAL_CONSENT_AGE_LIMIT: int = Field(default=13)
-    PARSE_KEYS: dict[str, Any] = Field(default_factory=lambda: {})
-    PASSWORD_POLICY_COMPLIANCE_API_TIMEOUT: int = Field(default=5)
-    PASSWORD_RESET_EMAIL_RATE: str = Field(default="2/h")
-    PASSWORD_RESET_IP_RATE: str = Field(default="1/m")
-    PASSWORD_RESET_SUPPORT_LINK: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    PAYMENT_SUPPORT_EMAIL: str = Field(default="billing@example.com")
     PLATFORM_FACEBOOK_ACCOUNT: str = Field(
         default="http://www.facebook.com/YourPlatformFacebookAccount"
     )
-    PLATFORM_TWITTER_ACCOUNT: str = Field(default="@YourPlatformTwitterAccount")
-    POLICY_CHANGE_GRADES_ROUTING_KEY: Any = Field(
+    PLATFORM_NAME: Any = Field(
         default=None
     )  # DERIVED: computed from other settings — add a @model_validator to reproduce
+    PLATFORM_TWITTER_ACCOUNT: str = Field(default="@YourPlatformTwitterAccount")
+    POLICY_CHANGE_GRADES_ROUTING_KEY: str = Field(default="edx.cms.core.default")
     POLICY_CHANGE_TASK_RATE_LIMIT: str = Field(default="900/h")
     PREPEND_LOCALE_PATHS: list[Any] = Field(default_factory=lambda: [])
     PRESS_EMAIL: str = Field(default="press@example.com")
     PREVENT_CONCURRENT_LOGINS: bool = Field(default=False)
+    PROCTORING_BACKENDS: dict[str, Any] = Field(
+        default_factory=lambda: {"DEFAULT": "null", "null": {}}
+    )
+    PROCTORING_SETTINGS: dict[str, Any] = Field(default_factory=lambda: {})
     PROFILE_IMAGE_BACKEND: dict[str, Any] = Field(
         default_factory=lambda: {
             "class": "openedx.core.storage.OverwriteStorage",
@@ -2473,20 +2129,18 @@ class AqueductSettings(BaseSettings):
     PROFILE_IMAGE_HASH_SEED: str = Field(default="placeholder_secret_key")
     PROFILE_IMAGE_MAX_BYTES: int = Field(default=1048576)
     PROFILE_IMAGE_MIN_BYTES: int = Field(default=100)
-    PROFILE_IMAGE_SIZES_MAP: dict[str, int] = Field(
+    PROFILE_IMAGE_SIZES_MAP: dict[str, Any] = Field(
         default_factory=lambda: {"full": 500, "large": 120, "medium": 50, "small": 30}
     )
     PROGRESS_HELP_URL: str = Field(
         default="https://docs.openedx.org/en/latest/educators/references/data/progress_page.html"
     )
-    PROJECT_ROOT: str = Field(
-        default=Path("/home/tmacey/code/mit/mitx/mitx-platform/cms")
-    )
-    RECALCULATE_GRADES_ROUTING_KEY: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
+    PROJECT_ROOT: str = Field(default=Path("/openedx/edx-platform/cms"))
+    RECALCULATE_GRADES_ROUTING_KEY: str = Field(default="edx.cms.core.default")
+    REDIRECT_CACHE_KEY_PREFIX: str = Field(default="redirects")
+    REDIRECT_CACHE_TIMEOUT: Any = Field(default=None)  # TODO: refine type
     REGISTRATION_EMAIL_PATTERNS_ALLOWED: Any = Field(default=None)  # TODO: refine type
-    REGISTRATION_EXTRA_FIELDS: dict[str, str] = Field(
+    REGISTRATION_EXTRA_FIELDS: dict[str, Any] = Field(
         default_factory=lambda: {
             "confirm_email": "hidden",
             "level_of_education": "optional",
@@ -2503,18 +2157,38 @@ class AqueductSettings(BaseSettings):
     )
     REGISTRATION_RATELIMIT: str = Field(default="60/7d")
     REGISTRATION_VALIDATION_RATELIMIT: str = Field(default="30/7d")
-    REPO_ROOT: str = Field(default=Path("/home/tmacey/code/mit/mitx/mitx-platform"))
+    REPO_ROOT: str = Field(default=Path("/openedx/edx-platform"))
+    REQUIRE_BASE_URL: str = Field(default="./")
+    REQUIRE_BUILD_PROFILE: str = Field(default="cms/js/build.js")
+    REQUIRE_DEBUG: bool = Field(default=False)
+    REQUIRE_JS: str = Field(default="js/vendor/requiresjs/require.js")
     RESET_PASSWORD_API_RATELIMIT: str = Field(default="30/7d")
     RESET_PASSWORD_TOKEN_VALIDATE_API_RATELIMIT: str = Field(default="30/7d")
     RESTRICT_AUTOMATIC_AUTH: bool = Field(default=True)
+    REST_FRAMEWORK: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "DEFAULT_AUTHENTICATION_CLASSES": [
+                "openedx.core.djangolib.default_auth_classes.DefaultJwtAuthentication",
+                "openedx.core.djangolib.default_auth_classes.DefaultSessionAuthentication",
+            ],
+            "DEFAULT_PAGINATION_CLASS": "edx_rest_framework_extensions.paginators.DefaultPagination",
+            "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
+            "EXCEPTION_HANDLER": "openedx.core.lib.request_utils.ignored_error_exception_handler",
+            "PAGE_SIZE": 10,
+            "URL_FORMAT_OVERRIDE": None,
+            "DEFAULT_THROTTLE_RATES": {
+                "user": "60/minute",
+                "service_user": "800/minute",
+                "registration_validation": "30/minute",
+                "high_service_user": "2000/minute",
+            },
+            "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+        }
+    )
     RETIRED_EMAIL_DOMAIN: str = Field(default="retired.invalid")
-    RETIRED_EMAIL_FMT: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
+    RETIRED_EMAIL_FMT: str = Field(default="retired__user_{}@retired.invalid")
     RETIRED_EMAIL_PREFIX: str = Field(default="retired__user_")
-    RETIRED_USERNAME_FMT: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
+    RETIRED_USERNAME_FMT: str = Field(default="retired__user_{}")
     RETIRED_USERNAME_PREFIX: str = Field(default="retired__user_")
     RETIRED_USER_SALTS: list[Any] = Field(default_factory=lambda: ["abc", "123"])
     RETIREMENT_SERVICE_WORKER_USERNAME: str = Field(default="RETIREMENT_SERVICE_USER")
@@ -2540,15 +2214,30 @@ class AqueductSettings(BaseSettings):
     )
     RETRY_ACTIVATION_EMAIL_MAX_ATTEMPTS: int = Field(default=5)
     RETRY_ACTIVATION_EMAIL_TIMEOUT: float = Field(default=0.5)
+    ROOT_URLCONF: str = Field(default="cms.urls")
     SAML_METADATA_URL_ALLOW_PRIVATE_IPS: bool = Field(default=False)
-    SCRAPE_YOUTUBE_THUMBNAILS_JOB_QUEUE: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
+    SCRAPE_YOUTUBE_THUMBNAILS_JOB_QUEUE: str = Field(default="edx.cms.core.default")
     SEARCH_ENGINE: Any = Field(default=None)  # TODO: refine type
     SECONDARY_EMAIL_RATE_LIMIT: str = Field(default="")
-    SHARED_COOKIE_DOMAIN: Any = Field(
+    SECRET_KEY: str = Field(default="dev key")
+    SECURE_PROXY_SSL_HEADER: tuple[Any, ...] = Field(
+        default=("HTTP_X_FORWARDED_PROTO", "https")
+    )  # TODO: refine type
+    SERVER_EMAIL: str = Field(default="devops@example.com")
+    SERVICE_VARIANT: str = Field(default="cms")
+    SESSION_COOKIE_DOMAIN: Any = Field(default=None)  # TODO: refine type
+    SESSION_COOKIE_HTTPONLY: bool = Field(default=True)
+    SESSION_COOKIE_NAME: str = Field(default="sessionid")
+    SESSION_COOKIE_SECURE: bool = Field(default=False)
+    SESSION_ENGINE: str = Field(default="django.contrib.sessions.backends.cache")
+    SESSION_INACTIVITY_TIMEOUT_IN_SECONDS: Any = Field(
         default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
+    )  # TODO: refine type
+    SESSION_SAVE_EVERY_REQUEST: bool = Field(default=False)
+    SESSION_SERIALIZER: str = Field(
+        default="openedx.core.lib.session_serializers.PickleSerializer"
+    )
+    SHARED_COOKIE_DOMAIN: Any = Field(default=None)  # TODO: refine type
     SHIBBOLETH_DOMAIN_PREFIX: str = Field(default="shib:")
     SHOW_ACCOUNT_ACTIVATION_CTA: bool = Field(default=False)
     SHOW_ACTIVATE_CTA_POPUP_COOKIE_NAME: str = Field(
@@ -2558,11 +2247,25 @@ class AqueductSettings(BaseSettings):
     SHOW_FOOTER_LANGUAGE_SELECTOR: bool = Field(default=False)
     SHOW_HEADER_LANGUAGE_SELECTOR: bool = Field(default=False)
     SHOW_REGISTRATION_LINKS: bool = Field(default=True)
-    SINGLE_LEARNER_COURSE_REGRADE_ROUTING_KEY: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
+    SIMPLE_HISTORY_DATE_INDEX: bool = Field(default=False)
+    SINGLE_LEARNER_COURSE_REGRADE_ROUTING_KEY: str = Field(
+        default="edx.cms.core.default"
+    )
+    SITE_ID: int = Field(default=1)
+    SITE_NAME: str = Field(default="localhost")
     SKIP_RATE_LIMIT_ON_ACCOUNT_AFTER_DAYS: int = Field(default=0)
-    SOCIAL_MEDIA_FOOTER_ACE_URLS: dict[str, str] = Field(
+    SOCIAL_AUTH_SAML_SP_PRIVATE_KEY: str = Field(default="")
+    SOCIAL_AUTH_SAML_SP_PRIVATE_KEY_DICT: dict[str, Any] = Field(
+        default_factory=lambda: {}
+    )
+    SOCIAL_AUTH_SAML_SP_PUBLIC_CERT: str = Field(default="")
+    SOCIAL_AUTH_SAML_SP_PUBLIC_CERT_DICT: dict[str, Any] = Field(
+        default_factory=lambda: {}
+    )
+    SOCIAL_AUTH_STRATEGY: str = Field(
+        default="auth_backends.strategies.EdxDjangoStrategy"
+    )
+    SOCIAL_MEDIA_FOOTER_ACE_URLS: dict[str, Any] = Field(
         default_factory=lambda: {
             "reddit": "http://www.reddit.com/r/edx",
             "twitter": "https://twitter.com/edXOnline",
@@ -2570,7 +2273,7 @@ class AqueductSettings(BaseSettings):
             "facebook": "http://www.facebook.com/EdxOnline",
         }
     )
-    SOCIAL_MEDIA_LOGO_URLS: dict[str, str] = Field(
+    SOCIAL_MEDIA_LOGO_URLS: dict[str, Any] = Field(
         default_factory=lambda: {
             "reddit": "http://email-media.s3.amazonaws.com/edX/2021/social_5_reddit.png",
             "twitter": "http://email-media.s3.amazonaws.com/edX/2021/social_2_twitter.png",
@@ -2578,12 +2281,41 @@ class AqueductSettings(BaseSettings):
             "facebook": "http://email-media.s3.amazonaws.com/edX/2021/social_1_fb.png",
         }
     )
+    SOCIAL_SHARING_SETTINGS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "CUSTOM_COURSE_URLS": False,
+            "DASHBOARD_FACEBOOK": False,
+            "CERTIFICATE_FACEBOOK": False,
+            "CERTIFICATE_TWITTER": False,
+            "DASHBOARD_TWITTER": False,
+            "FACEBOOK_BRAND": None,
+            "CERTIFICATE_FACEBOOK_TEXT": None,
+            "TWITTER_BRAND": None,
+            "CERTIFICATE_TWITTER_TEXT": None,
+            "DASHBOARD_TWITTER_TEXT": None,
+        }
+    )
     SOFTWARE_SECURE_REQUEST_RETRY_DELAY: int = Field(default=3600)
     SOFTWARE_SECURE_RETRY_MAX_ATTEMPTS: int = Field(default=6)
-    SOFTWARE_SECURE_VERIFICATION_ROUTING_KEY: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
+    SOFTWARE_SECURE_VERIFICATION_ROUTING_KEY: str = Field(default="edx.cms.core.high")
     SQUELCH_PII_IN_LOGS: bool = Field(default=False)
+    STATICFILES_DIRS: list[Any] = Field(
+        default_factory=lambda: [
+            Path("/openedx/edx-platform/common/static"),
+            Path("/openedx/edx-platform/lms/static"),
+            Path("/openedx/edx-platform/node_modules/@edx"),
+            Path("/openedx/edx-platform/xmodule/static"),
+        ]
+    )
+    STATICFILES_FINDERS: list[Any] = Field(
+        default_factory=lambda: [
+            "openedx.core.djangoapps.theming.finders.ThemeFilesFinder",
+            "django.contrib.staticfiles.finders.FileSystemFinder",
+            "django.contrib.staticfiles.finders.AppDirectoriesFinder",
+            "openedx.core.lib.xblock_pipeline.finder.XBlockPipelineFinder",
+            "pipeline.finders.PipelineFinder",
+        ]
+    )
     STATICFILES_IGNORE_PATTERNS: list[Any] = Field(
         default_factory=lambda: [
             "*.py",
@@ -2599,8 +2331,21 @@ class AqueductSettings(BaseSettings):
         ]
     )
     STATICFILES_STORAGE_KWARGS: dict[str, Any] = Field(default_factory=lambda: {})
+    STATICI18N_FILENAME_FUNCTION: str = Field(
+        default="statici18n.utils.legacy_filename"
+    )
+    STATICI18N_OUTPUT_DIR: str = Field(default="js/i18n")
+    STATICI18N_ROOT: str = Field(default=Path("/openedx/edx-platform/cms/static"))
+    STATIC_ROOT: str = Field(default=Path("/openedx/staticfiles/studio"))
     STATIC_ROOT_BASE: Any = Field(default=None)  # TODO: refine type
+    STATIC_URL: str = Field(default="/static/studio/")
     STATIC_URL_BASE: Any = Field(default=None)  # TODO: refine type
+    STORAGES: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {"BACKEND": "openedx.core.storage.ProductionStorage"},
+        }
+    )
     STUDIO_NAME: Any = Field(
         default=None
     )  # DERIVED: computed from other settings — add a @model_validator to reproduce
@@ -2624,10 +2369,155 @@ class AqueductSettings(BaseSettings):
     TEAMS_HELP_URL: str = Field(
         default="https://docs.openedx.org/en/latest/educators/navigation/advanced_features.html#use-teams-in-your-course"
     )
+    TECH_SUPPORT_EMAIL: str = Field(default="technical@example.com")
+    TEMPLATES: list[Any] = Field(
+        default_factory=lambda: [
+            {
+                "NAME": "django",
+                "BACKEND": "django.template.backends.django.DjangoTemplates",
+                "APP_DIRS": False,
+                "DIRS": [
+                    Path("/openedx/edx-platform/cms/templates"),
+                    Path("/openedx/edx-platform/common/templates"),
+                    Path(
+                        "/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"
+                    ),
+                    Path("/openedx/edx-platform/common/static"),
+                    Path(
+                        "/openedx/edx-platform/openedx/core/djangoapps/cors_csrf/templates"
+                    ),
+                    Path(
+                        "/openedx/edx-platform/openedx/core/djangoapps/dark_lang/templates"
+                    ),
+                    Path("/openedx/edx-platform/openedx/core/lib/license/templates"),
+                    Path("/openedx/edx-platform/cms/djangoapps/pipeline_js/templates"),
+                ],
+                "OPTIONS": {
+                    "loaders": [
+                        "openedx.core.djangoapps.theming.template_loaders.ThemeTemplateLoader",
+                        "common.djangoapps.edxmako.makoloader.MakoFilesystemLoader",
+                        "common.djangoapps.edxmako.makoloader.MakoAppDirectoriesLoader",
+                    ],
+                    "context_processors": [
+                        "django.template.context_processors.request",
+                        "django.template.context_processors.static",
+                        "django.template.context_processors.i18n",
+                        "django.contrib.auth.context_processors.auth",
+                        "django.template.context_processors.csrf",
+                        "django.template.context_processors.media",
+                        "django.template.context_processors.tz",
+                        "django.contrib.messages.context_processors.messages",
+                        "sekizai.context_processors.sekizai",
+                        "common.djangoapps.edxmako.shortcuts.marketing_link_context_processor",
+                        "lms.djangoapps.courseware.context_processor.user_timezone_locale_prefs",
+                        "help_tokens.context_processor",
+                        "openedx.core.djangoapps.site_configuration.context_processors.configuration_context",
+                        "lms.djangoapps.mobile_api.context_processor.is_from_mobile_app",
+                        "openedx.features.survey_report.context_processors.admin_extra_context",
+                        "social_django.context_processors.backends",
+                        "social_django.context_processors.login_redirect",
+                    ],
+                    "debug": False,
+                },
+            },
+            {
+                "NAME": "mako",
+                "BACKEND": "common.djangoapps.edxmako.backend.Mako",
+                "APP_DIRS": False,
+                "DIRS": [
+                    "/openedx/edx-platform/lms/templates",
+                    Path("/openedx/edx-platform/common/templates"),
+                    Path(
+                        "/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"
+                    ),
+                    Path(
+                        "/openedx/edx-platform/openedx/core/djangoapps/cors_csrf/templates"
+                    ),
+                    Path(
+                        "/openedx/edx-platform/openedx/core/djangoapps/dark_lang/templates"
+                    ),
+                    Path("/openedx/edx-platform/openedx/core/lib/license/templates"),
+                    Path("/openedx/edx-platform/lms/djangoapps/teams/templates"),
+                    Path(
+                        "/openedx/edx-platform/openedx/features/course_experience/templates"
+                    ),
+                ],
+                "OPTIONS": {
+                    "context_processors": [
+                        "django.template.context_processors.request",
+                        "django.template.context_processors.static",
+                        "django.template.context_processors.i18n",
+                        "django.contrib.auth.context_processors.auth",
+                        "django.template.context_processors.csrf",
+                        "django.template.context_processors.media",
+                        "django.template.context_processors.tz",
+                        "django.contrib.messages.context_processors.messages",
+                        "sekizai.context_processors.sekizai",
+                        "common.djangoapps.edxmako.shortcuts.marketing_link_context_processor",
+                        "lms.djangoapps.courseware.context_processor.user_timezone_locale_prefs",
+                        "help_tokens.context_processor",
+                        "openedx.core.djangoapps.site_configuration.context_processors.configuration_context",
+                        "lms.djangoapps.mobile_api.context_processor.is_from_mobile_app",
+                        "openedx.features.survey_report.context_processors.admin_extra_context",
+                        "social_django.context_processors.backends",
+                        "social_django.context_processors.login_redirect",
+                    ],
+                    "debug": False,
+                },
+            },
+            {
+                "NAME": "preview",
+                "BACKEND": "common.djangoapps.edxmako.backend.Mako",
+                "APP_DIRS": False,
+                "DIRS": [
+                    "/openedx/edx-platform/lms/templates",
+                    Path("/openedx/edx-platform/common/templates"),
+                    Path(
+                        "/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"
+                    ),
+                    Path(
+                        "/openedx/edx-platform/openedx/core/djangoapps/cors_csrf/templates"
+                    ),
+                    Path(
+                        "/openedx/edx-platform/openedx/core/djangoapps/dark_lang/templates"
+                    ),
+                    Path("/openedx/edx-platform/openedx/core/lib/license/templates"),
+                    Path("/openedx/edx-platform/lms/djangoapps/teams/templates"),
+                    Path(
+                        "/openedx/edx-platform/openedx/features/course_experience/templates"
+                    ),
+                ],
+                "OPTIONS": {
+                    "context_processors": [
+                        "django.template.context_processors.request",
+                        "django.template.context_processors.static",
+                        "django.template.context_processors.i18n",
+                        "django.contrib.auth.context_processors.auth",
+                        "django.template.context_processors.csrf",
+                        "django.template.context_processors.media",
+                        "django.template.context_processors.tz",
+                        "django.contrib.messages.context_processors.messages",
+                        "sekizai.context_processors.sekizai",
+                        "common.djangoapps.edxmako.shortcuts.marketing_link_context_processor",
+                        "lms.djangoapps.courseware.context_processor.user_timezone_locale_prefs",
+                        "help_tokens.context_processor",
+                        "openedx.core.djangoapps.site_configuration.context_processors.configuration_context",
+                        "lms.djangoapps.mobile_api.context_processor.is_from_mobile_app",
+                        "openedx.features.survey_report.context_processors.admin_extra_context",
+                        "social_django.context_processors.backends",
+                        "social_django.context_processors.login_redirect",
+                    ],
+                    "debug": False,
+                    "namespace": "lms.main",
+                },
+            },
+        ]
+    )
     TEXTBOOKS_HELP_URL: str = Field(
         default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/manage_textbooks.html"
     )
-    TRACKING_BACKENDS: dict[str, TrackingBackendsEntry] = Field(
+    TIME_ZONE: str = Field(default="UTC")
+    TRACKING_BACKENDS: dict[str, Any] = Field(
         default_factory=lambda: {
             "logger": {
                 "ENGINE": "common.djangoapps.track.backends.logger.LoggerBackend",
@@ -2635,13 +2525,46 @@ class AqueductSettings(BaseSettings):
             }
         }
     )
+    TRACKING_IGNORE_URL_PATTERNS: list[Any] = Field(
+        default_factory=lambda: [
+            "^/event",
+            "^/login",
+            "^/heartbeat",
+            "^/segmentio/event",
+            "^/performance",
+        ]
+    )
     TRACK_MAX_EVENT: int = Field(default=50000)
+    TRANSCRIPT_LANG_CACHE_TIMEOUT: int = Field(default=86400)
+    TRANSLATE_FILE_TASK_LIMITS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "soft_time_limit": 1740,
+            "time_limit": 1800,
+            "max_retries": 1,
+            "retry_countdown": 60,
+        }
+    )
+    TRANSLATIONS_GITHUB_TOKEN: str = Field(default="")
+    TRANSLATIONS_PROVIDERS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "default_provider": "mistral",
+            "deepl": {"api_key": ""},
+            "openai": {"api_key": "", "default_model": "gpt-5.2"},
+            "gemini": {"api_key": "", "default_model": "gemini-3-pro-preview"},
+            "mistral": {"api_key": "", "default_model": "mistral-large-latest"},
+        }
+    )
+    TRANSLATIONS_REPO_PATH: str = Field(default="")
+    TRANSLATIONS_REPO_URL: str = Field(
+        default="https://github.com/mitodl/mitxonline-translations.git"
+    )
     UNIVERSITY_EMAIL: str = Field(default="university@example.com")
-    UPDATE_SEARCH_INDEX_JOB_QUEUE: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
+    UPDATE_SEARCH_INDEX_JOB_QUEUE: str = Field(default="edx.cms.core.default")
     UPLOAD_CHUNK_SIZE_IN_MB: int = Field(default=10)
     USAGE_ID_PATTERN: str = Field(
+        default=None
+    )  # OPAQUE: original str value is not serialisable
+    USAGE_KEY_PATTERN: str = Field(
         default=None
     )  # OPAQUE: original str value is not serialisable
     USERNAME_PATTERN: str = Field(
@@ -2649,6 +2572,9 @@ class AqueductSettings(BaseSettings):
     )  # OPAQUE: original str value is not serialisable
     USERNAME_REGEX_PARTIAL: str = Field(default="[\\w .@_+-]+")
     USERNAME_REPLACEMENT_WORKER: str = Field(default="REPLACE WITH VALID USERNAME")
+    USER_TASKS_MAX_AGE: Any = Field(
+        default=datetime.timedelta(days=7)
+    )  # TODO: refine type
     USE_EXTRACTED_ANNOTATABLE_BLOCK: bool = Field(default=True)
     USE_EXTRACTED_DISCUSSION_BLOCK: bool = Field(default=True)
     USE_EXTRACTED_HTML_BLOCK: bool = Field(default=True)
@@ -2657,7 +2583,9 @@ class AqueductSettings(BaseSettings):
     USE_EXTRACTED_PROBLEM_BLOCK: bool = Field(default=True)
     USE_EXTRACTED_VIDEO_BLOCK: bool = Field(default=True)
     USE_EXTRACTED_WORD_CLOUD_BLOCK: bool = Field(default=True)
-    VERIFY_STUDENT: dict[str, int] = Field(
+    USE_I18N: bool = Field(default=True)
+    USE_TZ: bool = Field(default=True)
+    VERIFY_STUDENT: dict[str, Any] = Field(
         default_factory=lambda: {"DAYS_GOOD_FOR": 365, "EXPIRING_SOON_WINDOW": 28}
     )
     VIDEO_CDN_URL: dict[str, Any] = Field(default_factory=lambda: {})
@@ -2674,7 +2602,16 @@ class AqueductSettings(BaseSettings):
     VIDEO_IMAGE_MIN_FILE_SIZE_KB: str = Field(default="2 KB")
     VIDEO_IMAGE_MIN_HEIGHT: int = Field(default=360)
     VIDEO_IMAGE_MIN_WIDTH: int = Field(default=640)
-    VIDEO_IMAGE_SUPPORTED_FILE_FORMATS: dict[str, str] = Field(
+    VIDEO_IMAGE_SETTINGS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "VIDEO_IMAGE_MAX_BYTES": 2097152,
+            "VIDEO_IMAGE_MIN_BYTES": 2048,
+            "STORAGE_KWARGS": {"location": "/edx/var/edxapp/media/"},
+            "DIRECTORY_PREFIX": "video-images/",
+            "BASE_URL": "/media/",
+        }
+    )
+    VIDEO_IMAGE_SUPPORTED_FILE_FORMATS: dict[str, Any] = Field(
         default_factory=lambda: {
             ".bmp": "image/bmp",
             ".bmp2": "image/x-ms-bmp",
@@ -2685,15 +2622,33 @@ class AqueductSettings(BaseSettings):
         }
     )
     VIDEO_TRANSCRIPTS_MAX_AGE: int = Field(default=31536000)
-    VIDEO_TRANSCRIPT_MIGRATIONS_JOB_QUEUE: Any = Field(
-        default=None
-    )  # DERIVED: computed from other settings — add a @model_validator to reproduce
+    VIDEO_TRANSCRIPTS_SETTINGS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "VIDEO_TRANSCRIPTS_MAX_BYTES": 3145728,
+            "STORAGE_KWARGS": {"location": "/edx/var/edxapp/media/"},
+            "DIRECTORY_PREFIX": "video-transcripts/",
+            "BASE_URL": "/media/",
+        }
+    )
+    VIDEO_TRANSCRIPT_MIGRATIONS_JOB_QUEUE: str = Field(default="edx.cms.core.default")
     VIDEO_UPLOAD_PIPELINE: dict[str, Any] = Field(
         default_factory=lambda: {
             "VEM_S3_BUCKET": "",
             "BUCKET": "",
             "ROOT_PATH": "",
             "CONCURRENT_UPLOAD_LIMIT": 4,
+        }
+    )
+    WEBPACK_LOADER: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "DEFAULT": {
+                "BUNDLE_DIR_NAME": "bundles/",
+                "STATS_FILE": Path("/openedx/staticfiles/webpack-stats.json"),
+            },
+            "WORKERS": {
+                "BUNDLE_DIR_NAME": "bundles/",
+                "STATS_FILE": Path("/openedx/staticfiles/webpack-worker-stats.json"),
+            },
         }
     )
     WIKI_ENABLED: bool = Field(default=True)
@@ -2709,20 +2664,16 @@ class AqueductSettings(BaseSettings):
     )  # OPAQUE: original tuple value is not serialisable
     XBLOCK_RUNTIME_V2_EPHEMERAL_DATA_CACHE: str = Field(default="default")
     XBLOCK_SETTINGS: dict[str, Any] = Field(default_factory=lambda: {})
-    XMODULE_ROOT: str = Field(
-        default=Path("/home/tmacey/code/mit/mitx/mitx-platform/xmodule")
-    )
+    XMODULE_ROOT: str = Field(default=Path("/openedx/edx-platform/xmodule"))
     XQUEUE_INTERFACE: dict[str, Any] = Field(
         default_factory=lambda: {
             "url": "http://localhost:18040",
             "basic_auth": ["edx", "edx"],
-            "django_auth": {
-                "username": "lms",
-                "password": "password",  # pragma: allowlist secret
-            },  # pragma: allowlist secret,
+            "django_auth": {"username": "lms", "password": "password"},
         }
     )
     XQUEUE_WAITTIME_BETWEEN_REQUESTS: int = Field(default=5)
+    X_FRAME_OPTIONS: str = Field(default="DENY")
     YOUTUBE: dict[str, Any] = Field(
         default=None
     )  # OPAQUE: original dict value is not serialisable
