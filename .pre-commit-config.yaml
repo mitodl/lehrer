@@ -16,7 +16,8 @@ repos:
       (?x)(
         src/ol_infrastructure/infrastructure/aws/eks/files/|
         src/ol_infrastructure/applications/edxapp/files/edxapp/.*/.*\.yaml|
-        charts/
+        charts/|
+        sdk/
       )
   - id: check-added-large-files
   - id: check-merge-conflict
@@ -39,7 +40,8 @@ repos:
     exclude: |
       (?x)(
         src/ol_infrastructure/applications/edxapp/files/edxapp/.*/.*\.yaml|
-        charts/
+        charts/|
+        sdk/
       )
 - repo: https://github.com/adrienverge/yamllint.git
   rev: v1.38.0
@@ -49,7 +51,8 @@ repos:
     exclude: |
       (?x)(
         src/ol_infrastructure/applications/edxapp/files/edxapp/.*/.*\.yaml|
-        charts/
+        charts/|
+        sdk/
       )
 - repo: https://github.com/Yelp/detect-secrets
   rev: v1.5.0
@@ -83,7 +86,8 @@ repos:
       (?x)(
         dockerfiles/|
         settings/|
-        src/lehrer/
+        src/lehrer/|
+        sdk/
       )
     args:
     - --explicit-package-bases
