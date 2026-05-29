@@ -2,12 +2,22 @@
 name = "lehrer"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["dagger-io"]
+dependencies = [
+    "dagger-io",
+]
 license = "BSD-3-Clause"
 
 [build-system]
 requires = ["uv_build>=0.11.2,<0.12.0"]
 build-backend = "uv_build"
 
-[tool.uv.sources]
-dagger-io = { path = "sdk", editable = true }
+[dependency-groups]
+dev = ["pre-commit>=4.5.1"]
+
+[tool.mypy]
+exclude = [
+  # Generated django-aqueduct settings models and their production shims.
+  # These import pydantic, django_aqueduct, and openedx.* which only exist
+  # inside the edx-platform container at runtime, not in lehrer's own venv.
+  "settings/",
+]
