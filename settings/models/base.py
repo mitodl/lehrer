@@ -36,7 +36,7 @@ from typing import Any
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettingsSource
-from path import Path
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Config-sources directory
