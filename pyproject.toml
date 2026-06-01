@@ -19,3 +19,14 @@ exclude = [
   # inside the edx-platform container at runtime, not in lehrer's own venv.
   "settings/",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# settings/ contains three kinds of files that deliberately break ruff defaults:
+#
+#   assets.py / i18n.py        — use `from ..common import *` (F403) and reference
+#                                names imported by that star import (F405/F401).
+#
+#   process_scheduled_emails.py / saml_pull.py
+#                              — setup() must be called before Django imports;
+#                                E402 (module-level import not at top) is intentional.
+"settings/**" = ["E402", "F401", "F403", "F405"]

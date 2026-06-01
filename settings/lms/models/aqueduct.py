@@ -224,7 +224,7 @@ class AqueductSettings(SharedAqueductSettings):
         )
     )  # TODO: refine type
     COUNTRIES_FIRST: list[Any] = Field(default_factory=lambda: [])
-    COUNTRIES_OVERRIDE: dict[str, Any] = Field(default=None)
+    COUNTRIES_OVERRIDE: dict[str, Any] | None = Field(default=None)
     COURSES_API_CACHE_TIMEOUT: int = Field(default=3600)
     COURSES_ARE_BROWSABLE: bool = Field(default=True)
     COURSE_BLOCKS_API_EXTRA_FIELDS: list[Any] = Field(default_factory=lambda: [])
@@ -311,8 +311,10 @@ class AqueductSettings(SharedAqueductSettings):
     DISABLE_AUDIT_CERTIFICATES: bool = Field(default=False)
     DISABLE_HONOR_CERTIFICATES: bool = Field(default=False)
     DISABLE_LOGIN_BUTTON: bool = Field(default=False)
-    DISCUSSION_MODERATION_CLOSE_REASON_CODES: dict[str, Any] = Field(default=None)
-    DISCUSSION_MODERATION_EDIT_REASON_CODES: dict[str, Any] = Field(default=None)
+    DISCUSSION_MODERATION_CLOSE_REASON_CODES: dict[str, Any] | None = Field(
+        default=None
+    )
+    DISCUSSION_MODERATION_EDIT_REASON_CODES: dict[str, Any] | None = Field(default=None)
     DISCUSSION_SPAM_URLS: list[Any] = Field(default_factory=lambda: [])
     DISPLAY_ANALYTICS_ENROLLMENTS: bool = Field(default=True)
     DISPLAY_DEBUG_INFO_TO_STAFF: bool = Field(default=True)
@@ -1043,8 +1045,8 @@ class AqueductSettings(SharedAqueductSettings):
     NOTIFICATION_EMAIL_EDX_LOGO: str = Field(
         default="templates/credit_notifications/edx-logo-header.png"
     )
-    OAUTH2_DEFAULT_SCOPES: dict[str, Any] = Field(default=None)
-    OAUTH2_PROVIDER: dict[str, Any] = Field(default=None)
+    OAUTH2_DEFAULT_SCOPES: dict[str, Any] | None = Field(default=None)
+    OAUTH2_PROVIDER: dict[str, Any] | None = Field(default=None)
     OAUTH_DELETE_EXPIRED: bool = Field(default=True)
     OAUTH_ENFORCE_SECURE: bool = Field(default=True)
     OAUTH_EXPIRE_CONFIDENTIAL_CLIENT_DAYS: int = Field(default=365)
@@ -1642,7 +1644,7 @@ class AqueductSettings(SharedAqueductSettings):
         default="common.djangoapps.third_party_auth.strategy.ConfigurationModelStrategy"
     )
     SOCIAL_AUTH_UUID_LENGTH: int = Field(default=10)
-    SOCIAL_MEDIA_FOOTER_DISPLAY: dict[str, Any] = Field(default=None)
+    SOCIAL_MEDIA_FOOTER_DISPLAY: dict[str, Any] | None = Field(default=None)
     SOCIAL_MEDIA_FOOTER_NAMES: list[Any] = Field(
         default_factory=lambda: [
             "facebook",

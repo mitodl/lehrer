@@ -493,7 +493,7 @@ class Lehrer:
                 ]
             )
             # django-aqueduct settings:
-            # models/base.py    → shared BaseProductionSettings, copied into both envs
+            # models/base.py    → ProductionSettingsMixin + SharedAqueductSettings, copied into both envs
             # models/aqueduct.py → generated AqueductSettings pydantic model per service
             # aqueduct.py       → settings module (DJANGO_SETTINGS_MODULE target)
             .with_exec(
@@ -1654,20 +1654,26 @@ class Lehrer:
                 "from django_aqueduct.discovery.module import ModuleInspector",
                 "from django_aqueduct.codegen.generator import SettingsModelGenerator",
                 "def _add_imports(code):",
-                "    # The generator serialises path.Path values as Path('...') and",
-                "    # datetime values as datetime.timedelta(...) but doesn't add",
-                "    # the necessary imports.  Insert them after the last top-level import.",
+                "    # 1. Add missing stdlib/third-party imports that the generator omits.",
                 "    extra = []",
                 "    if 'Path(' in code and 'from path import' not in code:",
                 "        extra.append('from path import Path')",
                 "    if 'datetime.' in code and 'import datetime' not in code:",
                 "        extra.append('import datetime')",
-                "    if not extra:",
-                "        return code",
-                "    lines = code.splitlines()",
-                '    last_import = max((i for i, l in enumerate(lines) if re.match(r"^(from|import)\\s", l)), default=0)',
-                "    lines = lines[:last_import+1] + extra + lines[last_import+1:]",
-                "    return '\\n'.join(lines) + '\\n'",
+                "    if extra:",
+                "        lines = code.splitlines()",
+                '        last_import = max((i for i, l in enumerate(lines) if re.match(r"^(from|import)\\s", l)), default=0)',
+                "        lines = lines[:last_import+1] + extra + lines[last_import+1:]",
+                "        code = '\\n'.join(lines) + '\\n'",
+                "    # 2. Fix OPAQUE fields: `T = Field(default=None)` → `T | None = Field(default=None)`.",
+                "    #    The generator marks certain values as OPAQUE (not serialisable) and emits",
+                "    #    default=None, but keeps the non-nullable type annotation.  Widen it so",
+                "    #    pydantic v2 doesn't raise a validation error when the field is absent.",
+                "    code = re.sub(",
+                "        r'^(    \\w+: (?:(?!None|Any)[^\\n=])+) = Field\\(default=None\\)',",
+                "        r'\\1 | None = Field(default=None)',",
+                "        code, flags=re.MULTILINE)",
+                "    return code",
                 "for shim, out in [",
                 "    ('lehrer_lms_shim', 'lms/envs/models/aqueduct.py'),",
                 "    ('lehrer_cms_shim', 'cms/envs/models/aqueduct.py'),",

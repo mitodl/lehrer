@@ -754,7 +754,7 @@ class SharedAqueductSettings(BaseSettings):
     COURSE_CATALOG_API_URL: str = Field(default="http://localhost:8008/api/v1")
     COURSE_CATALOG_URL_ROOT: str = Field(default="http://localhost:8008")
     COURSE_CATALOG_VISIBILITY_PERMISSION: str = Field(default="see_exists")
-    COURSE_ENROLLMENT_MODES: dict[str, Any] = Field(default=None)
+    COURSE_ENROLLMENT_MODES: dict[str, Any] | None = Field(default=None)
     COURSE_ID_PATTERN: str = Field(
         default=None
     )  # OPAQUE: original str value is not serialisable
@@ -763,7 +763,7 @@ class SharedAqueductSettings(BaseSettings):
     )  # OPAQUE: original str value is not serialisable
     COURSE_KEY_REGEX: str = Field(default="(?:[^/+]+(/|\\+)[^/+]+(/|\\+)[^/?]+)")
     COURSE_LIVE_GLOBAL_CREDENTIALS: dict[str, Any] = Field(default_factory=lambda: {})
-    COURSE_MODE_DEFAULTS: dict[str, Any] = Field(default=None)
+    COURSE_MODE_DEFAULTS: dict[str, Any] | None = Field(default=None)
     COURSE_OLX_VALIDATION_IGNORE_LIST: Any = Field(default=None)  # TODO: refine type
     COURSE_OLX_VALIDATION_STAGE: int = Field(default=1)
     COURSE_TRANSLATIONS_BASE_DIR: str = Field(

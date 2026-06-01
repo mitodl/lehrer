@@ -71,6 +71,8 @@ repos:
     - charts/
     - --exclude-files
     - settings/.*/models/aqueduct\.py
+    - --exclude-files
+    - settings/models/base\.py
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
   rev: 'v0.14.14'
