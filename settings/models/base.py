@@ -5,7 +5,7 @@ Injected by the lehrer Dagger build into both:
   /openedx/edx-platform/cms/envs/models/base.py
 
 Each service's ``aqueduct.py`` imports from this module using a relative
-import (``from .models.base import BaseProductionSettings``), so the
+import (``from .models.base import ProductionSettingsMixin``), so the
 single source file works correctly in both namespaces without cross-service
 imports.
 
@@ -75,10 +75,30 @@ def _sorted_yaml_files(settings_dir: str) -> list[Path]:
 # ---------------------------------------------------------------------------
 
 
-class BaseProductionSettings(BaseSettings):
-    """Shared OL production settings — inherit alongside the app AqueductSettings.
+class ProductionSettingsMixin(BaseSettings):
+    """K8s deployment adapter mixed into LMS/CMS production settings classes.
 
-    Do *not* use this class directly as ``DJANGO_SETTINGS_MODULE``.
+    Provides three things that the generated ``AqueductSettings`` model does not:
+
+    1. **Settings loading** — ``settings_customise_sources`` wires the two-tier
+       env-var-then-YAML source pipeline used in Kubernetes deployments.
+
+    2. **Type corrections** — re-declares fields whose generated types are too
+       narrow (e.g. ``CELERY_BROKER_USE_SSL`` is ``bool`` in the generated model
+       but carries a dict of SSL options in production).  Because this mixin
+       appears before ``AqueductSettings`` in every subclass's MRO, its
+       declarations win without touching the generated file.
+
+    3. **Derived-setting validators** — ``@model_validator`` methods that
+       reproduce the post-YAML logic previously scattered across
+       ``lms/envs/production.py`` (``BROKER_URL``, ``LOGGING``, etc.).
+
+    Usage::
+
+        class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
+            ...
+
+    Do *not* instantiate this class directly as ``DJANGO_SETTINGS_MODULE``.
     """
 
     model_config = SettingsConfigDict(
@@ -168,7 +188,7 @@ class BaseProductionSettings(BaseSettings):
     # ------------------------------------------------------------------
 
     @model_validator(mode="after")
-    def _derive_celery_queue_names(self) -> BaseProductionSettings:
+    def _derive_celery_queue_names(self) -> ProductionSettingsMixin:
         """Build CELERY_DEFAULT_* queue names from SERVICE_VARIANT."""
         if getattr(self, "CELERY_DEFAULT_QUEUE", None) is None:
             service_variant = getattr(self, "SERVICE_VARIANT", None)
@@ -180,7 +200,7 @@ class BaseProductionSettings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_broker_url(self) -> BaseProductionSettings:
+    def _derive_broker_url(self) -> ProductionSettingsMixin:
         """Build BROKER_URL from CELERY_BROKER_* components.
 
         CELERY_BROKER_HOSTNAME and CELERY_BROKER_PASSWORD arrive as flat env
@@ -197,7 +217,7 @@ class BaseProductionSettings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_static_paths(self) -> BaseProductionSettings:
+    def _derive_static_paths(self) -> ProductionSettingsMixin:
         """Override STATIC_ROOT / STATIC_URL from *_BASE env-var variants."""
         if self.STATIC_ROOT_BASE:
             self.STATIC_ROOT = self.STATIC_ROOT_BASE  # type: ignore[assignment]
@@ -209,7 +229,7 @@ class BaseProductionSettings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_mako_module_dir(self) -> BaseProductionSettings:
+    def _derive_mako_module_dir(self) -> ProductionSettingsMixin:
         """MAKO_MODULE_DIR lives in the system temp dir, keyed by service variant."""
         if getattr(self, "MAKO_MODULE_DIR", None) is None:
             service_variant = getattr(self, "SERVICE_VARIANT", None)
@@ -220,7 +240,7 @@ class BaseProductionSettings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_statici18n_root(self) -> BaseProductionSettings:
+    def _derive_statici18n_root(self) -> ProductionSettingsMixin:
         """STATICI18N_ROOT mirrors STATIC_ROOT."""
         if getattr(self, "STATICI18N_ROOT", None) is None:
             static_root = getattr(self, "STATIC_ROOT", None)
@@ -229,7 +249,7 @@ class BaseProductionSettings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_language_settings(self) -> BaseProductionSettings:
+    def _derive_language_settings(self) -> ProductionSettingsMixin:
         """Populate LANGUAGE_COOKIE_NAME (from YAML alias) and LANGUAGE_DICT."""
         if self.LANGUAGE_COOKIE:
             self.LANGUAGE_COOKIE_NAME = self.LANGUAGE_COOKIE  # type: ignore[attr-defined]
@@ -239,14 +259,14 @@ class BaseProductionSettings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_elastic_search_config(self) -> BaseProductionSettings:
+    def _derive_elastic_search_config(self) -> ProductionSettingsMixin:
         """Use ELASTIC_SEARCH_CONFIG_ES7 as the authoritative search config."""
         if self.ELASTIC_SEARCH_CONFIG_ES7:
             self.ELASTIC_SEARCH_CONFIG = self.ELASTIC_SEARCH_CONFIG_ES7  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")
-    def _derive_timezone(self) -> BaseProductionSettings:
+    def _derive_timezone(self) -> ProductionSettingsMixin:
         """Align Django TIME_ZONE with Celery's timezone."""
         celery_timezone = getattr(self, "CELERY_TIMEZONE", None)
         if celery_timezone:
@@ -254,7 +274,7 @@ class BaseProductionSettings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_logging(self) -> BaseProductionSettings:
+    def _derive_logging(self) -> ProductionSettingsMixin:
         """Build LOGGING from log-dir / environment / loglevel.
 
         All three inputs are flat scalars arriving as env vars; they are

@@ -32,10 +32,10 @@ from pydantic import Field, model_validator
 from django_aqueduct import configure_django_settings
 
 from .models.aqueduct import AqueductSettings
-from .models.base import BaseProductionSettings
+from .models.base import ProductionSettingsMixin
 
 
-class LMSProductionSettings(BaseProductionSettings, AqueductSettings):
+class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
     """Typed LMS production settings."""
 
     # YAML key from 82-lms-interpolated-config; Django setting is LMS_SEGMENT_KEY.
