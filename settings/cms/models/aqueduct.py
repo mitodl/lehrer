@@ -60,7 +60,7 @@ class AqueductSettings(SharedAqueductSettings):
     CERT_QUEUE: str = Field(default="certificates")
     CLEAR_REQUEST_CACHE_ON_TASK_COMPLETION: bool = Field(default=True)
     CMS_BASE: Any = Field(default=None)  # TODO: refine type
-    CMS_ROOT: str = Field(default=Path("/openedx/edx-platform/cms"))
+    CMS_ROOT: str = Field(default=str(Path("/openedx/edx-platform/cms")))
     CMS_ROOT_URL: Any = Field(default=None)  # TODO: refine type
     CMS_SEGMENT_KEY: Any = Field(default=None)  # TODO: refine type
     CODE_JAIL: dict[str, Any] = Field(
@@ -138,7 +138,7 @@ class AqueductSettings(SharedAqueductSettings):
     )
     CREDENTIALS_INTERNAL_SERVICE_URL: str = Field(default="http://localhost:8005")
     CREDENTIALS_PUBLIC_SERVICE_URL: str = Field(default="http://localhost:8005")
-    DATA_DIR: str = Field(default=Path("/openedx/data"))
+    DATA_DIR: str = Field(default=str(Path("/openedx/data")))
     DEFAULT_COURSE_LANGUAGE: str = Field(default="en")
     DEFAULT_GRADE_DESIGNATIONS: list[Any] = Field(
         default_factory=lambda: ["A", "B", "C", "D"]
@@ -223,7 +223,7 @@ class AqueductSettings(SharedAqueductSettings):
     ELASTIC_FIELD_MAPPINGS: dict[str, Any] = Field(
         default_factory=lambda: {"start_date": {"type": "date"}}
     )
-    EMAIL_FILE_PATH: str = Field(default=Path("/openedx/data/emails/studio"))
+    EMAIL_FILE_PATH: str = Field(default=str(Path("/openedx/data/emails/studio")))
     ENABLE_AUTO_GITHUB_REPO_CREATION: bool = Field(default=False)
     ENABLE_CONTENT_LIBRARIES: bool = Field(default=True)
     ENABLE_COUNTRY_ACCESS: bool = Field(default=False)
@@ -428,7 +428,7 @@ class AqueductSettings(SharedAqueductSettings):
     GITHUB_ACCESS_TOKEN: Any = Field(default=None)  # TODO: refine type
     GITHUB_ORG_API_URL: str = Field(default="")
     GITHUB_PUSH: bool = Field(default=False)
-    GITHUB_REPO_ROOT: str = Field(default=Path("/openedx/data"))
+    GITHUB_REPO_ROOT: str = Field(default=str(Path("/openedx/data")))
     GIT_EXPORT_DEFAULT_IDENT: dict[str, Any] = Field(
         default_factory=lambda: {
             "name": "STUDIO_EXPORT_TO_GIT",
@@ -438,7 +438,7 @@ class AqueductSettings(SharedAqueductSettings):
     GIT_REPO_EXPORT_DIR: str = Field(default="/openedx/export_course_repos")
     HEARTBEAT_CELERY_ROUTING_KEY: str = Field(default="edx.cms.core.high")
     HELP_TOKENS_INI_FILE: str = Field(
-        default=Path("/openedx/edx-platform/cms/envs/help_tokens.ini")
+        default=str(Path("/openedx/edx-platform/cms/envs/help_tokens.ini"))
     )
     HIGH_PRIORITY_QUEUE: str = Field(default="edx.cms.core.high")
     HOTJAR_ID: int = Field(default=0)
@@ -670,7 +670,7 @@ class AqueductSettings(SharedAqueductSettings):
     )
     LMS_BASE: Any = Field(default=None)  # TODO: refine type
     LMS_INTERNAL_ROOT_URL: str = Field(default="http://localhost:18000")
-    LMS_ROOT: str = Field(default=Path("/openedx/edx-platform/lms"))
+    LMS_ROOT: str = Field(default=str(Path("/openedx/edx-platform/lms")))
     LMS_ROOT_URL: str = Field(default="http://localhost:18000")
     LOGIN_REDIRECT_URL: str = Field(default="/home/")
     LOGIN_URL: str = Field(default="/login/")
@@ -925,7 +925,7 @@ class AqueductSettings(SharedAqueductSettings):
     )
     POLICY_CHANGE_GRADES_ROUTING_KEY: str = Field(default="edx.cms.core.default")
     PREVENT_CONCURRENT_LOGINS: bool = Field(default=False)
-    PROJECT_ROOT: str = Field(default=Path("/openedx/edx-platform/cms"))
+    PROJECT_ROOT: str = Field(default=str(Path("/openedx/edx-platform/cms")))
     RECALCULATE_GRADES_ROUTING_KEY: str = Field(default="edx.cms.core.default")
     REGISTRATION_EXTRA_FIELDS: dict[str, Any] = Field(
         default_factory=lambda: {
@@ -989,8 +989,8 @@ class AqueductSettings(SharedAqueductSettings):
             "common_static",
         ]
     )
-    STATICI18N_ROOT: str = Field(default=Path("/openedx/edx-platform/cms/static"))
-    STATIC_ROOT: str = Field(default=Path("/openedx/staticfiles/studio"))
+    STATICI18N_ROOT: str = Field(default=str(Path("/openedx/edx-platform/cms/static")))
+    STATIC_ROOT: str = Field(default=str(Path("/openedx/staticfiles/studio")))
     STATIC_URL: str = Field(default="/static/studio/")
     STUDIO_NAME: Any = Field(
         default=None

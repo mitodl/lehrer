@@ -528,7 +528,7 @@ class SharedAqueductSettings(BaseSettings):
         default="https://course-catalog-api-guide.readthedocs.io/en/latest/"
     )
     ASSET_IGNORE_REGEX: str = Field(default="(^\\._.*$)|(^\\.DS_Store$)|(^.*~$)")
-    ASSET_KEY_PATTERN: str = Field(
+    ASSET_KEY_PATTERN: str | None = Field(
         default=None
     )  # OPAQUE: original str value is not serialisable
     AUTH_DOCUMENTATION_URL: str = Field(
@@ -716,7 +716,7 @@ class SharedAqueductSettings(BaseSettings):
     CODE_JAIL_REST_SERVICE_REMOTE_EXEC: str = Field(
         default="xmodule.capa.safe_exec.remote_exec.send_safe_exec_request_v0"
     )
-    COMMON_ROOT: str = Field(default=Path("/openedx/edx-platform/common"))
+    COMMON_ROOT: str = Field(default=str(Path("/openedx/edx-platform/common")))
     COMPLETION_VIDEO_COMPLETE_PERCENTAGE: float = Field(default=0.95)
     COMPREHENSIVE_THEME_DIRS: list[Any] = Field(default_factory=lambda: [""])
     COMPREHENSIVE_THEME_LOCALE_PATHS: list[Any] = Field(default_factory=lambda: [])
@@ -745,7 +745,7 @@ class SharedAqueductSettings(BaseSettings):
             "social_django.context_processors.login_redirect",
         ]
     )
-    COURSES_ROOT: str = Field(default=Path("/openedx/data"))
+    COURSES_ROOT: str = Field(default=str(Path("/openedx/data")))
     COURSES_WITH_UNSAFE_CODE: list[Any] = Field(default_factory=lambda: [])
     COURSE_ABOUT_VISIBILITY_PERMISSION: str = Field(default="see_exists")
     COURSE_ACCESS_DURATION_MAX_WEEKS: int = Field(default=18)
@@ -755,10 +755,10 @@ class SharedAqueductSettings(BaseSettings):
     COURSE_CATALOG_URL_ROOT: str = Field(default="http://localhost:8008")
     COURSE_CATALOG_VISIBILITY_PERMISSION: str = Field(default="see_exists")
     COURSE_ENROLLMENT_MODES: dict[str, Any] | None = Field(default=None)
-    COURSE_ID_PATTERN: str = Field(
+    COURSE_ID_PATTERN: str | None = Field(
         default=None
     )  # OPAQUE: original str value is not serialisable
-    COURSE_KEY_PATTERN: str = Field(
+    COURSE_KEY_PATTERN: str | None = Field(
         default=None
     )  # OPAQUE: original str value is not serialisable
     COURSE_KEY_REGEX: str = Field(default="(?:[^/+]+(/|\\+)[^/+]+(/|\\+)[^/?]+)")
@@ -993,7 +993,7 @@ class SharedAqueductSettings(BaseSettings):
     )
     ENTERPRISE_SERVICE_WORKER_USERNAME: str = Field(default="enterprise_worker")
     ENTRANCE_EXAM_MIN_SCORE_PCT: int = Field(default=50)
-    ENV_ROOT: str = Field(default=Path("/openedx"))
+    ENV_ROOT: str = Field(default=str(Path("/openedx")))
     EVENT_TRACKING_BACKENDS: dict[str, Any] = Field(
         default_factory=lambda: {
             "tracking_logs": {
@@ -1074,8 +1074,8 @@ class SharedAqueductSettings(BaseSettings):
     FIREBASE_CREDENTIALS_PATH: Any = Field(default=None)  # TODO: refine type
     GENERATE_PROFILE_SCORES: bool = Field(default=False)
     GEOIP_PATH: str = Field(
-        default=Path(
-            "/openedx/edx-platform/common/static/data/geoip/GeoLite2-Country.mmdb"
+        default=str(
+            Path("/openedx/edx-platform/common/static/data/geoip/GeoLite2-Country.mmdb")
         )
     )
     GOOGLE_ANALYTICS_ACCOUNT: Any = Field(default=None)  # TODO: refine type
@@ -1384,7 +1384,7 @@ class SharedAqueductSettings(BaseSettings):
     OPENEDX_AUTHZ_COURSE_OVERVIEW_MODEL: str = Field(
         default="course_overviews.CourseOverview"
     )
-    OPENEDX_ROOT: str = Field(default=Path("/openedx/edx-platform/openedx"))
+    OPENEDX_ROOT: str = Field(default=str(Path("/openedx/edx-platform/openedx")))
     OPEN_EDX_FILTERS_CONFIG: dict[str, Any] = Field(
         default_factory=lambda: {
             "org.openedx.learning.xblock.render.started.v1": {
@@ -1518,7 +1518,7 @@ class SharedAqueductSettings(BaseSettings):
     REGISTRATION_EMAIL_PATTERNS_ALLOWED: Any = Field(default=None)  # TODO: refine type
     REGISTRATION_RATELIMIT: str = Field(default="60/7d")
     REGISTRATION_VALIDATION_RATELIMIT: str = Field(default="30/7d")
-    REPO_ROOT: str = Field(default=Path("/openedx/edx-platform"))
+    REPO_ROOT: str = Field(default=str(Path("/openedx/edx-platform")))
     REQUIRE_BASE_URL: str = Field(default="./")
     REQUIRE_DEBUG: bool = Field(default=False)
     RESET_PASSWORD_API_RATELIMIT: str = Field(default="30/7d")
@@ -1714,13 +1714,13 @@ class SharedAqueductSettings(BaseSettings):
         }
     )
     UNIVERSITY_EMAIL: str = Field(default="university@example.com")
-    USAGE_ID_PATTERN: str = Field(
+    USAGE_ID_PATTERN: str | None = Field(
         default=None
     )  # OPAQUE: original str value is not serialisable
-    USAGE_KEY_PATTERN: str = Field(
+    USAGE_KEY_PATTERN: str | None = Field(
         default=None
     )  # OPAQUE: original str value is not serialisable
-    USERNAME_PATTERN: str = Field(
+    USERNAME_PATTERN: str | None = Field(
         default=None
     )  # OPAQUE: original str value is not serialisable
     USERNAME_REGEX_PARTIAL: str = Field(default="[\\w .@_+-]+")
@@ -1778,12 +1778,12 @@ class SharedAqueductSettings(BaseSettings):
     XBLOCK_FIELD_DATA_WRAPPERS: tuple[Any, ...] = Field(default=())  # TODO: refine type
     XBLOCK_FS_STORAGE_BUCKET: Any = Field(default=None)  # TODO: refine type
     XBLOCK_FS_STORAGE_PREFIX: Any = Field(default=None)  # TODO: refine type
-    XBLOCK_MIXINS: tuple[Any, ...] = Field(
+    XBLOCK_MIXINS: tuple[Any, ...] | None = Field(
         default=None
     )  # OPAQUE: original tuple value is not serialisable
     XBLOCK_RUNTIME_V2_EPHEMERAL_DATA_CACHE: str = Field(default="default")
     XBLOCK_SETTINGS: dict[str, Any] = Field(default_factory=lambda: {})
-    XMODULE_ROOT: str = Field(default=Path("/openedx/edx-platform/xmodule"))
+    XMODULE_ROOT: str = Field(default=str(Path("/openedx/edx-platform/xmodule")))
     XQUEUE_INTERFACE: dict[str, Any] = Field(
         default_factory=lambda: {
             "url": "http://localhost:18040",
@@ -1796,7 +1796,7 @@ class SharedAqueductSettings(BaseSettings):
     )
     XQUEUE_WAITTIME_BETWEEN_REQUESTS: int = Field(default=5)
     X_FRAME_OPTIONS: str = Field(default="DENY")
-    YOUTUBE: dict[str, Any] = Field(
+    YOUTUBE: dict[str, Any] | None = Field(
         default=None
     )  # OPAQUE: original dict value is not serialisable
     YOUTUBE_API_KEY: str = Field(default="PUT_YOUR_API_KEY_HERE")

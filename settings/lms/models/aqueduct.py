@@ -161,7 +161,7 @@ class AqueductSettings(SharedAqueductSettings):
     CERT_NAME_LONG: str = Field(default="Certificate of Achievement")
     CERT_NAME_SHORT: str = Field(default="Certificate")
     CERT_QUEUE: str = Field(default="test-pull")
-    CHECKPOINT_PATTERN: str = Field(
+    CHECKPOINT_PATTERN: str | None = Field(
         default=None
     )  # OPAQUE: original str value is not serialisable
     CMS_BASE: str = Field(default="studio.edx.org")
@@ -345,7 +345,7 @@ class AqueductSettings(SharedAqueductSettings):
     EDXNOTES_READ_TIMEOUT: float = Field(default=1.5)
     EDX_API_KEY: Any = Field(default=None)  # TODO: refine type
     ELASTICSEARCH_INDEX_PREFIX: str = Field(default="")
-    EMAIL_FILE_PATH: str = Field(default=Path("/edx/var/edxapp/data/emails/lms"))
+    EMAIL_FILE_PATH: str = Field(default=str(Path("/edx/var/edxapp/data/emails/lms")))
     EMAIL_OPTIN_MINIMUM_AGE: int = Field(default=13)
     ENABLED_PAYMENT_REPORTS: list[Any] = Field(
         default_factory=lambda: [
@@ -1035,7 +1035,9 @@ class AqueductSettings(SharedAqueductSettings):
         )
     )  # TODO: refine type
     MONGODB_LOG: dict[str, Any] = Field(default_factory=lambda: {})
-    NODE_MODULES_ROOT: str = Field(default=Path("/openedx/edx-platform/node_modules"))
+    NODE_MODULES_ROOT: str = Field(
+        default=str(Path("/openedx/edx-platform/node_modules"))
+    )
     NOTES_DISABLED_TABS: list[Any] = Field(
         default_factory=lambda: ["course_structure", "tags"]
     )
@@ -1473,7 +1475,7 @@ class AqueductSettings(SharedAqueductSettings):
     PROFILE_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
     PROGRAM_CERTIFICATES_ROUTING_KEY: str = Field(default="edx.lms.core.default")
     PROGRAM_CONSOLE_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
-    PROJECT_ROOT: str = Field(default=Path("/openedx/edx-platform/lms"))
+    PROJECT_ROOT: str = Field(default=str(Path("/openedx/edx-platform/lms")))
     PROVISIONING_ENTERPRISE_CUSTOMER_ADMIN_ROLE: str = Field(
         default="provisioning_enterprise_customer_admin"
     )
@@ -1692,12 +1694,12 @@ class AqueductSettings(SharedAqueductSettings):
             "xmodule_js",
         ]
     )
-    STATICI18N_ROOT: str = Field(default=Path("/openedx/edx-platform/lms/static"))
+    STATICI18N_ROOT: str = Field(default=str(Path("/openedx/edx-platform/lms/static")))
     STATIC_GRAB: bool = Field(default=False)
-    STATIC_ROOT: str = Field(default=Path("/openedx/staticfiles"))
+    STATIC_ROOT: str = Field(default=str(Path("/openedx/staticfiles")))
     STATIC_TEMPLATE_VIEW_DEFAULT_FILE_EXTENSION: str = Field(default="html")
     STATIC_URL: str = Field(default="/static/")
-    STATUS_MESSAGE_PATH: str = Field(default=Path("/openedx/status_message.json"))
+    STATUS_MESSAGE_PATH: str = Field(default=str(Path("/openedx/status_message.json")))
     STUDENTMODULEHISTORYEXTENDED_OFFSET: int = Field(default=10000)
     STUDENT_FILEUPLOAD_MAX_SIZE: int = Field(default=4000000)
     STUDIO_NAME: str = Field(default="Studio")
