@@ -440,7 +440,9 @@ class Lehrer:
                     "-p",
                     "/openedx/config",
                     "./lms/envs/mitol",
+                    "./lms/envs/models",
                     "./cms/envs/mitol",
+                    "./cms/envs/models",
                 ]
             )
         )
@@ -490,8 +492,52 @@ class Lehrer:
                     "/openedx/edx-platform/cms/envs/mitol/i18n.py",
                 ]
             )
-            # Note: custom_settings_module files (lms_settings.py, cms_settings.py, models.py, utils.py)
-            # are not currently provided. These would come from a separate directory in a full setup.
+            # django-aqueduct settings:
+            # models/base.py    → ProductionSettingsMixin + SharedAqueductSettings, copied into both envs
+            # models/aqueduct.py → generated AqueductSettings pydantic model per service
+            # aqueduct.py       → settings module (DJANGO_SETTINGS_MODULE target)
+            .with_exec(
+                [
+                    "cp",
+                    "/tmp/custom_settings/models/base.py",
+                    "/openedx/edx-platform/lms/envs/models/base.py",
+                ]
+            )
+            .with_exec(
+                [
+                    "cp",
+                    "/tmp/custom_settings/lms/models/aqueduct.py",
+                    "/openedx/edx-platform/lms/envs/models/aqueduct.py",
+                ]
+            )
+            .with_exec(
+                [
+                    "cp",
+                    "/tmp/custom_settings/lms/aqueduct.py",
+                    "/openedx/edx-platform/lms/envs/aqueduct.py",
+                ]
+            )
+            .with_exec(
+                [
+                    "cp",
+                    "/tmp/custom_settings/models/base.py",
+                    "/openedx/edx-platform/cms/envs/models/base.py",
+                ]
+            )
+            .with_exec(
+                [
+                    "cp",
+                    "/tmp/custom_settings/cms/models/aqueduct.py",
+                    "/openedx/edx-platform/cms/envs/models/aqueduct.py",
+                ]
+            )
+            .with_exec(
+                [
+                    "cp",
+                    "/tmp/custom_settings/cms/aqueduct.py",
+                    "/openedx/edx-platform/cms/envs/aqueduct.py",
+                ]
+            )
             .with_exec(
                 [
                     "cp",
@@ -1446,3 +1492,210 @@ class Lehrer:
         container = container.with_exposed_port(port).with_exec(["npm", "start"])
 
         return container.as_service()
+
+    @function
+    async def regenerate_aqueduct_settings(
+        self,
+        deployment_name: str,
+        pip_package_lists: dagger.Directory,
+        pip_package_overrides: dagger.Directory,
+        release_name: str = "master",
+        platform_repo: str = "https://github.com/openedx/edx-platform",
+        platform_branch: str = "master",
+        python_version: str | None = None,
+    ) -> dagger.Directory:
+        """Regenerate the AqueductSettings pydantic models for LMS and CMS.
+
+        Installs the Python dependencies (no Node/webpack), injects minimal
+        generation shims that do ``from <service>.envs.common import *;
+        derive_settings()``, then calls ``ModuleInspector`` and
+        ``SettingsModelGenerator`` from django-aqueduct directly — no
+        management command needed, no INSTALLED_APPS dependency.
+
+        Because the shims only import common.py and derive settings (exactly
+        as the upstream ``generate_aqueduct_settings`` workflow works), all
+        settings contributed by custom plugins via ``add_plugins()`` are
+        captured automatically.
+
+        Returns a directory containing:
+          lms/models/aqueduct.py
+          cms/models/aqueduct.py
+
+        Usage::
+
+            dagger call regenerate-aqueduct-settings \\
+              --deployment-name mitxonline \\
+              --pip-package-lists ./pip_package_lists \\
+              --pip-package-overrides ./pip_package_overrides \\
+              export --path ./generated
+
+            # Then update lehrer's committed models:
+            cp generated/lms/models/aqueduct.py settings/lms/models/aqueduct.py
+            cp generated/cms/models/aqueduct.py settings/cms/models/aqueduct.py
+
+        Args:
+            deployment_name: Deployment name (e.g. mitxonline, mitx).
+            pip_package_lists: Directory containing pip requirements files.
+            pip_package_overrides: Directory containing pip override requirements.
+            release_name: edx-platform release / branch name. Default: master.
+            platform_repo: Git repository URL for edx-platform.
+            platform_branch: Git branch to check out.
+            python_version: Python version. Defaults to 3.12 for master.
+        """
+        if python_version is None:
+            python_version = "3.12" if release_name == "master" else "3.11"
+
+        # ── Base system + code ────────────────────────────────────────────────
+        container = self.apt_base(python_version=python_version)
+        container = self.get_code(
+            container,
+            edx_platform_git_repo=platform_repo,
+            edx_platform_git_branch=platform_branch,
+        )
+
+        # ── Python-only dependency install (skip Node/webpack) ────────────────
+        container = (
+            container.with_mounted_directory(
+                "/root/pip_package_lists", pip_package_lists
+            )
+            .with_mounted_directory(
+                "/root/pip_package_overrides", pip_package_overrides
+            )
+            .with_exec(
+                [
+                    "sh",
+                    "-c",
+                    "cp /openedx/edx-platform/requirements/edx/base.txt"
+                    " /root/pip_package_lists/edx_base.txt"
+                    " && cp /openedx/edx-platform/requirements/edx/assets.txt"
+                    " /root/pip_package_lists/edx_assets.txt",
+                ]
+            )
+            .with_exec(
+                [
+                    "uv",
+                    "pip",
+                    "install",
+                    "-r",
+                    "/root/pip_package_lists/edx_base.txt",
+                    "-r",
+                    "/root/pip_package_lists/edx_assets.txt",
+                    "-r",
+                    f"/root/pip_package_lists/{release_name}/{deployment_name}.txt",
+                ]
+            )
+        )
+
+        if deployment_name == "mitxonline":
+            container = container.with_exec(
+                ["uv", "pip", "uninstall", "edx-name-affirmation"]
+            )
+
+        container = container.with_exec(
+            ["uv", "pip", "uninstall", "lxml", "xmlsec"]
+        ).with_exec(
+            [
+                "uv",
+                "pip",
+                "install",
+                "--no-cache-dir",
+                "--no-binary",
+                "lxml",
+                "--no-binary",
+                "xmlsec",
+                "-r",
+                f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt",
+            ]
+        )
+
+        # ── Install edx-platform in editable mode ─────────────────────────────
+        container = container.with_workdir("/openedx/edx-platform").with_exec(
+            ["uv", "pip", "install", "-e", "."]
+        )
+
+        # ── Inject minimal generation shims ───────────────────────────────────
+        # These shims do exactly what the upstream generate_aqueduct_settings
+        # workflow recommends: import common.py (which calls add_plugins so all
+        # plugin settings are included) then resolve Derived values.  We write
+        # them to throw-away module names so we never conflict with anything in
+        # the platform source tree.
+        lms_shim = (
+            "# Temporary generation shim — not committed to the platform.\n"
+            "from lms.envs.common import *  # noqa: F401,F403\n"
+            "from openedx.core.lib.derived import derive_settings\n"
+            "derive_settings(__name__)\n"
+        )
+        cms_shim = (
+            "# Temporary generation shim — not committed to the platform.\n"
+            "from cms.envs.common import *  # noqa: F401,F403\n"
+            "# LMS_ROOT_URL may be a Derived sentinel; provide a concrete default\n"
+            "# so derive_settings can resolve dependents.\n"
+            "if not isinstance(LMS_ROOT_URL, str):  # noqa: F821\n"
+            "    LMS_ROOT_URL = 'http://localhost:18000'  # noqa: F821\n"
+            "from openedx.core.lib.derived import derive_settings\n"
+            "derive_settings(__name__)\n"
+        )
+        container = (
+            container.with_new_file("./lehrer_lms_shim.py", contents=lms_shim)
+            .with_new_file("./lehrer_cms_shim.py", contents=cms_shim)
+            .with_exec(["mkdir", "-p", "./lms/envs/models", "./cms/envs/models"])
+        )
+
+        # ── Generate the models ───────────────────────────────────────────────
+        # Call ModuleInspector + SettingsModelGenerator directly — no
+        # management command required, no django_aqueduct in INSTALLED_APPS
+        # required.  The shim modules import common.py into their own globals
+        # so every UPPERCASE name (including plugin settings) is discovered.
+        generate_script = "\n".join(
+            [
+                "import sys, os, re",
+                "os.chdir('/openedx/edx-platform')",
+                "sys.path.insert(0, '/openedx/edx-platform')",
+                "from django_aqueduct.discovery.module import ModuleInspector",
+                "from django_aqueduct.codegen.generator import SettingsModelGenerator",
+                "def _add_imports(code):",
+                "    # 1. Add missing stdlib/third-party imports that the generator omits.",
+                "    extra = []",
+                "    if 'Path(' in code and 'from path import' not in code:",
+                "        extra.append('from path import Path')",
+                "    if 'datetime.' in code and 'import datetime' not in code:",
+                "        extra.append('import datetime')",
+                "    if extra:",
+                "        lines = code.splitlines()",
+                '        last_import = max((i for i, l in enumerate(lines) if re.match(r"^(from|import)\\s", l)), default=0)',
+                "        lines = lines[:last_import+1] + extra + lines[last_import+1:]",
+                "        code = '\\n'.join(lines) + '\\n'",
+                "    # 2. Fix OPAQUE fields: `T = Field(default=None)` → `T | None = Field(default=None)`.",
+                "    #    The generator marks certain values as OPAQUE (not serialisable) and emits",
+                "    #    default=None, but keeps the non-nullable type annotation.  Widen it so",
+                "    #    pydantic v2 doesn't raise a validation error when the field is absent.",
+                "    code = re.sub(",
+                "        r'^(    \\w+: (?:(?!None|Any)[^\\n=])+) = Field\\(default=None\\)',",
+                "        r'\\1 | None = Field(default=None)',",
+                "        code, flags=re.MULTILINE)",
+                "    return code",
+                "for shim, out in [",
+                "    ('lehrer_lms_shim', 'lms/envs/models/aqueduct.py'),",
+                "    ('lehrer_cms_shim', 'cms/envs/models/aqueduct.py'),",
+                "]:",
+                "    print(f'Generating {out} from {shim} ...')",
+                "    fields = ModuleInspector(shim).discover()",
+                "    code = _add_imports(SettingsModelGenerator(fields).render())",
+                "    open(out, 'w').write(code)",
+                "    print(f'  {len(fields)} fields written to {out}')",
+            ]
+        )
+        container = container.with_exec(["python", "-c", generate_script])
+
+        # ── Return the two generated model files ──────────────────────────────
+        return (
+            dag.directory()
+            .with_file(
+                "lms/models/aqueduct.py",
+                container.file("lms/envs/models/aqueduct.py"),
+            )
+            .with_file(
+                "cms/models/aqueduct.py",
+                container.file("cms/envs/models/aqueduct.py"),
+            )
+        )

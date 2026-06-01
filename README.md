@@ -410,7 +410,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Build and publish
         uses: dagger/dagger-for-github@v5
         with:

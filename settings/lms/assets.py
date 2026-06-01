@@ -2,6 +2,7 @@
 """
 Bare minimum settings for collecting production assets.
 """
+
 from ..common import *
 from openedx.core.lib.derived import derive_settings
 
@@ -19,7 +20,7 @@ DATABASES = {
     "default": {},
 }
 
-LMS_ROOT_URL = 'lms.example.com'
+LMS_ROOT_URL = "lms.example.com"
 
 derive_settings(__name__)
 
