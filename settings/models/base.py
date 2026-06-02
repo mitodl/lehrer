@@ -274,6 +274,20 @@ class ProductionSettingsMixin(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _derive_xblock_mixins(self) -> ProductionSettingsMixin:
+        """Restore XBLOCK_MIXINS when it couldn't be serialised by aqueduct.
+
+        The tuple-of-classes value is not JSON-serialisable, so aqueduct sets
+        the Pydantic default to None.  Import the canonical value from
+        openedx.core.lib.xblock_utils at runtime when no override is present.
+        """
+        if getattr(self, "XBLOCK_MIXINS", None) is None:
+            from lms.envs.common import XBLOCK_MIXINS  # noqa: PLC0415
+
+            self.XBLOCK_MIXINS = XBLOCK_MIXINS  # type: ignore[attr-defined]
+        return self
+
+    @model_validator(mode="after")
     def _derive_logging(self) -> ProductionSettingsMixin:
         """Build LOGGING from log-dir / environment / loglevel.
 

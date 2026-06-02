@@ -93,5 +93,27 @@ class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
             self.SOCIAL_AUTH_CLEAN_USERNAMES = False  # type: ignore[attr-defined]
         return self
 
+    @model_validator(mode="after")
+    def _derive_lti_provider(self) -> LMSProductionSettings:
+        """Mirror production.py: add lti_provider app + backend when enabled.
+
+        lms/urls.py unconditionally includes lms.djangoapps.lti_provider.urls,
+        so the app must be in INSTALLED_APPS whenever LTI is enabled or Django
+        will raise a RuntimeError at startup when importing the models.
+        """
+        if not getattr(self, "ENABLE_LTI_PROVIDER", False):
+            return self
+        apps: list = list(getattr(self, "INSTALLED_APPS", None) or [])
+        lti_app = "lms.djangoapps.lti_provider.apps.LtiProviderConfig"
+        lti_backend = "lms.djangoapps.lti_provider.users.LtiBackend"
+        if lti_app not in apps:
+            apps.append(lti_app)
+            self.INSTALLED_APPS = apps  # type: ignore[attr-defined]
+        backends: list = list(getattr(self, "AUTHENTICATION_BACKENDS", None) or [])
+        if lti_backend not in backends:
+            backends.append(lti_backend)
+            self.AUTHENTICATION_BACKENDS = backends  # type: ignore[attr-defined]
+        return self
+
 
 configure_django_settings(LMSProductionSettings)
