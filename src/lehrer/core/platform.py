@@ -904,7 +904,7 @@ class OpenedxPlatform:
     ) -> dagger.Container:
         """Build a complete openedx-platform image
 
-        This chains together all the build steps based on the Earthfile process.
+        This chains together all the build steps into a multi-stage pipeline.
 
         Args:
             deployment_name: Deployment name
@@ -954,7 +954,7 @@ class OpenedxPlatform:
         # Run the heavy install steps on a throw-away chain.  All build caches
         # (npm ~/.npm, pip /tmp artefacts) accumulate here and are discarded
         # when we copy only the three needed directories to the clean base
-        # below, mirroring the Earthfile's multi-stage `collected` approach.
+        # below, following the same multi-stage pattern.
         deps = self.apt_base(python_version=python_version)
         deps = self.get_code(
             deps,
@@ -974,7 +974,7 @@ class OpenedxPlatform:
         )
 
         # ── Clean base ────────────────────────────────────────────────────────
-        # Start fresh (equivalent to Earthfile `collected: FROM +apt-base`).
+        # Start fresh (equivalent to a multi-stage build's clean base layer).
         # Copy only the built artefacts; npm/uv/pip caches are left behind.
         container = self.apt_base(python_version=python_version)
         container = (

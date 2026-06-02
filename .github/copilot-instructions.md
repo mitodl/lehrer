@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A [Dagger](https://dagger.io/) Python module that builds and publishes Open edX platform images (edx-platform, codejail, edx-notes, MFEs) for MIT ODL deployments. It replaces an Earthly-based build pipeline.
+A [Dagger](https://dagger.io/) Python module that builds and publishes Open edX platform images (edx-platform, codejail, edx-notes, MFEs) for MIT ODL deployments.
 
 All logic lives in a single file: `src/lehrer/main.py`.
 

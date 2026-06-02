@@ -1,10 +1,10 @@
 # Lehrer - OpenEdx Platform Build Pipeline
 
-A Dagger module for building and deploying Open edX platform images, services, and micro-frontends. This module provides composable and reusable functions based on the MIT ODL Earthly build process.
+A Dagger module for building and deploying Open edX platform images, services, and micro-frontends.
 
 ## Overview
 
-This module replaces the Earthly-based build pipeline with Dagger, providing:
+This module provides:
 
 - **Composable functions** - Build steps can be used independently or chained together
 - **Flexibility** - Support for multiple deployments with different configurations
@@ -379,23 +379,18 @@ The `mfe_slot_config` directory contains:
 
 These files are copied into the MFE build to customize behavior per deployment.
 
-## Differences from Earthfile
+## Composing individual build steps
 
-### Key Changes
+All build parameters are explicit — no implicit file copying from a build context.
+Use directory/file mounting for local sources:
 
-1. **Explicit arguments** - All parameters must be passed explicitly (no file copying from context)
-2. **Directory mounting** - Use `--source`, `--theme-source` for local directories
-3. **No LOCALLY** - All operations run in containers
-4. **Function composition** - Chain functions for flexibility
+- Pass `--source` for a local edx-platform checkout
+- Pass `--theme-source` for a local theme directory
+- Pass `--pip-package-lists`, `--pip-package-overrides`, `--custom-settings` as directories
 
-### Migration Notes
-
-- Replace `COPY` commands with directory/file mounting
-- Replace `ARG --required` with required function parameters
-- Use `build-platform` for complete builds or compose individual functions
-- Package lists and overrides must be passed as directories
-
-## Integration with CI/CD
+Use `build-platform` for a complete end-to-end build, or call individual functions
+(`apt-base`, `get-code`, `install-deps`, `collected`, etc.) and chain them for
+custom pipelines.
 
 ### GitHub Actions Example
 
