@@ -296,13 +296,12 @@ class OpenedxPlatform:
             container = container.with_exec(["uv", "pip", "uninstall", pkg])
 
         # Fix lxml/xmlsec compatibility issues
-        # Use plain pip (not uv) here because the override file uses inline --no-binary flags
+        # Use plain pip here because the override file uses inline --no-binary flags
         # that uv does not support in requirements files.
         container = container.with_exec(
             ["uv", "pip", "uninstall", "lxml", "xmlsec"]
         ).with_exec(
             [
-                "uv",
                 "pip",
                 "install",
                 "--no-cache-dir",
@@ -651,9 +650,11 @@ class OpenedxPlatform:
         Returns:
             Container with compiled translations
         """
-        atlas_options = (
-            f"--repository {translations_repository} --revision {translations_branch}"
-        )
+        import shlex
+
+        safe_repo = shlex.quote(translations_repository)
+        safe_branch = shlex.quote(translations_branch)
+        atlas_options = f"--repository {safe_repo} --revision {safe_branch}"
 
         # Check if pull_plugin_translations command exists
         container = container.with_env_variable(
@@ -841,8 +842,10 @@ class OpenedxPlatform:
         if extra_ssh_hosts is None:
             extra_ssh_hosts = []
 
+        import shlex
+
         all_hosts = ["github.com"] + extra_ssh_hosts
-        hosts_str = " ".join(f"'{h}'" for h in all_hosts)
+        hosts_str = " ".join(shlex.quote(h) for h in all_hosts)
 
         container = (
             container.with_env_variable("DJANGO_SETTINGS_MODULE", "invalid")
@@ -1174,7 +1177,6 @@ class OpenedxPlatform:
             ["uv", "pip", "uninstall", "lxml", "xmlsec"]
         ).with_exec(
             [
-                "uv",
                 "pip",
                 "install",
                 "--no-cache-dir",

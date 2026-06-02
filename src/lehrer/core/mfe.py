@@ -168,8 +168,11 @@ class OpenedxMfe:
 
         # Pack and copy extra npm bundles (e.g. UI component libraries shipped
         # as pre-built bundles rather than as npm dependencies)
+        import shlex
+
         for bundle_spec in extra_npm_bundles:
             pkg_spec, target_path = bundle_spec.split("|", 1)
+            safe_target = shlex.quote(target_path)
             container = (
                 container.with_exec(["npm", "pack", pkg_spec])
                 .with_exec(["sh", "-c", "tar -xvzf *.tgz"])
@@ -178,7 +181,7 @@ class OpenedxMfe:
                     [
                         "sh",
                         "-c",
-                        f"cp package/dist/bundles/* {target_path}/",
+                        f"cp package/dist/bundles/* {safe_target}/",
                     ]
                 )
             )

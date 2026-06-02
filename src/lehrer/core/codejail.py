@@ -162,12 +162,14 @@ class OpenedxCodejail:
             else "https://raw.githubusercontent.com/openedx/edx-platform/master/requirements/edx-sandbox/base.txt"
         )
 
+        import shlex
+
         container = container.with_exec(
             [
                 "bash",
                 "-c",
                 f"source /sandbox/venv/bin/activate && "
-                f"pip install --no-cache-dir -r {sandbox_req_url} && "
+                f"pip install --no-cache-dir -r {shlex.quote(sandbox_req_url)} && "
                 f"deactivate",
             ]
         )
