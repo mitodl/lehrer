@@ -14,14 +14,15 @@ dev = ["pre-commit>=4.5.1"]
 
 [tool.mypy]
 exclude = [
-  # Generated django-aqueduct settings models and their production shims.
-  # These import pydantic, django_aqueduct, and openedx.* which only exist
-  # inside the edx-platform container at runtime, not in lehrer's own venv.
-  "settings/",
+  # All files under deployments/ (OL-specific config) import Django, pydantic,
+  # django_aqueduct, and openedx.* which only exist inside the edx-platform
+  # container at runtime, not in lehrer's own venv.
+  "deployments/",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# settings/ contains three kinds of files that deliberately break ruff defaults:
+# deployments/mit-ol/settings/ contains three kinds of files that deliberately
+# break ruff defaults:
 #
 #   assets.py / i18n.py        — use `from ..common import *` (F403) and reference
 #                                names imported by that star import (F405/F401).
@@ -29,4 +30,4 @@ exclude = [
 #   process_scheduled_emails.py / saml_pull.py
 #                              — setup() must be called before Django imports;
 #                                E402 (module-level import not at top) is intentional.
-"settings/**" = ["E402", "F401", "F403", "F405"]
+"deployments/mit-ol/settings/**" = ["E402", "F401", "F403", "F405"]

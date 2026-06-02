@@ -70,9 +70,9 @@ repos:
     - --exclude-files
     - charts/
     - --exclude-files
-    - settings/.*/models/aqueduct\.py
+    - deployments/mit-ol/settings/.*/models/aqueduct\.py
     - --exclude-files
-    - settings/models/base\.py
+    - deployments/mit-ol/settings/models/base\.py
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
   rev: 'v0.14.14'
@@ -87,7 +87,7 @@ repos:
     exclude: |
       (?x)(
         dockerfiles/|
-        settings/|
+        deployments/|
         src/lehrer/|
         sdk/
       )
@@ -114,6 +114,14 @@ repos:
   rev: v0.0.3
   hooks:
   - id: packer_fmt
+- repo: local
+  hooks:
+  - id: lehrer-core-boundary
+    name: lehrer core boundary — no OL-specific strings
+    language: pygrep
+    entry: 'deployments|mitol|mitxonline|mitodl|github\.mit\.edu|verificient|proctortrack'
+    files: ^src/lehrer/(core|infra)/
+    exclude: ^src/lehrer/(core|infra)/__init__\.py$
 - repo: https://github.com/hadolint/hadolint
   rev: v2.14.0
   hooks:
