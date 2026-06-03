@@ -19,11 +19,11 @@ django-aqueduct==0.3.0
 ol-openedx-chat
 
 # Open Telemetry support
-opentelemetry-api==1.39.1
+opentelemetry-api==1.42.0
 opentelemetry-distro==0.59b0
 opentelemetry-instrumentation==0.59b0
 opentelemetry-instrumentation-django==0.59b0
 opentelemetry-instrumentation-wsgi==0.59b0
-opentelemetry-sdk==1.39.1
+opentelemetry-sdk==1.42.0
 opentelemetry-semantic-conventions==0.59b0
 opentelemetry-util-http==0.59b0
