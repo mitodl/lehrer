@@ -5,8 +5,8 @@
   ],
   "pip_requirements": {
     "managerFilePatterns": [
-      "/.*?/pip_package_lists/.*?/.*.txt/",
-      "/.*?/pip_package_overrides/.*?/.*.txt/"
+      "/pip_package_lists/.*?/.*.txt/",
+      "/pip_package_overrides/.*?/.*.txt/"
     ]
   }
 }
