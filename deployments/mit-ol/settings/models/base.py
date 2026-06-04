@@ -295,13 +295,13 @@ class ProductionSettingsMixin(BaseSettings):
         declared as explicit fields so pydantic populates them before this
         validator runs.
         """
-        from openedx.core.lib.logsettings import get_logger_config  # noqa: PLC0415
+        from openedx.core.lib.logsettings import get_docker_logger_config  # noqa: PLC0415
 
-        service_variant = getattr(self, "SERVICE_VARIANT", None)
-        self.LOGGING = get_logger_config(  # type: ignore[attr-defined]
+        service_variant = getattr(self, "SERVICE_VARIANT", None) or "lms"
+        self.LOGGING = get_docker_logger_config(  # type: ignore[attr-defined]
             self.LOG_DIR,
             logging_env=self.LOGGING_ENV,
-            local_loglevel=self.LOCAL_LOGLEVEL,
+            debug=(self.LOCAL_LOGLEVEL == "DEBUG"),
             service_variant=service_variant,
         )
         return self
