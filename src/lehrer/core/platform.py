@@ -295,13 +295,14 @@ class OpenedxPlatform:
         for pkg in packages_to_remove:
             container = container.with_exec(["uv", "pip", "uninstall", pkg])
 
-        # Fix lxml/xmlsec compatibility issues
-        # Use plain pip here because the override file uses inline --no-binary flags
-        # that uv does not support in requirements files.
+        # Fix lxml/xmlsec compatibility issues by building from source.
+        # --no-binary is a CLI flag that uv pip install supports; it is NOT
+        # an in-requirements-file option, so uv handles it correctly here.
         container = container.with_exec(
             ["uv", "pip", "uninstall", "lxml", "xmlsec"]
         ).with_exec(
             [
+                "uv",
                 "pip",
                 "install",
                 "--no-cache-dir",
@@ -1177,6 +1178,7 @@ class OpenedxPlatform:
             ["uv", "pip", "uninstall", "lxml", "xmlsec"]
         ).with_exec(
             [
+                "uv",
                 "pip",
                 "install",
                 "--no-cache-dir",
