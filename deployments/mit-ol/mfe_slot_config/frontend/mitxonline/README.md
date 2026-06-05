@@ -52,15 +52,15 @@ frontend/
 
 | Legacy file | OEP-65 equivalent | Status |
 |---|---|---|
-| `../legacy/Footer.jsx` | `src/Footer.tsx` | Scaffold — needs TypeScript port |
-| `../legacy/learning-mfe-config.env.jsx` | plugin slot entries in `site.config.build.tsx` | Not started |
-| `../legacy/mitxonline/common-mfe-config.env.jsx` | environment-specific config in `site.config.build.tsx` | Not started |
-| `../legacy/mitx/common-mfe-config.env.jsx` | separate Site Project or runtime config | Not started |
-| `../legacy/mitx-staging/common-mfe-config.env.jsx` | separate Site Project or runtime config | Not started |
-| `../legacy/AIDrawerManagerSidebar.jsx` | `src/AIDrawerManagerSidebar.tsx` | Not started |
-| `../legacy/SidebarAIDrawerCoordinator.jsx` | `src/SidebarAIDrawerCoordinator.tsx` | Not started |
-| `../legacy/mitxonline-styles.scss` | CSS override via frontend-base theme API (verify) | Not started |
-| `../legacy/mitx-styles.scss` | CSS override via frontend-base theme API (verify) | Not started |
+| `../legacy/Footer.jsx` | `src/Footer.tsx` | Moved to shared: `shared/src/footer/index.tsx` |
+| `../legacy/learning-mfe-config.env.jsx` | plugin slot entries in `site.config.build.tsx` | HIDE operations completed; custom widgets blocked on frontend-app-learning |
+| `../legacy/mitxonline/common-mfe-config.env.jsx` | environment-specific config in `site.config.build.tsx` | Complete — Header apps, custom user menu overrides, and dashboard routing verified |
+| `../legacy/mitx/common-mfe-config.env.jsx` | separate Site Project or runtime config | Complete — custom Header application injected |
+| `../legacy/mitx-staging/common-mfe-config.env.jsx` | separate Site Project or runtime config | Complete — maps to mitx Site Project config |
+| `../legacy/AIDrawerManagerSidebar.jsx` | `src/AIDrawerManagerSidebar.tsx` | Complete — `shared/src/ai-drawer/AIDrawerManagerSidebar.tsx` fully typed and migrated |
+| `../legacy/SidebarAIDrawerCoordinator.jsx` | `src/SidebarAIDrawerCoordinator.tsx` | Documented typescript stub created in shared (blocked on frontend-app-learning) |
+| `../legacy/mitxonline-styles.scss` | CSS override via frontend-base theme API (verify) | Complete — loaded dynamically using `createStyleOverrideApp` from `shared/src/styles/` |
+| `../legacy/mitx-styles.scss` | CSS override via frontend-base theme API (verify) | Complete — loaded dynamically using `createStyleOverrideApp` from `shared/src/styles/` |
 
 > The files in `../legacy/` remain in use by `dagger call mfe build-legacy` and
 > must not be deleted until `build_legacy` is decommissioned.

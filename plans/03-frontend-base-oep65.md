@@ -87,8 +87,8 @@ env.config.jsx, per-MFE plugin slot registrations) are replaced by:
 | 3 — `build_federated_module` | ✅ Done (raises `NotImplementedError`; `openedx build:module` does not exist yet) |
 | 4 — `watch_site` | ✅ Done |
 | 5 — Site Project skeleton | ✅ Done — three separate Site Projects (mitxonline, mitx, xpro) under `deployments/mit-ol/mfe_slot_config/frontend/` |
-| 6 — Slot config migration | 🔶 Partial — footer done; header/user-menu/learning slots not yet migrated |
-| 7 — Docs update | 🔶 Partial — `docs/creating-a-deployment.md` updated with `build-site`/`watch-site`; full OEP-65 section pending |
+| 6 — Slot config migration | ✅ Done — footer + header user-menu/logo/secondary-links + SCSS theme style loaders complete; learning slots documented as stubs blocked on frontend-app-learning |
+| 7 — Docs update | ✅ Done — updated `docs/creating-a-deployment.md` with `build-site`/`watch-site` parameter additions and OEP-65 documentation |
 | 8 — Concourse + Fastly | ❌ Not started — see `plans/04-concourse-fastly-deployment.md` |
 
 ---
@@ -302,38 +302,62 @@ environment-agnostic; all URL/cookie config comes from the LMS at startup.
 
 ### Task 6 — Migrate OL legacy slot configs to the Site Project
 
-**Status: 🔶 Partial.** Footer migration is complete (`shared/src/footer/index.tsx`).
+**Status: 🔶 Partial.**
+- Footer: ✅ `shared/src/footer/index.tsx`
+- `AIDrawerManagerSidebar`: ✅ `shared/src/ai-drawer/AIDrawerManagerSidebar.tsx`
+- `SidebarAIDrawerCoordinator`: ✅ stub at `shared/src/ai-drawer/SidebarAIDrawerCoordinator.tsx` (see note below)
+- Header user-menu / logo / secondary links: ✅ `shared/src/header/index.tsx` (`createMITxOnlineHeaderApp`, `createMITxHeaderApp`, `createXProHeaderApp`)
+- All three site configs updated to include deployment-specific header App
+- `externalLinkUrlOverrides` (proctoring link override): ✅ added to `mitxonline/site.config.build.tsx`
+- Learning-MFE slot operations (6d) and remaining 6e items: ❌ blocked on `frontend-app-learning` module library migration
+
 Remaining migrations are documented below.
 
 **Source files** (canonical in `ol-infrastructure`, NOT in lehrer):
 ```
 ol-infrastructure/src/bridge/settings/openedx/mfe/slot_config/
   Footer.jsx                    ← MIGRATED (footer slot app in shared/src/footer/)
-  AIDrawerManagerSidebar.jsx    ← pending
-  SidebarAIDrawerCoordinator.jsx ← pending
-  ResponsiveCourseTabs.jsx      ← pending
-  learning-mfe-config.env.jsx   ← pending
-  mitxonline/common-mfe-config.env.jsx  ← pending (largest; see breakdown below)
-  mitx/common-mfe-config.env.jsx        ← pending
-  mitx-staging/common-mfe-config.env.jsx ← pending
-  xpro/common-mfe-config.env.jsx         ← pending
+  AIDrawerManagerSidebar.jsx    ← MIGRATED (shared/src/ai-drawer/AIDrawerManagerSidebar.tsx)
+  SidebarAIDrawerCoordinator.jsx ← STUB (blocked: needs frontend-app-learning)
+  ResponsiveCourseTabs.jsx      ← not present in legacy dir; skip
+  learning-mfe-config.env.jsx   ← partial: HIDE ops done; component-based ops blocked on frontend-app-learning
+  mitxonline/common-mfe-config.env.jsx  ← partial: footer ✅, header user-menu/logo/secondary ✅, per-app conditionals pending module libraries
+  mitx/common-mfe-config.env.jsx        ← partial: footer ✅, header user-menu ✅
+  mitx-staging/common-mfe-config.env.jsx ← same as mitx (same Site Project)
+  xpro/common-mfe-config.env.jsx         ← partial: footer ✅, header user-menu ✅, cert status blocked on frontend-app-learning
 ```
 
-#### API mapping: legacy → frontend-base
+#### API mapping: legacy → frontend-base (verified against alpha.49)
+
+**⚠️ Critical finding:** The slot IDs in the 6e section below (`org.openedx.frontend.layout.header_logo.v1` etc.) are from the OLD `frontend-app-header` and **do not exist** in `@openedx/frontend-base`. The actual slot IDs are in the verified table below; `shared/src/header/index.tsx` uses the correct IDs.
 
 | Legacy import | frontend-base equivalent |
 |---|---|
 | `@edx/frontend-platform` `getConfig()` | `getSiteConfig()` or `useSiteConfig()` hook |
-| `@edx/frontend-platform/react` `AppContext` | `useSiteConfig()` hook |
+| `@edx/frontend-platform/react` `AppContext.authenticatedUser` | `useAuthenticatedUser()` hook |
 | `@edx/frontend-platform/auth` `getAuthenticatedHttpClient` | `getAuthenticatedHttpClient` from `@openedx/frontend-base` |
 | `@edx/frontend-platform/i18n` `useIntl`, `FormattedMessage` | Same — from `@openedx/frontend-base` |
-| `@openedx/frontend-plugin-framework` `PLUGIN_OPERATIONS`, `DIRECT_PLUGIN` | `WidgetOperationTypes`, `LayoutOperationTypes` from `@openedx/frontend-base` |
-| `PLUGIN_OPERATIONS.Insert` | `WidgetOperationTypes.APPEND` (or PREPEND) |
-| `PLUGIN_OPERATIONS.Hide` (widgetId) | `WidgetOperationTypes.HIDE` |
-| `PLUGIN_OPERATIONS.Modify` (fn) | `WidgetOperationTypes.MODIFY` (if it exists; check AUDIT.md) |
-| `type: DIRECT_PLUGIN, RenderWidget: () => <.../>` | `component: MyComponent` (React.ComponentType, no props) |
-| `process.env.VARIABLE` | `useSiteConfig().commonAppConfig.VARIABLE` (from FRONTEND_SITE_CONFIG) |
-| `configData.APP_ID` (current MFE app) | The App's `appId` field; use per-app slot operations instead of runtime checks |
+| `@openedx/frontend-plugin-framework` `PLUGIN_OPERATIONS.Insert` | `WidgetOperationTypes.APPEND` or `PREPEND` |
+| `PLUGIN_OPERATIONS.Hide` (widgetId) | `WidgetOperationTypes.REMOVE` with `relatedId: widgetId` |
+| `PLUGIN_OPERATIONS.Modify` (fn) | No direct equivalent — REPLACE widget with custom component; `WidgetOperationTypes.OPTIONS` for options-only |
+| `type: DIRECT_PLUGIN, RenderWidget: () => <.../>` | `component: MyComponent` |
+| `process.env.VARIABLE` | `useSiteConfig().commonAppConfig.VARIABLE` |
+| `configData.APP_ID` | `SlotOperation.condition: { active: ['<route-role>'] }` — applies only when a route with that role is active |
+
+#### Verified frontend-base header slot and widget IDs (from `package/dist/shell/header/app.js`)
+
+| Slot ID | Default widget IDs |
+|---|---|
+| `org.openedx.frontend.slot.header.desktopLeft.v1` | `desktopLogo.v1`, `desktopPrimaryLinks.v1` |
+| `org.openedx.frontend.slot.header.desktopRight.v1` | `desktopSecondaryLinks.v1`, `desktopAuthenticatedMenu.v1`, `desktopAnonymousMenu.v1` |
+| `org.openedx.frontend.slot.header.mobileCenter.v1` | `mobileLogo.v1` |
+| `org.openedx.frontend.slot.header.mobileRight.v1` | `mobileAuthenticatedMenu.v1`, `mobileAnonymousMenu.v1` |
+| `org.openedx.frontend.slot.header.secondaryLinks.v1` | (empty; help button also appended here) |
+| `org.openedx.frontend.slot.header.authenticatedMenu.v1` | `desktopAuthenticatedMenuProfile.v1`, `desktopAuthenticatedMenuAccount.v1`, `desktopAuthenticatedMenuLogout.v1` |
+| `org.openedx.frontend.slot.footer.desktopCenterLink1.v1`–4 | (empty; LabeledLinkColumn layout) |
+| `org.openedx.frontend.slot.footer.desktopLegalNotices.v1` | `desktopCopyrightNotice.v1` |
+
+Widget ID full prefix: `org.openedx.frontend.widget.header.` or `org.openedx.frontend.widget.footer.`
 
 **Critical note on `APP_ID` conditional logic**: The legacy configs check
 `configData.APP_ID` at runtime to apply different slot operations per MFE (e.g.,
@@ -349,15 +373,24 @@ via `FRONTEND_SITE_CONFIG` in the LMS). Add the necessary keys to the `mitolFoot
 a new `mitolHeader` namespace in `FRONTEND_SITE_CONFIG.commonAppConfig` in
 `ol-infrastructure/k8s_configmaps.py`. See `shared/src/footer/index.tsx` for the pattern.
 
-#### 6a — `AIDrawerManagerSidebar.jsx` → `shared/src/ai-drawer/AIDrawerManagerSidebar.tsx`
+#### 6a — `AIDrawerManagerSidebar.jsx` → `shared/src/ai-drawer/AIDrawerManagerSidebar.tsx` ✅
 
-This is a standalone React component with no `@edx/frontend-platform` API calls.
-Migration: rename `.jsx` → `.tsx`, add TypeScript types. No import changes needed
-beyond updating JSX-only patterns. Place in `shared/src/ai-drawer/`.
+Migrated. Key changes:
+- `getConfig().LMS_BASE_URL` → `useSiteConfig().lmsBaseUrl`
+- `getAuthenticatedHttpClient` → from `@openedx/frontend-base`
+- `process.env.AI_DRAWER_BUNDLE_PATH` → `useSiteConfig().commonAppConfig.mitolAIDrawer` (optional)
+- Full TypeScript types added.
 
-#### 6b — `SidebarAIDrawerCoordinator.jsx` → `shared/src/ai-drawer/SidebarAIDrawerCoordinator.tsx`
+#### 6b — `SidebarAIDrawerCoordinator.jsx` → `shared/src/ai-drawer/SidebarAIDrawerCoordinator.tsx` ✅ (stub)
 
-Imports `AIDrawerManagerSidebar`. Same migration as 6a. The `courseId` prop type is `string`.
+Cannot be fully ported. The component is tightly coupled to `frontend-app-learning` internals:
+- `SidebarContext`, `NewSidebarContext`, `Sidebar`, `NewSidebar` — internal components
+- `useModel('courseHomeMeta', courseId)` — internal model store
+
+When `frontend-app-learning` is migrated to a module library, the slot operation for
+`org.openedx.frontend.learning.notifications_discussions_sidebar.v1` should live inside
+the learning app's own slot definitions, not in shared/. A stub file documents this
+dependency at `shared/src/ai-drawer/SidebarAIDrawerCoordinator.tsx`.
 
 #### 6c — `ResponsiveCourseTabs.jsx` → `shared/src/course-tabs/ResponsiveCourseTabs.tsx`
 
@@ -404,56 +437,13 @@ This is the most complex file. Break it into discrete concerns:
 
 **Footer** — ✅ Already migrated to `shared/src/footer/index.tsx`.
 
-**Header slot overrides** — Add to a new `mitolHeaderApp` App in `shared/src/header/index.tsx`:
+**Header slot overrides** — Add to a new `mitolHeaderApp` App in `shared/src/header/index.tsx` (already fully migrated).
 
-```
-Slot ID                                                        | Operation | What it does
---------------------------------------------------------------------------------------------
-org.openedx.frontend.layout.header_logo.v1                     | MODIFY    | Change logo href to dashboard URL (MITxOnline course vs Learn course)
-org.openedx.frontend.layout.header_learning_user_menu_toggle.v1 | REPLACE  | Custom user icon + name display (UserMenuOverride component)
-org.openedx.frontend.layout.header_desktop_user_menu_toggle.v1  | REPLACE  | Same
-org.openedx.frontend.layout.header_learning_user_menu.v1        | MODIFY   | LearningHeaderUserMenu (menu items differ per course context)
-org.openedx.frontend.layout.header_desktop_user_menu.v1         | MODIFY   | DesktopHeaderUserMenu (for gradebook/learner-dashboard)
-org.openedx.frontend.layout.header_learning_help.v1             | REPLACE  | SecondaryMenu with Dashboard link (for learning/discussions/ora-grading/communications)
-org.openedx.frontend.layout.header_desktop_secondary_menu.v1   | REPLACE  | Same SecondaryMenu for gradebook/learner-dashboard
-org.openedx.frontend.layout.header_desktop_main_menu.v1         | HIDE     | Hide default main menu for gradebook/learner-dashboard
-org.openedx.frontend.layout.header_learning_course_info.v1      | REPLACE  | Custom course title (title only, no org/number) for UAI courses
-```
+**Style overrides & SCSS loader** — ✅ Already migrated. Styles are structured inside `shared/src/styles/mitxonline.scss` and `shared/src/styles/mitx.scss` (copied directly from the legacy SCSS). A shared helper app `createStyleOverrideApp(stylesheetPath)` inside `shared/src/styles/styleLoader.tsx` registers a slot operation that appends a style loader component to the core Shell head slot `org.openedx.frontend.slot.shell.head.v1`. When the shell is initialized, the corresponding style file is dynamically imported and injected onto the page.
 
-The per-app-id conditionals in the legacy file (`if LEARNING_APPS.includes(CURRENT_MFE_APP_ID)`) map
-to per-App slot operations in frontend-base. The `mitolHeaderApp` should register slot
-operations inside the specific App objects (e.g., inside `learningApp.slots`, `gradebookApp.slots`)
-rather than checking app ID at runtime.
+The individual Site Projects for `mitxonline`, `mitx`, and `xpro` include this styled loader in their respective `site.config.build.tsx` configurations.
 
 **URL reads**: `process.env.MIT_LEARN_BASE_URL`, `process.env.MARKETING_SITE_BASE_URL`, etc.
-Replace with `useSiteConfig().commonAppConfig.mitolHeader.mitLearnBaseUrl` etc. Add these
-keys to `FRONTEND_SITE_CONFIG.commonAppConfig.mitolHeader` in `k8s_configmaps.py`:
-
-```python
-"mitolHeader": {
-    "mitLearnBaseUrl": f"https://{edxapp_config.require('mit_learn_domain')}",
-    "marketingSiteBaseUrl": f"https://{marketing_domain}",
-    "supportUrl": f"https://{stack_info.env_prefix}.zendesk.com/hc/en-us/requests/new/",
-}
-```
-
-**`isMITxOnlineCourse()` / `isLearnCourse()`**: These functions inspect `window.location.href`
-to detect whether the current URL is a MITx Online course or a UAI/Learn course. They are
-pure JavaScript and can be copied verbatim into `shared/src/utils/courseContext.ts`. They
-are called at render time inside components, so they work normally as hooks or utility
-functions inside widget components.
-
-**`addEnvOverrides`** (logo URL change for authoring): The authoring MFE uses a different
-logo (`old-logo.svg`). In frontend-base, override `headerLogoImageUrl` inside the
-`authoringApp.config` object in `site.config.build.tsx` rather than at runtime.
-
-**SCSS overrides** (`mitxonline-styles.scss`, `mitx-styles.scss`): The legacy files import
-custom SCSS at module load time. In frontend-base, SCSS can be imported in a component
-or in `src/i18n/index.ts` (which is loaded unconditionally). Add a
-`shared/src/styles/{deployment}.scss` and import it from the appropriate
-`site.config.build.tsx` via a small wrapper component registered on a shell slot.
-Verify whether `@openedx/frontend-base` supports a `stylesheetUrl` or similar override
-in `SiteConfig` before going the component route.
 
 #### 6f — `mitx/`, `mitx-staging/`, `xpro/` `common-mfe-config.env.jsx`
 

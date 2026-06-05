@@ -8,11 +8,13 @@ import Footer, { Logo, MenuLinks, CopyrightNotice } from './Footer.jsx';
 import './mitxonline-styles.scss';
 
 const configData = getConfig();
-const UAI_COURSE_KEYS = ['course-v1:uai_', 'course-v1:mitxt+ctl.scx_wm+1t2026'];
+const UAI_COURSE_KEYS = ['course-v1:uai_', 'course-v1:b2c+uai.', 'course-v1:mitxt+ctl.scx_wm+1t2026'];
+const COURSE_KEY_REGEX = '(?:course-v1:[^/+]+(/|\\+)[^/+]+(/|\\+)[^/?]+)';
 const MOBILE_BREAKPOINT = 991; // px
 const AUTHORING_APP_ID = 'authoring';
 const LEARNING_APPS = ['learning', 'discussions', 'ora-grading', 'communications'];
 const DASHBOARD_APPS = ['gradebook', 'learner-dashboard'];
+const DEFAULT_SUPPORT_URL = 'https://support.learn.mit.edu/';
 
 const CURRENT_MFE_APP_ID = configData.APP_ID;
 const SLOT_IDS = {
@@ -41,9 +43,8 @@ const SLOT_IDS = {
 const addFooterSubSlotsOverride = (config) => {
   const currentYear = new Date().getFullYear();
   const accessibilityURL = process.env.ACCESSIBILITY_URL || 'https://accessibility.mit.edu/';
-  const contactUsURL = process.env.CONTACT_URL || 'mailto:mitlearn-support@mit.edu';
+  const helpURL = process.env.SUPPORT_URL || DEFAULT_SUPPORT_URL;
   const copyRightText = 'Massachusetts Institute of Technology';
-  const supportURL = process.env.SUPPORT_URL || 'https://mitxonline.zendesk.com/hc/en-us';
   const footerLogo = <Logo imageUrl={configData.LOGO_TRADEMARK_URL} destinationUrl={process.env.MIT_BASE_URL} />;
 
   const footerLegalLinks = [
@@ -63,21 +64,11 @@ const addFooterSubSlotsOverride = (config) => {
       messageId: 'footer.links.accessibility',
     },
     {
-      url: contactUsURL,
-      title: 'Contact Us',
-      messageId: 'footer.links.contact.us',
+      url: helpURL,
+      title: 'Help',
+      messageId: 'footer.links.help',
     },
   ]
-
-  if (!isLearnCourse()) {
-    footerLegalLinks.push(
-      {
-        url: supportURL,
-        title: 'Help',
-        messageId: 'footer.links.help',
-      }
-    );
-  }
 
   const footerSubSlotsConfig = {
     [SLOT_IDS.footer.desktop_left_links]: {
@@ -185,6 +176,22 @@ const isLearnCourse = () => {
   });
 }
 
+const safeDecodeURIComponent = (value) => {
+  // decodeURIComponent throws URIError on malformed percent-encoding.
+  try {
+    return decodeURIComponent(value);
+  } catch (e) {
+    return value;
+  }
+};
+
+const isMITxOnlineCourse = () => {
+  const href = (window.location?.href || document.URL || '').toLowerCase();
+  const decodedHref = safeDecodeURIComponent(href);
+  const isCourseKeyInPath = new RegExp(COURSE_KEY_REGEX, 'i').test(decodedHref);
+  return isCourseKeyInPath && !isLearnCourse();
+}
+
 const isMobile = () => {
   // Guard for SSR / tests
   if (typeof window === 'undefined') {
@@ -204,11 +211,11 @@ const getUserMenu = ({ includeDashboard = false } = {}) => {
 
   // Build dashboard URL consistently with SecondaryMenu logic
   let dashboardURL = process.env.MIT_LEARN_BASE_URL ? `${process.env.MIT_LEARN_BASE_URL}/dashboard` : 'https://learn.mit.edu/dashboard';
-  if (!isLearnCourse()) {
+  if (isMITxOnlineCourse()) {
     dashboardURL = configData.MARKETING_SITE_BASE_URL ? `${configData.MARKETING_SITE_BASE_URL}/dashboard/` : 'https://mitxonline.mit.edu/dashboard/';
   }
 
-  if (isLearnCourse()) {
+  if (!isMITxOnlineCourse()) {
     const baseMenu = [
       {
         url: `${configData.LMS_BASE_URL}/logout`,
@@ -390,7 +397,7 @@ const addUserMenuSlotOverride = (config) => {
 }
 
 const addLearningCourseInfoSlotOverride = (config) => {
-  if (isLearnCourse()) {
+  if (!isMITxOnlineCourse()) {
   // Hiding the course org and number from the learning header in the UAI courses
     config.pluginSlots = {
       ...config.pluginSlots,
@@ -417,10 +424,10 @@ const addLearningCourseInfoSlotOverride = (config) => {
 }
 
 const modifyLogoHref = ( widget ) => {
-  if (isLearnCourse()) {
-    widget.content.href = `${process.env.MIT_LEARN_BASE_URL}/dashboard` || "https://learn.mit.edu/dashboard";
-  } else {
+  if (isMITxOnlineCourse()) {
     widget.content.href = `${configData.MARKETING_SITE_BASE_URL}/dashboard/` || "https://mitxonline.mit.edu/dashboard/";
+  } else {
+    widget.content.href = `${process.env.MIT_LEARN_BASE_URL}/dashboard` || "https://learn.mit.edu/dashboard";
   }
   return widget;
 };
@@ -446,7 +453,7 @@ const addLogoSlotOverride = (config) => {
 
 const SecondaryMenu = () => {
   let dashboardURL = process.env.MIT_LEARN_BASE_URL ? `${process.env.MIT_LEARN_BASE_URL}/dashboard` : 'https://learn.mit.edu/dashboard';
-  if (!isLearnCourse()) {
+  if (isMITxOnlineCourse()) {
     dashboardURL = configData.MARKETING_SITE_BASE_URL ? `${configData.MARKETING_SITE_BASE_URL}/dashboard/` : 'https://mitxonline.mit.edu/dashboard/';
   }
 
@@ -525,12 +532,6 @@ const addEnvOverrides = (config) => {
     config = {
       ...config,
       LOGO_URL: process.env.LOGO_URL.replace(/logo\.svg$/, 'old-logo.svg'),
-    }
-  }
-  if (isLearnCourse()) {
-    return {
-      ...config,
-      SUPPORT_URL: process.env.CONTACT_URL || 'mailto:mitlearn-support@mit.edu',
     }
   }
   return config;

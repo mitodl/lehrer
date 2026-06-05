@@ -329,6 +329,7 @@ class OpenedxMfe:
         site_project: dagger.Directory,
         shared_src: dagger.Directory | None = None,
         node_version: str = "24",
+        public_path: str | None = None,
     ) -> dagger.Directory:
         """Build an OEP-65 frontend-base Site Project.
 
@@ -352,6 +353,9 @@ class OpenedxMfe:
                 (or the equivalent absolute path) under ``compilerOptions.paths``.
             node_version: Node.js version (default: 24, as required by frontend-base
                 .nvmrc; minimum tested: 22).
+            public_path: Optional public URL prefix for assets (webpack's publicPath).
+                Used when static assets are hosted on a CDN (e.g., S3, Fastly).
+                If provided, sets the ``PUBLIC_PATH`` environment variable before build.
 
         Returns:
             ``dist/`` directory suitable for static hosting (CDN, S3, nginx).
@@ -366,9 +370,15 @@ class OpenedxMfe:
         )
         if shared_src is not None:
             container = container.with_directory("/app/site/shared", shared_src)
+
+        build_cmd = ["npx", "openedx", "build"]
+
+        if public_path is not None:
+            container = container.with_env_variable("PUBLIC_PATH", public_path)
+
         return (
             container.with_exec(["npm", "install"])
-            .with_exec(["npx", "openedx", "build"])
+            .with_exec(build_cmd)
             .directory("/app/site/dist")
         )
 

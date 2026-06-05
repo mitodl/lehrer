@@ -187,6 +187,7 @@ for a working reference.
 | `site_project` | `Directory` | **required** | Site Project directory (contains `package.json` + `site.config.build.tsx`) |
 | `shared_src` | `Directory` | `None` | Optional shared components directory, mounted at `{site_project}/shared/` and aliased as `@shared/*` in tsconfig |
 | `node_version` | `str` | `"24"` | Node.js version |
+| `public_path` | `str` | `None` | Optional public URL prefix for assets (webpack's publicPath). Used when static assets are hosted on a CDN (e.g., S3, Fastly). If provided, sets the `PUBLIC_PATH` environment variable before build. |
 
 Returns a `dagger.Directory` containing the built `dist/` output.
 

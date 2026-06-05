@@ -23,8 +23,8 @@ export interface MITOLFooterConfig {
 
 function useMITOLFooterConfig(): MITOLFooterConfig {
 	const { commonAppConfig } = useSiteConfig();
-	return ((commonAppConfig as Record<string, unknown>)
-		?.mitolFooter ?? {}) as MITOLFooterConfig;
+	return ((commonAppConfig as Record<string, unknown>)?.mitolFooter ??
+		{}) as MITOLFooterConfig;
 }
 
 function CopyrightNotice() {
