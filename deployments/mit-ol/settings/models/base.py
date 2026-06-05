@@ -37,7 +37,6 @@ from typing import Any
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettingsSource
 from pathlib import Path
-from py import path
 
 # ---------------------------------------------------------------------------
 # Config-sources directory
@@ -1533,7 +1532,7 @@ class SharedAqueductSettings(BaseSettings):
     REGISTRATION_EMAIL_PATTERNS_ALLOWED: Any = Field(default=None)  # TODO: refine type
     REGISTRATION_RATELIMIT: str = Field(default="60/7d")
     REGISTRATION_VALIDATION_RATELIMIT: str = Field(default="30/7d")
-    REPO_ROOT: path.local = Field(default=path.local("/openedx/edx-platform"))
+    REPO_ROOT: Path = Field(default=Path("/openedx/edx-platform"))
     REQUIRE_BASE_URL: str = Field(default="./")
     REQUIRE_DEBUG: bool = Field(default=False)
     RESET_PASSWORD_API_RATELIMIT: str = Field(default="30/7d")
