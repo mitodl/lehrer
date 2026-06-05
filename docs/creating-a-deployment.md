@@ -14,7 +14,7 @@ Lehrer exposes four Dagger object types, each responsible for one service:
 | Sub-command | Type | Builds |
 |---|---|---|
 | `dagger call platform` | `OpenedxPlatform` | edx-platform (LMS + CMS) container image |
-| `dagger call mfe` | `OpenedxMfe` | Open edX Micro Frontends (legacy + OEP-65 stubs) |
+| `dagger call mfe` | `OpenedxMfe` | Open edX Micro Frontends — `build_legacy` (stable) and `build_site` / `watch_site` (OEP-65) |
 | `dagger call codejail` | `OpenedxCodejail` | codejail sandboxed execution service |
 | `dagger call notes` | `OpenedxNotes` | edx-notes-api annotation service |
 
@@ -143,6 +143,22 @@ my-deployment/
 
 ---
 
+## MFE builder — two build models
+
+Lehrer supports two MFE build models that coexist permanently:
+
+| Function | Model | When to use |
+|---|---|---|
+| `build_legacy` | Legacy per-MFE SPA | MFEs that have not yet migrated to `@openedx/frontend-base` |
+| `build_site` | OEP-65 Site Project | MFEs shipped as module libraries in `@openedx/frontend-base` |
+| `watch_site` | OEP-65 dev server | Local development against a Site Project |
+
+The legacy and OEP-65 builds are independent — switching one MFE to the Site Project
+model does not affect the others. See `plans/03-frontend-base-oep65.md` for migration
+guidance and `plans/04-concourse-fastly-deployment.md` for deployment infrastructure.
+
+---
+
 ## MFE builder parameters — `OpenedxMfe.build_legacy`
 
 | Parameter | Type | Default | Description |
@@ -156,6 +172,87 @@ my-deployment/
 | `enable_ai_drawer` | `bool` | `False` | Include AI drawer components (learning MFE only) |
 | `styles_file` | `str` | `None` | Deployment-specific styles file name |
 | `extra_npm_bundles` | `list[str]` | `[]` | Extra npm packages to pack as static bundles. Format: `"pkg_spec\|target_dir"` (e.g. `"@myorg/lib@^1.0\|public/static/lib"`) |
+
+---
+
+## MFE builder parameters — `OpenedxMfe.build_site`
+
+Builds an OEP-65 Site Project using `npx openedx build`. The Site Project must contain
+`package.json`, `site.config.build.tsx`, `src/i18n/index.ts`, `public/index.html`, and
+a `browserslist` field in `package.json`. See `deployments/mit-ol/mfe_slot_config/frontend/`
+for a working reference.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `site_project` | `Directory` | **required** | Site Project directory (contains `package.json` + `site.config.build.tsx`) |
+| `shared_src` | `Directory` | `None` | Optional shared components directory, mounted at `{site_project}/shared/` and aliased as `@shared/*` in tsconfig |
+| `node_version` | `str` | `"24"` | Node.js version |
+
+Returns a `dagger.Directory` containing the built `dist/` output.
+
+```bash
+# Basic build
+dagger call mfe build-site \
+  --site-project ./my-site-project \
+  export --path ./dist
+
+# With shared components
+dagger call mfe build-site \
+  --site-project ./deployments/mit-ol/mfe_slot_config/frontend/mitxonline \
+  --shared-src   ./deployments/mit-ol/mfe_slot_config/frontend/shared \
+  export --path  ./dist/mitxonline
+```
+
+## MFE builder parameters — `OpenedxMfe.watch_site`
+
+Starts a local OEP-65 dev server using `npx openedx dev`. Accepts the same parameters
+as `build_site` plus `port`. Returns a `dagger.Service`.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `site_project` | `Directory` | **required** | Site Project directory |
+| `shared_src` | `Directory` | `None` | Optional shared components directory |
+| `node_version` | `str` | `"24"` | Node.js version |
+| `port` | `int` | `8080` | Port to expose |
+
+```bash
+dagger call mfe watch-site \
+  --site-project ./deployments/mit-ol/mfe_slot_config/frontend/mitxonline \
+  --shared-src   ./deployments/mit-ol/mfe_slot_config/frontend/shared \
+  up --ports 8080:8080
+```
+
+## MFE builder parameters — `OpenedxMfe.build_federated_module`
+
+Currently raises `NotImplementedError`. The `openedx build:module` CLI command does not
+exist in `@openedx/frontend-base` as of v1.0.0-alpha.41; module libraries are bundled at
+build time into the Site Project. This function will be implemented once the upstream CLI
+command ships.
+
+---
+
+## Site Project layout requirements
+
+A Site Project passed to `build_site` or `watch_site` must contain:
+
+```
+my-site-project/
+├── package.json            ← must include @openedx/frontend-base, browserslist field
+├── site.config.build.tsx   ← production SiteConfig (read by openedx build)
+├── site.config.dev.tsx     ← development SiteConfig (read by openedx dev)
+├── tsconfig.json
+├── src/
+│   └── i18n/
+│       └── index.ts            ← required; export default [];
+└── public/
+    └── index.html          ← required; must contain <div id="root"></div>
+```
+
+`site.config.build.tsx` exports a `SiteConfig` object (or async function returning one)
+with at minimum `siteId`, `siteName`, `baseUrl`, `lmsBaseUrl`, `loginUrl`, `logoutUrl`,
+`environment`, and `apps[]`. Set `runtimeConfigJsonUrl: "/api/frontend_site_config/v1/"`
+to allow the LMS to override URL and cookie fields at runtime, making one build artifact
+serve all environments (CI, QA, Production).
 
 ---
 
