@@ -108,6 +108,17 @@ From `test-site/package.json`:
 }
 ```
 
+## Required files and config — build checklist
+
+The following are all required by `openedx build` and are not present by default.
+Absence of any one causes a hard build failure.
+
+| File / config | Error if missing | Notes |
+|---|---|---|
+| `src/i18n/index.ts` | `Default site i18n directory does not exist. Aborting.` | `export default []` is sufficient |
+| `public/index.html` | `Module not found: Can't resolve '/app/site/public/index.html'` | Minimal HTML shell with `<div id="root">` |
+| `browserslist` in `package.json` + `@edx/browserslist-config` devDep | `Cannot find module '@edx/browserslist-config'` | `postcss-loader`/`autoprefixer` reads project-root browserslist config |
+
 ## `src/i18n/index.ts` requirement
 
 The build aborts with `Default site i18n directory (/app/site/src/i18n) does not exist`

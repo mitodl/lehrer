@@ -2,6 +2,9 @@
   "name": "@mitodl/openedx-site-mitx",
   "version": "0.1.0",
   "private": true,
+  "browserslist": [
+    "extends @edx/browserslist-config"
+  ],
   "scripts": {
     "build": "openedx build",
     "dev": "openedx dev",
@@ -16,5 +19,8 @@
     "react-dom": "^18",
     "react-router": "^6",
     "react-router-dom": "^6"
+  },
+  "devDependencies": {
+    "@edx/browserslist-config": "^1.5.0"
   }
 }
