@@ -13,8 +13,5 @@ ol-openedx-course-translations
 ol-openedx-auto-select-language
 ol-openedx-ai-static-translations
 
-# Install edx-search from mitodl's fork + branch
-git+https://github.com/mitodl/edx-search.git@fix/typesense-url-length-scale#egg=edx-search
-
 # Install edx-submissions from mitodl's fork + branch
 git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-csrf-exempt-session-auth#egg=edx-submissions
