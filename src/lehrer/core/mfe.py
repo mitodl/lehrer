@@ -327,6 +327,7 @@ class OpenedxMfe:
     async def build_site(
         self,
         site_project: dagger.Directory,
+        shared_src: dagger.Directory | None = None,
         node_version: str = "24",
     ) -> dagger.Directory:
         """Build an OEP-65 frontend-base Site Project.
@@ -344,6 +345,11 @@ class OpenedxMfe:
 
         Args:
             site_project: Directory containing the complete Site Project.
+            shared_src: Optional directory of shared TypeScript source mounted at
+                ``/app/shared``.  Use when multiple Site Projects share components
+                via a ``@shared/*`` tsconfig path alias.  The tsconfig in
+                ``site_project`` must declare ``"@shared/*": ["../shared/src/*"]``
+                (or the equivalent absolute path) under ``compilerOptions.paths``.
             node_version: Node.js version (default: 24, as required by frontend-base
                 .nvmrc; minimum tested: 22).
 
@@ -357,10 +363,14 @@ class OpenedxMfe:
             self._oep65_base(node_version)
             .with_workdir("/app/site")
             .with_directory("/app/site", site_project)
-            .with_exec(["npm", "install"])
-            .with_exec(["npx", "openedx", "build"])
         )
-        return container.directory("/app/site/dist")
+        if shared_src is not None:
+            container = container.with_directory("/app/shared", shared_src)
+        return (
+            container.with_exec(["npm", "install"])
+            .with_exec(["npx", "openedx", "build"])
+            .directory("/app/site/dist")
+        )
 
     @function
     async def build_federated_module(
@@ -399,6 +409,7 @@ class OpenedxMfe:
     async def watch_site(
         self,
         site_project: dagger.Directory,
+        shared_src: dagger.Directory | None = None,
         node_version: str = "24",
         port: int = 8080,
     ) -> dagger.Service:
@@ -410,6 +421,8 @@ class OpenedxMfe:
 
         Args:
             site_project: Directory containing the Site Project.
+            shared_src: Optional directory of shared TypeScript source; mounted at
+                ``/app/shared`` (same contract as ``build_site``).
             node_version: Node.js version (default: 24).
             port: Port to expose the dev server on (default: 8080).
 
@@ -422,9 +435,13 @@ class OpenedxMfe:
             self._oep65_base(node_version)
             .with_workdir("/app/site")
             .with_directory("/app/site", site_project)
-            .with_env_variable("PORT", str(port))
+        )
+        if shared_src is not None:
+            container = container.with_directory("/app/shared", shared_src)
+        return (
+            container.with_env_variable("PORT", str(port))
             .with_exec(["npm", "install"])
             .with_exposed_port(port)
             .with_exec(["npx", "openedx", "dev"])
+            .as_service()
         )
-        return container.as_service()

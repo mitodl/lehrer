@@ -98,6 +98,52 @@ dagger call mfe build-legacy \
 
 ---
 
+## 6. OEP-65 Site Project builds (frontend-base)
+
+Each deployment has its own Site Project under
+`deployments/mit-ol/mfe_slot_config/frontend/<deployment>/`.
+All three share components from `mfe_slot_config/frontend/shared/`.
+
+### MITx Online (mitxonline)
+
+```bash
+dagger call mfe build-site \
+  --site-project ./deployments/mit-ol/mfe_slot_config/frontend/mitxonline \
+  --shared-src   ./deployments/mit-ol/mfe_slot_config/frontend/shared \
+  export --path ./dist/mitxonline
+```
+
+Dev server:
+
+```bash
+dagger call mfe watch-site \
+  --site-project ./deployments/mit-ol/mfe_slot_config/frontend/mitxonline \
+  --shared-src   ./deployments/mit-ol/mfe_slot_config/frontend/shared \
+  up --ports 8080:8080
+```
+
+### MITx (mitx + mitx-staging)
+
+One build artifact; `runtimeConfigJsonUrl` supplies environment-specific URLs at startup.
+
+```bash
+dagger call mfe build-site \
+  --site-project ./deployments/mit-ol/mfe_slot_config/frontend/mitx \
+  --shared-src   ./deployments/mit-ol/mfe_slot_config/frontend/shared \
+  export --path ./dist/mitx
+```
+
+### xPRO
+
+```bash
+dagger call mfe build-site \
+  --site-project ./deployments/mit-ol/mfe_slot_config/frontend/xpro \
+  --shared-src   ./deployments/mit-ol/mfe_slot_config/frontend/shared \
+  export --path ./dist/xpro
+```
+
+---
+
 ## Regenerating aqueduct settings models
 
 After adding or removing pip packages, regenerate the AqueductSettings pydantic

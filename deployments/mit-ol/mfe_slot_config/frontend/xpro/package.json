@@ -1,5 +1,5 @@
 {
-  "name": "@mitodl/openedx-site",
+  "name": "@mitodl/openedx-site-xpro",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,6 +10,7 @@
   "dependencies": {
     "@openedx/frontend-base": "^1.0.0-alpha",
     "@openedx/paragon": "^23",
+    "@tanstack/react-query": "^5",
     "react": "^18",
     "react-dom": "^18",
     "react-router": "^6",
