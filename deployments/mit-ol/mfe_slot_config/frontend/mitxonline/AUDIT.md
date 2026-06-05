@@ -108,6 +108,22 @@ From `test-site/package.json`:
 }
 ```
 
+## `src/i18n/index.ts` requirement
+
+The build aborts with `Default site i18n directory (/app/site/src/i18n) does not exist`
+if `src/i18n/` is missing. Every Site Project must include:
+
+```ts
+// src/i18n/index.ts
+export default [];
+```
+
+This is an empty i18n message list. Populate it with merged translation message
+objects once `openedx translations:pull` is integrated into the build pipeline.
+The path can be overridden via `SITE_I18N_PATH` env var if needed.
+
+Source: `tools/webpack/utils/getResolvedSiteI18nPath.ts` in the frontend-base repo.
+
 ## `tsconfig.json` requirement
 
 The build config references `tsconfig.json` in the project root via `TsconfigPathsPlugin`.
