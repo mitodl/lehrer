@@ -1,14 +1,14 @@
 {
   "extends": "@openedx/frontend-base/tools/tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
     "outDir": "dist",
     "paths": {
-      "@shared/*": ["../shared/src/*"]
+      "@shared/*": ["./shared/src/*"]
     }
   },
   "include": [
     "site.config.*.tsx",
-    "src/**/*"
+    "src/**/*",
+    "./shared/src/**/*"
   ]
 }

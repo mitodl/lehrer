@@ -346,7 +346,7 @@ class OpenedxMfe:
         Args:
             site_project: Directory containing the complete Site Project.
             shared_src: Optional directory of shared TypeScript source mounted at
-                ``/app/shared``.  Use when multiple Site Projects share components
+                ``/app/site/shared``.  Use when multiple Site Projects share components
                 via a ``@shared/*`` tsconfig path alias.  The tsconfig in
                 ``site_project`` must declare ``"@shared/*": ["../shared/src/*"]``
                 (or the equivalent absolute path) under ``compilerOptions.paths``.
@@ -365,7 +365,7 @@ class OpenedxMfe:
             .with_directory("/app/site", site_project)
         )
         if shared_src is not None:
-            container = container.with_directory("/app/shared", shared_src)
+            container = container.with_directory("/app/site/shared", shared_src)
         return (
             container.with_exec(["npm", "install"])
             .with_exec(["npx", "openedx", "build"])
@@ -422,7 +422,7 @@ class OpenedxMfe:
         Args:
             site_project: Directory containing the Site Project.
             shared_src: Optional directory of shared TypeScript source; mounted at
-                ``/app/shared`` (same contract as ``build_site``).
+                ``/app/site/shared`` (same contract as ``build_site``).
             node_version: Node.js version (default: 24).
             port: Port to expose the dev server on (default: 8080).
 
@@ -437,7 +437,7 @@ class OpenedxMfe:
             .with_directory("/app/site", site_project)
         )
         if shared_src is not None:
-            container = container.with_directory("/app/shared", shared_src)
+            container = container.with_directory("/app/site/shared", shared_src)
         return (
             container.with_env_variable("PORT", str(port))
             .with_exec(["npm", "install"])
