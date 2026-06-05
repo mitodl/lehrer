@@ -24,26 +24,7 @@ const siteConfig: SiteConfig = {
 		shellApp,
 		headerApp,
 		footerApp,
-		createMITOLFooterApp({
-			homeUrl: "http://local.openedx.io:8000",
-			copyrightText: "© MIT xPRO. All rights reserved except where noted.",
-			column1: {
-				label: "Resources",
-				links: [
-					{ label: "About Us", url: "http://local.openedx.io:8000/about-us/" },
-					{ label: "Support", url: "https://xpro.zendesk.com/hc" },
-					{ label: "Accessibility", url: "https://accessibility.mit.edu/" },
-				],
-			},
-			column2: {
-				label: "Policies",
-				links: [
-					{ label: "Privacy Policy", url: "http://local.openedx.io:8000/privacy/" },
-					{ label: "Terms of Service", url: "http://local.openedx.io:8000/tos/" },
-					{ label: "Honor Code", url: "http://local.openedx.io:8000/honor/" },
-				],
-			},
-		}),
+		createMITOLFooterApp(),
 		instructorDashboardApp,
 	],
 };

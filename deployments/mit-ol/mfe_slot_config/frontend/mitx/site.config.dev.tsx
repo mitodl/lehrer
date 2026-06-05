@@ -24,24 +24,7 @@ const siteConfig: SiteConfig = {
 		shellApp,
 		headerApp,
 		footerApp,
-		createMITOLFooterApp({
-			homeUrl: "http://local.openedx.io:8000",
-			copyrightText: "© MIT Open Learning. All rights reserved except where noted.",
-			column1: {
-				label: "Resources",
-				links: [
-					{ label: "Support", url: "http://local.openedx.io:8000/support/" },
-					{ label: "Accessibility", url: "https://accessibility.mit.edu/" },
-					{ label: "Open Learning", url: "https://openlearning.mit.edu" },
-				],
-			},
-			column2: {
-				label: "Policies",
-				links: [
-					{ label: "Terms of Service", url: "http://local.openedx.io:8000/tos" },
-				],
-			},
-		}),
+		createMITOLFooterApp(),
 		instructorDashboardApp,
 	],
 };
