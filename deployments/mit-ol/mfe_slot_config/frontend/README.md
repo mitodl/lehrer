@@ -66,8 +66,8 @@ Currently contains:
 | Deployment | Module library | npm version |
 |---|---|---|
 | mitxonline | `@openedx/frontend-app-instructor-dashboard` | `^1.0.0-alpha` |
-| mitx | — (scaffold only) | |
-| xpro | — (scaffold only) | |
+| mitx | `@openedx/frontend-app-instructor-dashboard` | `^1.0.0-alpha` |
+| xpro | `@openedx/frontend-app-instructor-dashboard` | `^1.0.0-alpha` |
 
 ## Relationship to legacy JSX files
 
