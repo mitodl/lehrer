@@ -5,7 +5,7 @@ xmlsec==1.3.14
 
 # Fix dependencies for ol-openedx-course-translations package
 # https://github.com/openedx/edx-platform/issues/35268
-openai==2.15.0
+openai==2.38.0
 
 # Experimental Plugins for Translations feature
 # install at the end to override any dependency issues
