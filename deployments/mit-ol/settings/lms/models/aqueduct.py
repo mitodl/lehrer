@@ -104,7 +104,7 @@ class AqueductSettings(SharedAqueductSettings):
     )
     ANALYTICS_API_KEY: str = Field(default="")
     ANALYTICS_API_URL: str = Field(default="http://localhost:18100")
-    ANALYTICS_DASHBOARD_NAME: Any = Field(
+    ANALYTICS_DASHBOARD_NAME: str | None = Field(
         default=None
     )  # DERIVED: computed from other settings — add a @model_validator to reproduce
     ANALYTICS_DASHBOARD_URL: str = Field(default="")
@@ -136,7 +136,7 @@ class AqueductSettings(SharedAqueductSettings):
     BULK_EMAIL_ROUTING_KEY_SMALL_JOBS: str = Field(default="edx.lms.core.default")
     CATALOG_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
     CCX_MAX_STUDENTS_ALLOWED: int = Field(default=200)
-    CC_MERCHANT_NAME: Any = Field(
+    CC_MERCHANT_NAME: str | None = Field(
         default=None
     )  # DERIVED: computed from other settings — add a @model_validator to reproduce
     CELERYBEAT_SCHEDULE: dict[str, Any] = Field(
@@ -250,8 +250,8 @@ class AqueductSettings(SharedAqueductSettings):
     DCS_SESSION_COOKIE_SAMESITE: str = Field(default="None")
     DCS_SESSION_COOKIE_SAMESITE_FORCE_ALL: bool = Field(default=True)
     DEBUG_TRACK_LOG: bool = Field(default=False)
-    DEFAULT_ENTERPRISE_API_URL: Any = Field(default=None)  # TODO: refine type
-    DEFAULT_ENTERPRISE_CONSENT_API_URL: Any = Field(default=None)  # TODO: refine type
+    DEFAULT_ENTERPRISE_API_URL: str | None = Field(default=None)
+    DEFAULT_ENTERPRISE_CONSENT_API_URL: str | None = Field(default=None)
     DEFAULT_ENTERPRISE_ENROLLMENT_INTENTIONS_ROLE: str = Field(
         default="default_enterprise_enrollment_intentions_learner"
     )
@@ -421,9 +421,9 @@ class AqueductSettings(SharedAqueductSettings):
             "enterprise_subsidy_worker",
         ]
     )
-    ENTERPRISE_API_URL: Any = Field(default=None)  # TODO: refine type
+    ENTERPRISE_API_URL: str | None = Field(default=None)
     ENTERPRISE_CATALOG_ADMIN_ROLE: str = Field(default="catalog_admin")
-    ENTERPRISE_CONSENT_API_URL: Any = Field(default=None)  # TODO: refine type
+    ENTERPRISE_CONSENT_API_URL: str | None = Field(default=None)
     ENTERPRISE_COURSE_ENROLLMENT_AUDIT_MODES: list[Any] = Field(
         default_factory=lambda: ["audit", "honor"]
     )
@@ -452,10 +452,10 @@ class AqueductSettings(SharedAqueductSettings):
         default_factory=lambda: []
     )
     ENTERPRISE_OPERATOR_ROLE: str = Field(default="enterprise_openedx_operator")
-    ENTERPRISE_PLATFORM_WELCOME_TEMPLATE: Any = Field(
+    ENTERPRISE_PLATFORM_WELCOME_TEMPLATE: str | None = Field(
         default=None
     )  # DERIVED: computed from other settings — add a @model_validator to reproduce
-    ENTERPRISE_PROXY_LOGIN_WELCOME_TEMPLATE: Any = Field(
+    ENTERPRISE_PROXY_LOGIN_WELCOME_TEMPLATE: str | None = Field(
         default=None
     )  # DERIVED: computed from other settings — add a @model_validator to reproduce
     ENTERPRISE_PUBLIC_ENROLLMENT_API_URL: str = Field(default="/api/enrollment/v1/")
@@ -465,7 +465,7 @@ class AqueductSettings(SharedAqueductSettings):
     ENTERPRISE_REPORTING_CONFIG_ADMIN_ROLE: str = Field(
         default="reporting_config_admin"
     )
-    ENTERPRISE_SPECIFIC_BRANDED_WELCOME_TEMPLATE: Any = Field(
+    ENTERPRISE_SPECIFIC_BRANDED_WELCOME_TEMPLATE: str | None = Field(
         default=None
     )  # DERIVED: computed from other settings — add a @model_validator to reproduce
     ENTERPRISE_SSO_ORCHESTRATOR_OPERATOR_ROLE: str = Field(
@@ -864,7 +864,7 @@ class AqueductSettings(SharedAqueductSettings):
     LTI_AGGREGATE_SCORE_PASSBACK_DELAY: int = Field(default=900)
     LTI_CUSTOM_PARAMS: list[Any] = Field(default_factory=lambda: [])
     LTI_USER_EMAIL_DOMAIN: str = Field(default="lti.example.com")
-    MAILCHIMP_NEW_USER_LIST_ID: str = Field(default="")
+    MAILCHIMP_NEW_USER_LIST_ID: str | None = Field(default=None)
     MAINTENANCE_BANNER_TEXT: Any = Field(default=None)  # TODO: refine type
     MAKO_MODULE_DIR: str = Field(default="/tmp/mako_lms")
     MAKO_TEMPLATE_DIRS_BASE: list[Any] = Field(
@@ -1863,6 +1863,122 @@ class AqueductSettings(SharedAqueductSettings):
         }
     )
     TRACKING_SEGMENTIO_WEBHOOK_SECRET: Any = Field(default=None)  # TODO: refine type
+    # Added from working_dump.json (fields missing from generated snapshot).
+    ALLOW_ALL_ADVANCED_COMPONENTS: bool = Field(default=True)
+    ALTERNATE_ENV_TASKS: dict[str, Any] = Field(default_factory=lambda: {})
+    ALTERNATE_QUEUES: list[Any] = Field(default_factory=lambda: [])
+    ALTERNATE_QUEUE_ENVS: list[Any] = Field(default_factory=lambda: [])
+    APPZI_URL: str = Field(default="")
+    AUDIT_CERT_CUTOFF_DATE: Any = Field(default=None)  # TODO: refine type
+    AUTH_TOKENS: dict[str, Any] = Field(default_factory=lambda: {})
+    AUTH_USE_CERTIFICATES: bool = Field(default=False)
+    AUTH_USE_OPENID_PROVIDER: bool = Field(default=True)
+    AWS_BUCKET_ACL: str = Field(default="public-read")
+    AWS_DEFAULT_ACL: str = Field(default="public-read")
+    AWS_SES_CONFIGURATION_SET: str = Field(default="edxapp-mitxonline-ci")
+    BLOCKSTORE_USE_BLOCKSTORE_APP_API: bool = Field(default=True)
+    BROKER_CONNECTION_TIMEOUT: int = Field(default=1)
+    BROKER_POOL_LIMIT: int = Field(default=0)
+    BROKER_TRANSPORT_OPTIONS: dict[str, Any] = Field(
+        default_factory=lambda: {"fanout_patterns": True, "fanout_prefix": True}
+    )
+    BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH: bool = Field(default=True)
+    CELERYBEAT_SCHEDULER: str = Field(default="redbeat.RedBeatScheduler")
+    CELERYD_PREFETCH_MULTIPLIER: int = Field(default=1)
+    CELERY_TASK_SEND_SENT_EVENT: bool = Field(default=True)
+    CELERY_TASK_TRACK_STARTED: bool = Field(default=True)
+    CONFIG_FILE: str = Field(default="/openedx/config/lms.env.yml")
+    CONTACT_US_ENABLE: bool = Field(default=False)
+    CORS_ALLOW_INSECURE: bool = Field(default=False)
+    CORS_ORIGIN_ALLOW_ALL: bool = Field(default=False)
+    COURSES_INVITE_ONLY: bool = Field(default=True)
+    COURSE_IMPORT_EXPORT_BUCKET: str = Field(default="mitxonline-ci-edxapp-courses")
+    CSRF_COOKIE_MASKED: bool = Field(default=False)
+    DATAPLATFORM_CERTIFICATE_BASE_URL: str = Field(
+        default="https://bi-ci.ol.mit.edu/superset/dashboard/da9e03d3-e1bb-45b8-981f-208deca90e7a/"
+    )
+    EMAIL_USE_COURSE_ID_FROM_FOR_BULK: bool = Field(default=False)
+    ENABLE_AUTO_COURSE_REGISTRATION: bool = Field(default=True)
+    ENABLE_AUTO_GITHUB_REPO_CREATION: bool = Field(default=True)
+    ENABLE_BLAKE2B_HASHING: bool = Field(default=True)
+    ENABLE_COMBINED_LOGIN_REGISTRATION: bool = Field(default=True)
+    ENABLE_COUNTRY_ACCESS: bool = Field(default=False)
+    ENABLE_COURSEWARE_INDEX: bool = Field(default=False)
+    ENABLE_COURSE_BLOCKS_NAVIGATION_API: bool = Field(default=True)
+    ENABLE_CREDIT_API: bool = Field(default=False)
+    ENABLE_DATES_COURSE_APP: bool = Field(default=True)
+    ENABLE_EDX_USERNAME_CHANGER: bool = Field(default=True)
+    ENABLE_EXAM_SETTINGS_HTML_VIEW: bool = Field(default=True)
+    ENABLE_EXPORT_GIT: bool = Field(default=True)
+    ENABLE_FORUM_DAILY_DIGEST: bool = Field(default=True)
+    ENABLE_GIT_AUTO_EXPORT: bool = Field(default=True)
+    ENABLE_INSTRUCTOR_ANALYTICS: bool = Field(default=False)
+    ENABLE_INSTRUCTOR_EMAIL: bool = Field(default=True)
+    ENABLE_INSTRUCTOR_LEGACY_DASHBOARD: bool = Field(default=True)
+    ENABLE_INSTRUCTOR_REMOTE_GRADEBOOK_CONTROLS: bool = Field(default=True)
+    ENABLE_LIBRARY_AUTHORING_MICROFRONTEND: bool = Field(default=True)
+    ENABLE_LIBRARY_INDEX: bool = Field(default=False)
+    ENABLE_OAUTH2_PROVIDER: bool = Field(default=True)
+    ENABLE_OTHER_COURSE_SETTINGS: bool = Field(default=True)
+    ENABLE_PAID_COURSE_REGISTRATION: bool = Field(default=False)
+    ENABLE_PROCTORED_EXAMS: bool = Field(default=True)
+    ENABLE_RENDER_XBLOCK_API: bool = Field(default=True)
+    ENABLE_SHOPPING_CART: bool = Field(default=True)
+    ENABLE_SYSADMIN_DASHBOARD: bool = Field(default=True)
+    ENABLE_V2_CERT_DISPLAY_SETTINGS: bool = Field(default=True)
+    ENABLE_VIDEO_UPLOAD_PIPELINE: bool = Field(default=True)
+    ENV_CELERY_QUEUES: Any = Field(default=None)  # TODO: refine type
+    ENV_FEATURES: dict[str, Any] = Field(default_factory=lambda: {})
+    ENV_TOKENS: dict[str, Any] = Field(default_factory=lambda: {})
+    EXPLICIT_QUEUES: dict[str, Any] = Field(default_factory=lambda: {})
+    FOOTER_ORGANIZATION_IMAGE: str = Field(default="/images/logo.png")
+    JWT_EXPIRATION: int = Field(default=30)
+    LEARNER_PORTAL_URL_ROOT: str = Field(default="https://learner-portal-localhost:18000")
+    LOGO_URL_PNG_FOR_EMAIL: str = Field(
+        default="https://courses.ci.learn.mit.edu/static/mitxonline/images/logo.png"
+    )
+    MARKETING_SITE_BASE_URL: str = Field(default="https://ci.mitxonline.mit.edu/")
+    MITXONLINE_BASE_URL: str = Field(default="https://ci.mitxonline.mit.edu/")
+    MIT_BASE_URL: str = Field(default="https://web.mit.edu")
+    MIT_LEARN_BASE_URL: str = Field(default="https://ci.learn.mit.edu")
+    MIT_LEARN_LOGO: str = Field(
+        default="https://courses.ci.learn.mit.edu/static/mitxonline/images/mit-learn-logo.svg"
+    )
+    MIT_LEARN_SUPPORT_SITE_LINK: str = Field(default="https://support.learn.mit.edu/")
+    OAUTH_ENFORCE_CLIENT_SECURE: bool = Field(default=True)
+    OAUTH_EXPIRE_DELTA: str = Field(default="datetime.timedelta(days=365)")
+    OAUTH_EXPIRE_DELTA_PUBLIC: str = Field(default="datetime.timedelta(days=30)")
+    ORGANIZATIONS_AUTOCREATE: bool = Field(default=True)
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = Field(
+        default="http://grafana-k8s-monitoring-alloy-receiver.grafana.svc.cluster.local:4318"
+    )
+    OTEL_LOG_LEVEL: str = Field(default="info")
+    OTEL_SERVICE_NAME: str = Field(default="mitxonline-ci-edxapp")
+    PREVIEW_LMS_BASE: str = Field(default="preview.courses.ci.learn.mit.edu")
+    PROFILE_IMAGE_SECRET_KEY: str = Field(default="placeholder_secret_key")
+    REDBEAT_KEY_PREFIX: str = Field(default="redbeat_lms")
+    REQUIRE_COURSE_EMAIL_AUTH: bool = Field(default=False)
+    RESTRICT_ENROLL_BY_REG_METHOD: bool = Field(default=False)
+    REVISION_CONFIG: dict[str, Any] = Field(default_factory=lambda: {})
+    REVISION_CONFIG_FILE: str = Field(default="/openedx/config/revisions.yml")
+    SENTRY_ENABLED: bool = Field(default=True)
+    SENTRY_ENVIRONMENT: str = Field(default="mitxonline-ci")
+    SESSION_COOKIE_SAMESITE_FORCE_ALL: bool = Field(default=True)
+    SOCIAL_AUTH_LTI_CONSUMER_SECRETS: dict[str, Any] = Field(default_factory=lambda: {})
+    SOCIAL_AUTH_PIPELINE_TIMEOUT: int = Field(default=600)
+    THIRD_PARTY_AUTH_CUSTOM_AUTH_FORMS: dict[str, Any] = Field(
+        default_factory=lambda: {}
+    )
+    THIRD_PARTY_AUTH_OLD_CONFIG: Any = Field(default=None)  # TODO: refine type
+    TRANSLATIONS_REPO_PATH: str = Field(default="/openedx/data/mitxonline-translations")
+    TRANSLATIONS_REPO_URL: str = Field(
+        default="https://github.com/mitodl/mitxonline-translations.git"
+    )
+    TYPESENSE_COLLECTION_PREFIX: str = Field(default="openedx_")
+    TYPESENSE_ENABLED: bool = Field(default=True)
+    _YAML_ALTERNATE_WORKER_QUEUES: list[Any] = Field(default_factory=lambda: [])
+    _YAML_CELERY_QUEUES: Any = Field(default=None)  # TODO: refine type
+    _YAML_TOKENS: dict[str, Any] = Field(default_factory=lambda: {})
     TRANSLATORS_GUIDE: str = Field(
         default="https://docs.openedx.org/en/latest/translators/index.html"
     )
@@ -1882,12 +1998,12 @@ class AqueductSettings(SharedAqueductSettings):
     )
     WIKI_ACCOUNT_HANDLING: bool = Field(default=False)
     WIKI_ANONYMOUS: bool = Field(default=False)
-    WIKI_CAN_ASSIGN: Any = Field(default=None)  # CALLABLE DEFAULT: 'CAN_ASSIGN'
-    WIKI_CAN_CHANGE_PERMISSIONS: Any = Field(
+    WIKI_CAN_ASSIGN: str | None = Field(default=None)  # CALLABLE DEFAULT: 'CAN_ASSIGN'
+    WIKI_CAN_CHANGE_PERMISSIONS: str | None = Field(
         default=None
     )  # CALLABLE DEFAULT: 'CAN_CHANGE_PERMISSIONS'
-    WIKI_CAN_DELETE: Any = Field(default=None)  # CALLABLE DEFAULT: 'CAN_DELETE'
-    WIKI_CAN_MODERATE: Any = Field(default=None)  # CALLABLE DEFAULT: 'CAN_MODERATE'
+    WIKI_CAN_DELETE: str | None = Field(default=None)  # CALLABLE DEFAULT: 'CAN_DELETE'
+    WIKI_CAN_MODERATE: str | None = Field(default=None)  # CALLABLE DEFAULT: 'CAN_MODERATE'
     WIKI_EDITOR: str = Field(default="lms.djangoapps.course_wiki.editors.CodeMirror")
     WIKI_LINK_DEFAULT_LEVEL: int = Field(default=2)
     WIKI_LINK_LIVE_LOOKUPS: bool = Field(default=False)

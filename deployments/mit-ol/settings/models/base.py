@@ -620,10 +620,10 @@ class SharedAqueductSettings(BaseSettings):
     AUTO_LANGUAGE_SELECTION_EXEMPT_PATHS: list[Any] = Field(
         default_factory=lambda: ["admin", "sysadmin", "instructor"]
     )
-    AWS_ACCESS_KEY_ID: Any = Field(default=None)  # TODO: refine type
+    AWS_ACCESS_KEY_ID: str | None = Field(default=None)
     AWS_QUERYSTRING_AUTH: bool = Field(default=True)
     AWS_S3_CUSTOM_DOMAIN: str = Field(default="edxuploads.s3.amazonaws.com")
-    AWS_SECRET_ACCESS_KEY: Any = Field(default=None)  # TODO: refine type
+    AWS_SECRET_ACCESS_KEY: str | None = Field(default=None)
     AWS_SES_REGION_ENDPOINT: str = Field(default="email.us-east-1.amazonaws.com")
     AWS_SES_REGION_NAME: str = Field(default="us-east-1")
     AWS_STORAGE_BUCKET_NAME: str = Field(default="edxuploads")
@@ -639,7 +639,7 @@ class SharedAqueductSettings(BaseSettings):
     )
     BROKER_HEARTBEAT: float = Field(default=60.0)
     BROKER_HEARTBEAT_CHECKRATE: int = Field(default=2)
-    BROKER_USE_SSL: bool = Field(default=False)
+    BROKER_USE_SSL: bool | dict[str, Any] | None = Field(default=False)
     BUGS_EMAIL: str = Field(default="bugs@example.com")
     BULK_EMAIL_DEFAULT_FROM_EMAIL: str = Field(default="no-reply@example.com")
     BULK_EMAIL_EMAILS_PER_TASK: int = Field(default=500)
@@ -1116,7 +1116,7 @@ class SharedAqueductSettings(BaseSettings):
     FAVICON_PATH: str = Field(default="images/favicon.ico")
     FAVICON_URL: Any = Field(default=None)  # TODO: refine type
     FCM_APP_NAME: str = Field(default="fcm-edx-platform")
-    FEATURES: Any = Field(
+    FEATURES: dict[str, Any] | str | None = Field(
         default=None
     )  # DERIVED: computed from other settings — add a @model_validator to reproduce
     FEEDBACK_SUBMISSION_EMAIL: str = Field(default="")
@@ -1638,7 +1638,7 @@ class SharedAqueductSettings(BaseSettings):
     SESSION_SERIALIZER: str = Field(
         default="openedx.core.lib.session_serializers.PickleSerializer"
     )
-    SHARED_COOKIE_DOMAIN: Any = Field(default=None)  # TODO: refine type
+    SHARED_COOKIE_DOMAIN: str | None = Field(default=None)
     SHIBBOLETH_DOMAIN_PREFIX: str = Field(default="shib:")
     SHOW_ACCOUNT_ACTIVATION_CTA: bool = Field(default=False)
     SHOW_ACTIVATE_CTA_POPUP_COOKIE_NAME: str = Field(
