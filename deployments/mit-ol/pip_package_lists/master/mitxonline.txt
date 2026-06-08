@@ -14,7 +14,7 @@ ol-openedx-logging
 ol-openedx-sentry
 openedx-scorm-xblock
 ol-social-auth==0.2.2
-pydantic-settings[yaml]==2.13.1
+pydantic-settings[yaml]==2.14.1
 django-aqueduct==0.3.0
 
 # Experimental Plugins for AI features
