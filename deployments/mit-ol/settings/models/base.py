@@ -306,6 +306,29 @@ class ProductionSettingsMixin(BaseSettings):
         )
         return self
 
+    @model_validator(mode="after")
+    def _convert_path_strings_to_path_objects(self) -> ProductionSettingsMixin:
+        """Convert path-related settings from strings to Path objects.
+
+        edx-platform code (e.g., xmodule/modulestore/api.py:get_python_locale_root)
+        uses the '/' operator on these settings, expecting Path objects. This
+        validator ensures they're converted from strings after loading from
+        environment or YAML configuration.
+        """
+        path_settings = [
+            "REPO_ROOT",
+            "COMMON_ROOT",
+            "ENV_ROOT",
+            "OPENEDX_ROOT",
+            "XMODULE_ROOT",
+            "COURSES_ROOT",
+        ]
+        for setting_name in path_settings:
+            value = getattr(self, setting_name, None)
+            if isinstance(value, str):
+                setattr(self, setting_name, Path(value))  # type: ignore[attr-defined]
+        return self
+
 
 class SharedAqueductSettings(BaseSettings):
     """Settings shared between LMS and CMS.
