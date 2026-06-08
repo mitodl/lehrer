@@ -38,6 +38,31 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettingsSource
 from pathlib import Path
 
+
+class PathString(str):
+    """String subclass that acts like a Path object for path-related operations.
+
+    This bridges the gap between edx-platform code that expects Path objects
+    (using the '/' operator) and code that expects string methods (like isdir()).
+    """
+
+    def __truediv__(self, other: str | Path) -> PathString:
+        """Support the '/' operator for path joining."""
+        return PathString(str(Path(self) / other))
+
+    def __rtruediv__(self, other: str | Path) -> PathString:
+        """Support reverse '/' operator."""
+        return PathString(str(Path(other) / self))
+
+    def is_dir(self) -> bool:
+        """pathlib.Path style directory check."""
+        return Path(self).is_dir()
+
+    def isdir(self) -> bool:
+        """os.path style directory check (backward compatibility)."""
+        return self.is_dir()
+
+
 # ---------------------------------------------------------------------------
 # Config-sources directory
 # ---------------------------------------------------------------------------
@@ -308,12 +333,15 @@ class ProductionSettingsMixin(BaseSettings):
 
     @model_validator(mode="after")
     def _convert_path_strings_to_path_objects(self) -> ProductionSettingsMixin:
-        """Convert path-related settings from strings to Path objects.
+        """Convert path-related settings to PathString objects.
+
+        PathString is a str subclass that supports both the '/' operator
+        (like Path) and string methods (like isdir()). This bridges
+        edx-platform code that expects Path-like behavior.
 
         edx-platform code (e.g., xmodule/modulestore/api.py:get_python_locale_root)
-        uses the '/' operator on these settings, expecting Path objects. This
-        validator ensures they're converted from strings after loading from
-        environment or YAML configuration.
+        uses the '/' operator on these settings, while other code calls .isdir()
+        as a string method. PathString supports both.
         """
         path_settings = [
             "REPO_ROOT",
@@ -325,8 +353,8 @@ class ProductionSettingsMixin(BaseSettings):
         ]
         for setting_name in path_settings:
             value = getattr(self, setting_name, None)
-            if isinstance(value, str):
-                setattr(self, setting_name, Path(value))  # type: ignore[attr-defined]
+            if isinstance(value, str) and not isinstance(value, PathString):
+                setattr(self, setting_name, PathString(value))  # type: ignore[attr-defined]
         return self
 
 
