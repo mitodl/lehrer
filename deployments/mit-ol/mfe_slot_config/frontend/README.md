@@ -8,9 +8,13 @@ MIT OL deployment, plus a `shared/` directory of common TypeScript components.
 
 ```
 frontend/
-├── shared/              ← shared TypeScript components (Footer, AI drawer, etc.)
+├── shared/              ← shared TypeScript components (footer, header, styles, utils)
 │   └── src/
-│       └── Footer.tsx   ← scaffold — needs port from ../legacy/Footer.jsx
+│       ├── footer/      ← createMITOLFooterApp()
+│       ├── header/      ← createMITxOnlineHeaderApp(), createMITxHeaderApp(), createXProHeaderApp()
+│       ├── styles/      ← createStyleOverrideApp(), mitxonline.scss, mitx.scss
+│       ├── utils/       ← courseContext helpers
+│       └── ai-drawer/   ← AIDrawerManagerSidebar, SidebarAIDrawerCoordinator stubs
 ├── mitxonline/          ← MIT OpenLearning (master branch, latest frontend-base)
 ├── mitx/                ← MITx + MITx-Staging (named releases, same build artifact)
 └── xpro/                ← MIT xPRO (named releases, MARKETING_SITE_BASE_URL nav model)
@@ -55,11 +59,18 @@ dagger call mfe build-site \
 
 Components in `shared/src/` are imported by any Site Project via the `@shared/*`
 TypeScript path alias declared in each project's `tsconfig.json`. No npm publishing
-required — Dagger mounts the directory at `/app/shared` alongside each project.
+required — Dagger mounts the directory at `/app/site/shared` inside each Site Project.
 
 Currently contains:
-- `Footer.tsx` — **scaffold only**, needs TypeScript port from `../legacy/Footer.jsx`
-  (see plan task: `plans/03-frontend-base-oep65.md` § Task 6)
+- `footer/index.tsx` — `createMITOLFooterApp()`: runtime-config-driven footer links
+- `header/index.tsx` — `createMITxOnlineHeaderApp()`, `createMITxHeaderApp()`, `createXProHeaderApp()`
+- `styles/styleLoader.tsx` — `createStyleOverrideApp()`: injects per-deployment SCSS into shell head slot
+- `styles/mitxonline.scss` — mitxonline theme overrides (ported from legacy)
+- `styles/mitx.scss` — mitx theme overrides (scaffold)
+- `utils/courseContext.ts` — URL/course-context detection helpers
+- `ai-drawer/AIDrawerManagerSidebar.tsx` — fully typed AI drawer sidebar wrapper
+- `ai-drawer/SidebarAIDrawerCoordinator.tsx` — stub, blocked on `frontend-app-learning` migration
+- `course-tabs/ResponsiveCourseTabs.tsx` — stub, blocked on `frontend-app-learning` migration
 
 ## Module libraries wired in
 

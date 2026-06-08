@@ -88,7 +88,7 @@ env.config.jsx, per-MFE plugin slot registrations) are replaced by:
 | 4 — `watch_site` | ✅ Done |
 | 5 — Site Project skeleton | ✅ Done — three separate Site Projects (mitxonline, mitx, xpro) under `deployments/mit-ol/mfe_slot_config/frontend/` |
 | 6 — Slot config migration | ✅ Done — footer + header user-menu/logo/secondary-links + SCSS theme style loaders complete; learning slots documented as stubs blocked on frontend-app-learning |
-| 7 — Docs update | ✅ Done — updated `docs/creating-a-deployment.md` with `build-site`/`watch-site` parameter additions and OEP-65 documentation |
+| 7 — Docs update | 🔶 Partial — parameter tables added and MIT OL examples in `build.md`; full narrative OEP-65 section (two build models, migration guidance, Site Project layout) still needed |
 | 8 — Concourse + Fastly | ❌ Not started — see `plans/04-concourse-fastly-deployment.md` |
 
 ---

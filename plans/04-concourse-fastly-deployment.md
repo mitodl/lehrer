@@ -1,6 +1,6 @@
 # Plan 04 — Concourse Pipeline and Fastly Routing for Frontend-Base Site Projects
 
-## Status: Not started
+## Status: In progress — Phase 1 infrastructure implemented
 
 ## Context
 
@@ -102,23 +102,15 @@ works without any webpack `DefinePlugin` changes.
 
 ### Dagger `build_site` env var support
 
-`build_site` does not currently expose a `PUBLIC_PATH` parameter. Add it:
+`build_site` already exposes a `public_path: str | None` parameter (implemented in
+PR #51).  Pass it directly:
 
-```python
-@function
-async def build_site(
-    self,
-    site_project: dagger.Directory,
-    shared_src: dagger.Directory | None = None,
-    node_version: str = "24",
-    public_path: str = "/",                # new
-) -> dagger.Directory:
-    ctr = (
-        self._oep65_base(node_version)
-        ...
-        .with_env_variable("PUBLIC_PATH", public_path)   # new
-        .with_exec(["npx", "openedx", "build"])
-    )
+```bash
+dagger call mfe build-site \
+    --site-project ./deployments/mit-ol/mfe_slot_config/frontend/mitxonline \
+    --shared-src   ./deployments/mit-ol/mfe_slot_config/frontend/shared \
+    --public-path  https://static.mitxonline.mit.edu/ \
+    export --path ./dist/mitxonline
 ```
 
 ---
@@ -264,7 +256,7 @@ the hash changes with every build.
 1. Merge ol-infrastructure PR #4730
 2. Deploy updated LMS configmap to CI; verify `/api/frontend_site_config/v1/` returns
    expected values
-3. Add `public_path` parameter to `build_site` in `src/lehrer/core/mfe.py`
+3. ~~Add `public_path` parameter to `build_site`~~ — already implemented in `src/lehrer/core/mfe.py`
 4. Write `site_pipeline.py`; register with CI but do not add Fastly rules yet
 5. Trigger CI build; verify S3 upload to `{env}-edxapp-mfe/mitxonline-site/`
 

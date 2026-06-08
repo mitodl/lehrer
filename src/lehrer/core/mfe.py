@@ -81,23 +81,20 @@ class OpenedxMfe:
             )
 
         # Start with Node.js base image
-        container = dag.container().from_(f"node:{node_version}-trixie-slim")
-
-        # Install system dependencies
         container = (
-            container.with_exec(["apt-get", "update"])
+            dag.container()
+            .from_(f"node:{node_version}-trixie-slim")
             .with_exec(
                 [
-                    "apt",
-                    "install",
-                    "-y",
-                    "python3",
-                    "python-is-python3",
-                    "build-essential",
-                    "git",
+                    "sh",
+                    "-c",
+                    "apt-get update -q && "
+                    "apt-get install -y --no-install-recommends "
+                    "git build-essential python3 python-is-python3 && "
+                    "apt-get clean && "
+                    "rm -rf /var/lib/apt/lists/*",
                 ]
             )
-            .with_exec(["apt", "clean"])
         )
 
         # Clone MFE repository
@@ -236,23 +233,20 @@ class OpenedxMfe:
             )
 
         # Start with Node.js base image
-        container = dag.container().from_(f"node:{node_version}-trixie-slim")
-
-        # Install system dependencies
         container = (
-            container.with_exec(["apt-get", "update"])
+            dag.container()
+            .from_(f"node:{node_version}-trixie-slim")
             .with_exec(
                 [
-                    "apt",
-                    "install",
-                    "-y",
-                    "python3",
-                    "python-is-python3",
-                    "build-essential",
-                    "git",
+                    "sh",
+                    "-c",
+                    "apt-get update -q && "
+                    "apt-get install -y --no-install-recommends "
+                    "git build-essential python3 python-is-python3 && "
+                    "apt-get clean && "
+                    "rm -rf /var/lib/apt/lists/*",
                 ]
             )
-            .with_exec(["apt", "clean"])
         )
 
         # Set up work directory and mount source
@@ -306,21 +300,17 @@ class OpenedxMfe:
         return (
             dag.container()
             .from_(f"node:{node_version}-trixie-slim")
-            .with_exec(["apt-get", "update", "-q"])
             .with_exec(
                 [
-                    "apt-get",
-                    "install",
-                    "-y",
-                    "--no-install-recommends",
-                    "git",
-                    "build-essential",
-                    "python3",
-                    "python-is-python3",
+                    "sh",
+                    "-c",
+                    "apt-get update -q && "
+                    "apt-get install -y --no-install-recommends "
+                    "git build-essential python3 python-is-python3 && "
+                    "apt-get clean && "
+                    "rm -rf /var/lib/apt/lists/*",
                 ]
             )
-            .with_exec(["apt-get", "clean"])
-            .with_exec(["rm", "-rf", "/var/lib/apt/lists/*"])
         )
 
     @function
@@ -349,8 +339,8 @@ class OpenedxMfe:
             shared_src: Optional directory of shared TypeScript source mounted at
                 ``/app/site/shared``.  Use when multiple Site Projects share components
                 via a ``@shared/*`` tsconfig path alias.  The tsconfig in
-                ``site_project`` must declare ``"@shared/*": ["../shared/src/*"]``
-                (or the equivalent absolute path) under ``compilerOptions.paths``.
+                ``site_project`` must declare ``"@shared/*": ["./shared/src/*"]``
+                under ``compilerOptions.paths``.
             node_version: Node.js version (default: 24, as required by frontend-base
                 .nvmrc; minimum tested: 22).
             public_path: Optional public URL prefix for assets (webpack's publicPath).
@@ -365,6 +355,7 @@ class OpenedxMfe:
         """
         container = (
             self._oep65_base(node_version)
+            .with_mounted_cache("/root/.npm", dag.cache_volume("npm-cache"))
             .with_workdir("/app/site")
             .with_directory("/app/site", site_project)
         )
@@ -443,6 +434,7 @@ class OpenedxMfe:
         """
         container = (
             self._oep65_base(node_version)
+            .with_mounted_cache("/root/.npm", dag.cache_volume("npm-cache"))
             .with_workdir("/app/site")
             .with_directory("/app/site", site_project)
         )

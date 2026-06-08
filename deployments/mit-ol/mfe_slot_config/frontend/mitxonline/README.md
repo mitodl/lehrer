@@ -17,12 +17,14 @@ libraries into one deployable `dist/` artifact.
 ```sh
 # Production build
 dagger call mfe build-site \
-  --site-project ./deployments/mit-ol/mfe_slot_config/frontend \
-  export --path ./dist
+  --site-project ./deployments/mit-ol/mfe_slot_config/frontend/mitxonline \
+  --shared-src   ./deployments/mit-ol/mfe_slot_config/frontend/shared \
+  export --path ./dist/mitxonline
 
 # Dev server
 dagger call mfe watch-site \
-  --site-project ./deployments/mit-ol/mfe_slot_config/frontend \
+  --site-project ./deployments/mit-ol/mfe_slot_config/frontend/mitxonline \
+  --shared-src   ./deployments/mit-ol/mfe_slot_config/frontend/shared \
   up --ports 8080:8080
 ```
 

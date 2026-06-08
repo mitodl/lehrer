@@ -15,7 +15,7 @@ import {
  */
 export function createStyleOverrideApp(stylesheetPath: string): App {
 	return {
-		appId: `org.mitol.styleOverride.${stylesheetPath.replace(/[^a-zA-Z0-0]/g, "")}`,
+		appId: `org.mitol.styleOverride.${stylesheetPath.replace(/[^a-zA-Z0-9]/g, "")}`,
 		slots: [
 			new SlotOperation({
 				targetId: "org.openedx.frontend.slot.shell.head.v1",
@@ -23,7 +23,7 @@ export function createStyleOverrideApp(stylesheetPath: string): App {
 					{
 						op: WidgetOperationTypes.APPEND,
 						widget: {
-							id: `mitol-style-override-${stylesheetPath.replace(/[^a-zA-Z0-0]/g, "")}`,
+							id: `mitol-style-override-${stylesheetPath.replace(/[^a-zA-Z0-9]/g, "")}`,
 							component: () => {
 								// Dynamic import triggers Webpack/Vite compilation of SCSS/CSS
 								// and loads it onto the page when the app mounts.

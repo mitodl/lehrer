@@ -8,6 +8,8 @@ import {
 
 import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
+import { createMITxOnlineHeaderApp } from "@shared/header";
+import { createStyleOverrideApp } from "@shared/styles/styleLoader";
 
 import "@openedx/frontend-base/shell/style";
 
@@ -24,7 +26,9 @@ const siteConfig: SiteConfig = {
 		shellApp,
 		headerApp,
 		footerApp,
+		createStyleOverrideApp("@shared/styles/mitxonline.scss"),
 		createMITOLFooterApp(),
+		createMITxOnlineHeaderApp(),
 		instructorDashboardApp,
 	],
 };

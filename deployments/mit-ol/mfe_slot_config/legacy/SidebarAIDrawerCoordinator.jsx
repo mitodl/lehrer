@@ -85,6 +85,7 @@ const SidebarAIDrawerCoordinator = ({ courseId }) => {
     // scroll/resize so the sticky drawer never overflows the viewport bottom.
     useEffect(() => {
         const wrapper = wrapperRef.current;
+        if (!wrapper) return undefined;
 
         if (!showAIDrawer || shouldDisplayFullScreen) {
             wrapper.style.removeProperty('--ai-drawer-height');
@@ -126,7 +127,7 @@ const SidebarAIDrawerCoordinator = ({ courseId }) => {
             if (mq.matches) {
                 window.addEventListener('scroll', schedule, { passive: true });
                 window.addEventListener('resize', schedule);
-                if (!resizeObserver && wrapper.parentElement) {
+                if (!resizeObserver && wrapper.parentElement && typeof ResizeObserver !== 'undefined') {
                     resizeObserver = new ResizeObserver(schedule);
                     resizeObserver.observe(wrapper.parentElement);
                 }
