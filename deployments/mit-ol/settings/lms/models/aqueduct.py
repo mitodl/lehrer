@@ -1933,7 +1933,9 @@ class AqueductSettings(SharedAqueductSettings):
     EXPLICIT_QUEUES: dict[str, Any] = Field(default_factory=lambda: {})
     FOOTER_ORGANIZATION_IMAGE: str = Field(default="/images/logo.png")
     JWT_EXPIRATION: int = Field(default=30)
-    LEARNER_PORTAL_URL_ROOT: str = Field(default="https://learner-portal-localhost:18000")
+    LEARNER_PORTAL_URL_ROOT: str = Field(
+        default="https://learner-portal-localhost:18000"
+    )
     LOGO_URL_PNG_FOR_EMAIL: str = Field(
         default="https://courses.ci.learn.mit.edu/static/mitxonline/images/logo.png"
     )
@@ -1976,9 +1978,9 @@ class AqueductSettings(SharedAqueductSettings):
     )
     TYPESENSE_COLLECTION_PREFIX: str = Field(default="openedx_")
     TYPESENSE_ENABLED: bool = Field(default=True)
-    _YAML_ALTERNATE_WORKER_QUEUES: list[Any] = Field(default_factory=lambda: [])
-    _YAML_CELERY_QUEUES: Any = Field(default=None)  # TODO: refine type
-    _YAML_TOKENS: dict[str, Any] = Field(default_factory=lambda: {})
+    YAML_ALTERNATE_WORKER_QUEUES: list[Any] = Field(default_factory=lambda: [])
+    YAML_CELERY_QUEUES: Any = Field(default=None)  # TODO: refine type
+    YAML_TOKENS: dict[str, Any] = Field(default_factory=lambda: {})
     TRANSLATORS_GUIDE: str = Field(
         default="https://docs.openedx.org/en/latest/translators/index.html"
     )
@@ -2003,7 +2005,9 @@ class AqueductSettings(SharedAqueductSettings):
         default=None
     )  # CALLABLE DEFAULT: 'CAN_CHANGE_PERMISSIONS'
     WIKI_CAN_DELETE: str | None = Field(default=None)  # CALLABLE DEFAULT: 'CAN_DELETE'
-    WIKI_CAN_MODERATE: str | None = Field(default=None)  # CALLABLE DEFAULT: 'CAN_MODERATE'
+    WIKI_CAN_MODERATE: str | None = Field(
+        default=None
+    )  # CALLABLE DEFAULT: 'CAN_MODERATE'
     WIKI_EDITOR: str = Field(default="lms.djangoapps.course_wiki.editors.CodeMirror")
     WIKI_LINK_DEFAULT_LEVEL: int = Field(default=2)
     WIKI_LINK_LIVE_LOOKUPS: bool = Field(default=False)
