@@ -1,8 +1,4 @@
-import {
-	type App,
-	SlotOperation,
-	WidgetOperationTypes,
-} from "@openedx/frontend-base";
+import { type App, type SlotOperation, WidgetOperationTypes } from "@openedx/frontend-base";
 
 /**
  * Creates a shell-level styling app that registers a slot operation
@@ -14,30 +10,25 @@ import {
  * @param stylesheetPath Relative or absolute path to the stylesheet (e.g. "@shared/styles/mitxonline.scss")
  */
 export function createStyleOverrideApp(stylesheetPath: string): App {
+	const styleWidgetId = `mitol-style-override-${stylesheetPath.replace(/[^a-zA-Z0-9]/g, "")}`;
 	return {
 		appId: `org.mitol.styleOverride.${stylesheetPath.replace(/[^a-zA-Z0-9]/g, "")}`,
 		slots: [
-			new SlotOperation({
-				targetId: "org.openedx.frontend.slot.shell.head.v1",
-				widgetOperations: [
-					{
-						op: WidgetOperationTypes.APPEND,
-						widget: {
-							id: `mitol-style-override-${stylesheetPath.replace(/[^a-zA-Z0-9]/g, "")}`,
-							component: () => {
-								// Dynamic import triggers Webpack/Vite compilation of SCSS/CSS
-								// and loads it onto the page when the app mounts.
-								if (stylesheetPath === "@shared/styles/mitxonline.scss") {
-									import("@shared/styles/mitxonline.scss");
-								} else if (stylesheetPath === "@shared/styles/mitx.scss") {
-									import("@shared/styles/mitx.scss");
-								}
-								return null;
-							},
-						},
-					},
-				],
-			}),
-		],
+			{
+				slotId: "org.openedx.frontend.slot.shell.head.v1",
+				id: styleWidgetId,
+				op: WidgetOperationTypes.APPEND,
+				component: () => {
+					// Dynamic import triggers Webpack/Vite compilation of SCSS/CSS
+					// and loads it onto the page when the app mounts.
+					if (stylesheetPath === "@shared/styles/mitxonline.scss") {
+						import("@shared/styles/mitxonline.scss");
+					} else if (stylesheetPath === "@shared/styles/mitx.scss") {
+						import("@shared/styles/mitx.scss");
+					}
+					return null;
+				},
+			},
+		] satisfies SlotOperation[],
 	};
 }

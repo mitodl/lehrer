@@ -250,7 +250,10 @@ const AIDrawerManagerSidebar: FC = () => {
 	 */
 	const buildTranslationFn =
 		(i: typeof intl) =>
-		(key: string, vars?: Record<string, unknown>): string => {
+		(
+			key: string,
+			vars?: Record<string, string | number | boolean | null | undefined>,
+		): string => {
 			const descriptor = (
 				bundleMessages as Record<string, { id: string; defaultMessage: string }>
 			)[key];
