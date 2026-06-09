@@ -81,23 +81,20 @@ class OpenedxMfe:
             )
 
         # Start with Node.js base image
-        container = dag.container().from_(f"node:{node_version}-trixie-slim")
-
-        # Install system dependencies
         container = (
-            container.with_exec(["apt-get", "update"])
+            dag.container()
+            .from_(f"node:{node_version}-trixie-slim")
             .with_exec(
                 [
-                    "apt",
-                    "install",
-                    "-y",
-                    "python3",
-                    "python-is-python3",
-                    "build-essential",
-                    "git",
+                    "sh",
+                    "-c",
+                    "apt-get update -q && "
+                    "apt-get install -y --no-install-recommends "
+                    "git build-essential python3 python-is-python3 && "
+                    "apt-get clean && "
+                    "rm -rf /var/lib/apt/lists/*",
                 ]
             )
-            .with_exec(["apt", "clean"])
         )
 
         # Clone MFE repository
@@ -236,23 +233,20 @@ class OpenedxMfe:
             )
 
         # Start with Node.js base image
-        container = dag.container().from_(f"node:{node_version}-trixie-slim")
-
-        # Install system dependencies
         container = (
-            container.with_exec(["apt-get", "update"])
+            dag.container()
+            .from_(f"node:{node_version}-trixie-slim")
             .with_exec(
                 [
-                    "apt",
-                    "install",
-                    "-y",
-                    "python3",
-                    "python-is-python3",
-                    "build-essential",
-                    "git",
+                    "sh",
+                    "-c",
+                    "apt-get update -q && "
+                    "apt-get install -y --no-install-recommends "
+                    "git build-essential python3 python-is-python3 && "
+                    "apt-get clean && "
+                    "rm -rf /var/lib/apt/lists/*",
                 ]
             )
-            .with_exec(["apt", "clean"])
         )
 
         # Set up work directory and mount source
@@ -296,92 +290,160 @@ class OpenedxMfe:
 
         return container.as_service()
 
-    # ── OEP-65 frontend-base stubs ────────────────────────────────────────────
+    # ── OEP-65 frontend-base ─────────────────────────────────────────────────
+
+    def _oep65_base(
+        self,
+        node_version: str,
+    ) -> dagger.Container:
+        """Shared Node base container for all OEP-65 builds."""
+        return (
+            dag.container()
+            .from_(f"node:{node_version}-trixie-slim")
+            .with_exec(
+                [
+                    "sh",
+                    "-c",
+                    "apt-get update -q && "
+                    "apt-get install -y --no-install-recommends "
+                    "git build-essential python3 python-is-python3 && "
+                    "apt-get clean && "
+                    "rm -rf /var/lib/apt/lists/*",
+                ]
+            )
+        )
 
     @function
     async def build_site(
         self,
         site_project: dagger.Directory,
-        node_version: str = "22",
+        shared_src: dagger.Directory | None = None,
+        node_version: str = "24",
+        public_path: str | None = None,
     ) -> dagger.Directory:
         """Build an OEP-65 frontend-base Site Project.
 
-        A Site Project is an operator-owned repository containing a site.config.tsx
-        that declares which modules to load, along with any custom module source
-        in src/. This function runs ``openedx build`` from @openedx/frontend-base,
-        producing a deployable dist/ directory containing the Shell bundled with
-        all imported modules.
+        Runs ``openedx build`` (webpack production build) against a Site Project
+        directory.  The Site Project must contain:
+
+        - ``package.json`` with ``@openedx/frontend-base`` listed as a dependency
+        - ``site.config.build.tsx`` declaring the Shell, header, footer, and any
+          imported module library app configs
+        - ``site.config.dev.tsx`` (not used during build, but expected by the
+          webpack config resolver)
+        - ``tsconfig.json`` (required by TsconfigPathsPlugin)
+        - (optional) ``src/`` with operator module overrides
 
         Args:
-            site_project: Directory containing the Site Project. Must include:
-                - package.json with @openedx/frontend-base as a dependency
-                - site.config.build.tsx (or .jsx) declaring modules and config
-                - (optional) src/ with custom module overrides
-            node_version: Node.js version (default: 22, minimum required by frontend-base)
+            site_project: Directory containing the complete Site Project.
+            shared_src: Optional directory of shared TypeScript source mounted at
+                ``/app/site/shared``.  Use when multiple Site Projects share components
+                via a ``@shared/*`` tsconfig path alias.  The tsconfig in
+                ``site_project`` must declare ``"@shared/*": ["./shared/src/*"]``
+                under ``compilerOptions.paths``.
+            node_version: Node.js version (default: 24, as required by frontend-base
+                .nvmrc; minimum tested: 22).
+            public_path: Optional public URL prefix for assets (webpack's publicPath).
+                Used when static assets are hosted on a CDN (e.g., S3, Fastly).
+                If provided, sets the ``PUBLIC_PATH`` environment variable before build.
 
         Returns:
-            dist/ directory suitable for static hosting (CDN, S3, nginx).
+            ``dist/`` directory suitable for static hosting (CDN, S3, nginx).
 
-        See: plans/03-frontend-base-oep65.md for full implementation guide.
+        See: mfe_slot_config/frontend/AUDIT.md for verified API details.
         See: https://github.com/openedx/frontend-base
-        See: https://docs.openedx.org/projects/openedx-proposals/en/latest/architectural-decisions/oep-0065-arch-frontend-composability.html
         """
-        raise NotImplementedError(
-            "OEP-65 frontend-base Site Project builds are not yet implemented. "
-            "See plans/03-frontend-base-oep65.md for the implementation guide."
+        container = (
+            self._oep65_base(node_version)
+            .with_mounted_cache("/root/.npm", dag.cache_volume("npm-cache"))
+            .with_workdir("/app/site")
+            .with_directory("/app/site", site_project)
+        )
+        if shared_src is not None:
+            container = container.with_directory("/app/site/shared", shared_src)
+
+        build_cmd = ["npx", "openedx", "build"]
+
+        if public_path is not None:
+            container = container.with_env_variable("PUBLIC_PATH", public_path)
+
+        return (
+            container.with_exec(["npm", "install"])
+            .with_exec(build_cmd)
+            .directory("/app/site/dist")
         )
 
     @function
     async def build_federated_module(
         self,
         module_project: dagger.Directory,
-        node_version: str = "22",
+        node_version: str = "24",
     ) -> dagger.Directory:
         """Build an OEP-65 frontend-base federated module for runtime loading.
 
-        A Module Project exposes one or more application modules via webpack
-        module federation. The resulting remoteEntry.js and chunk files are
-        loaded at runtime by the Shell served from a Site Project build.
+        **Not yet implemented.** The ``openedx build:module`` CLI command does not
+        exist in ``@openedx/frontend-base`` as of ``v1.0.0-alpha.41`` (2026-04-27).
+        Module libraries are currently imported directly by Site Projects as npm
+        package dependencies and bundled at build time — they are not deployed as
+        independently loadable federated remotes at this stage.
 
         Args:
             module_project: Directory containing the Module Project. Must include:
-                - package.json with a "config" block declaring exposes entries
+                - package.json with a module library configuration
                 - src/ with the module implementations
-            node_version: Node.js version (default: 22)
+            node_version: Node.js version (default: 24)
 
         Returns:
             Directory of federated module assets (remoteEntry.js + chunks)
             to be deployed alongside or separately from the Site.
 
-        See: plans/03-frontend-base-oep65.md for full implementation guide.
+        See: mfe_slot_config/frontend/AUDIT.md for the blocking finding.
+        See: plans/03-frontend-base-oep65.md for the implementation guide.
         """
         raise NotImplementedError(
-            "OEP-65 federated module builds are not yet implemented. "
-            "See plans/03-frontend-base-oep65.md for the implementation guide."
+            "openedx build:module does not exist in @openedx/frontend-base "
+            "v1.0.0-alpha.41. Module libraries are bundled into the Site Project "
+            "at build time. See mfe_slot_config/frontend/AUDIT.md."
         )
 
     @function
     async def watch_site(
         self,
         site_project: dagger.Directory,
-        node_version: str = "22",
+        shared_src: dagger.Directory | None = None,
+        node_version: str = "24",
         port: int = 8080,
     ) -> dagger.Service:
         """Run an OEP-65 Site Project dev server with hot reload.
 
-        Equivalent to ``openedx dev`` from @openedx/frontend-base.
+        Runs ``openedx dev`` (webpack-dev-server) against a Site Project directory.
+        The Site Project must include ``site.config.dev.tsx`` — see
+        ``mfe_slot_config/frontend/AUDIT.md`` for the required structure.
 
         Args:
-            site_project: Directory containing the Site Project
-            node_version: Node.js version (default: 22)
-            port: Port to expose the dev server on (default: 8080)
+            site_project: Directory containing the Site Project.
+            shared_src: Optional directory of shared TypeScript source; mounted at
+                ``/app/site/shared`` (same contract as ``build_site``).
+            node_version: Node.js version (default: 24).
+            port: Port to expose the dev server on (default: 8080).
 
         Returns:
-            Service running the site dev server with hot reload.
+            Service running the webpack-dev-server at the given port.
 
-        See: plans/03-frontend-base-oep65.md for full implementation guide.
+        See: mfe_slot_config/frontend/AUDIT.md for verified API details.
         """
-        raise NotImplementedError(
-            "OEP-65 site dev server is not yet implemented. "
-            "See plans/03-frontend-base-oep65.md for the implementation guide."
+        container = (
+            self._oep65_base(node_version)
+            .with_mounted_cache("/root/.npm", dag.cache_volume("npm-cache"))
+            .with_workdir("/app/site")
+            .with_directory("/app/site", site_project)
+        )
+        if shared_src is not None:
+            container = container.with_directory("/app/site/shared", shared_src)
+        return (
+            container.with_env_variable("PORT", str(port))
+            .with_exec(["npm", "install"])
+            .with_exposed_port(port)
+            .with_exec(["npx", "openedx", "dev"])
+            .as_service()
         )

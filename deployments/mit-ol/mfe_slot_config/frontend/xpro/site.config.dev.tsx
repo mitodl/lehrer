@@ -1,0 +1,36 @@
+import {
+	footerApp,
+	headerApp,
+	shellApp,
+	EnvironmentTypes,
+	type SiteConfig,
+} from "@openedx/frontend-base";
+
+import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
+import { createMITOLFooterApp } from "@shared/footer";
+import { createXProHeaderApp } from "@shared/header";
+import { createStyleOverrideApp } from "@shared/styles/styleLoader";
+
+import "@openedx/frontend-base/shell/style";
+
+const siteConfig: SiteConfig = {
+	siteId: "xpro",
+	siteName: "MIT xPRO (dev)",
+	baseUrl: "http://apps.local.openedx.io:8080",
+	lmsBaseUrl: "http://local.openedx.io:8000",
+	loginUrl: "http://local.openedx.io:8000/login",
+	logoutUrl: "http://local.openedx.io:8000/logout",
+	environment: EnvironmentTypes.DEVELOPMENT,
+	runtimeConfigJsonUrl: "/api/frontend_site_config/v1/",
+	apps: [
+		shellApp,
+		headerApp,
+		footerApp,
+		createStyleOverrideApp("@shared/styles/mitx.scss"),
+		createMITOLFooterApp(),
+		createXProHeaderApp(),
+		instructorDashboardApp,
+	],
+};
+
+export default siteConfig;

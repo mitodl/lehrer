@@ -1,0 +1,26 @@
+{
+  "name": "@mitodl/openedx-site-mitxonline",
+  "version": "0.1.0",
+  "private": true,
+  "browserslist": [
+    "extends @edx/browserslist-config"
+  ],
+  "scripts": {
+    "build": "openedx build",
+    "dev": "openedx dev",
+    "serve": "openedx serve"
+  },
+  "dependencies": {
+    "@openedx/frontend-app-instructor-dashboard": "^1.0.0-alpha",
+    "@openedx/frontend-base": "1.0.0-alpha.41",
+    "@openedx/paragon": "^23",
+    "@tanstack/react-query": "^5",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-router": "^6",
+    "react-router-dom": "^6"
+  },
+  "devDependencies": {
+    "@edx/browserslist-config": "^1.5.0"
+  }
+}
