@@ -274,18 +274,22 @@ class OpenedxMfe:
         import yaml
 
         raw = await slot_config.file(config_file).contents()
-        config = yaml.safe_load(raw) or {}
+        config = yaml.safe_load(raw)
+        # A present-but-empty YAML key parses as None, so coalesce each level to
+        # an empty container rather than assuming a default only fills absent keys.
+        if not isinstance(config, dict):
+            config = {}
 
-        styles_file = config.get("styles", {}).get(deployment_name)
-        mfe_cfg = config.get("mfes", {}).get(mfe_name.lower(), {})
+        styles_file = (config.get("styles") or {}).get(deployment_name)
+        mfe_cfg = (config.get("mfes") or {}).get(mfe_name.lower()) or {}
 
         extra_slot_files: list[str] = []
-        for item in mfe_cfg.get("extra_slot_files", []):
+        for item in mfe_cfg.get("extra_slot_files") or []:
             if isinstance(item, str):
                 extra_slot_files.append(item)
                 continue
             dest = item["dest"]
-            variants = item.get("by_release", {})
+            variants = item.get("by_release") or {}
             src = variants.get(release_name.lower()) or variants.get("default")
             if src is None:
                 raise ValueError(
@@ -303,7 +307,7 @@ class OpenedxMfe:
             slot_config=slot_config,
             extra_slot_files=extra_slot_files,
             styles_file=styles_file,
-            extra_npm_bundles=list(mfe_cfg.get("extra_npm_bundles", [])),
+            extra_npm_bundles=list(mfe_cfg.get("extra_npm_bundles") or []),
             env_vars=env_vars,
             pre_build_commands=pre_build_commands,
         )
