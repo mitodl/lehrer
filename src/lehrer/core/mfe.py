@@ -33,9 +33,11 @@ class OpenedxMfe:
         node_version: str = "20.18.0",
         deployment_name: str = "default",
         slot_config: dagger.Directory | None = None,
-        enable_ai_drawer: bool = False,
+        extra_slot_files: list[str] | None = None,
         styles_file: str | None = None,
         extra_npm_bundles: list[str] | None = None,
+        env_vars: list[str] | None = None,
+        pre_build_commands: list[str] | None = None,
     ) -> dagger.Directory:
         """Build an Open edX Micro Frontend (MFE) — legacy webpack build
 
@@ -49,10 +51,18 @@ class OpenedxMfe:
                 ``{deployment_name}/common-mfe-config.env.jsx`` is loaded.
                 Default: ``"default"``.
             slot_config: Directory containing slot configuration files.
-                **Required** — pass the directory from your operator slot config
-                pass the directory from your operator config, e.g. ``--slot-config /path/to/mfe_slot_config/legacy``.
-            enable_ai_drawer: Enable AI drawer components (for learning MFE)
-            styles_file: Deployment-specific styles file to include
+                **Required** — pass the directory from your operator slot config,
+                e.g. ``--slot-config /path/to/mfe_slot_config/legacy``.
+            extra_slot_files: Additional files to inject from ``slot_config`` into
+                the MFE root before building.  Each entry is either
+                ``"filename"`` (source and destination share the same name) or
+                ``"source:dest"`` (rename on copy).  Example::
+
+                    ["CustomBanner.jsx",
+                     "MyComponent.v2.jsx:MyComponent.jsx"]
+
+            styles_file: A file from ``slot_config`` to copy into the MFE root
+                as a deployment-specific stylesheet override.
             extra_npm_bundles: Additional npm packages to pack and copy as
                 static bundles.  Each entry has the format
                 ``"npm_package_spec|target_directory"``, e.g.::
@@ -62,14 +72,15 @@ class OpenedxMfe:
                 The package is packed with ``npm pack``, extracted, and its
                 ``package/dist/bundles/*`` contents are copied to
                 ``target_directory``.  Default: empty list — no extra bundles.
+            env_vars: Build-time environment variables in ``KEY=VALUE`` form.
+                Applied before ``npm run build`` so webpack bakes them in via
+                ``process.env.*``.
+            pre_build_commands: Shell commands to run after ``npm install`` but
+                before ``npm run build``.  Use for translation pulls, e.g.:
+                ``["export ATLAS_OPTIONS='...'", "make pull_translations"]``.
 
         Returns:
             Directory containing built MFE dist files
-
-        Note:
-            Set environment variables using with_env_variable() on the returned container.
-            For example:
-              dir = await build_legacy(...).with_env_variable("LMS_BASE_URL", "...").directory("/app/mfe/dist")
         """
         if extra_npm_bundles is None:
             extra_npm_bundles = []
@@ -140,22 +151,22 @@ class OpenedxMfe:
                 "/app/mfe/common-mfe-config.env.jsx", common_config_file
             )
 
-        # Copy AI drawer components if enabled
-        if enable_ai_drawer and is_learning_mfe:
-            ai_drawer_sidebar = slot_config.file("AIDrawerManagerSidebar.jsx")
-            container = container.with_file(
-                "/app/mfe/AIDrawerManagerSidebar.jsx", ai_drawer_sidebar
-            )
-
-            sidebar_coordinator = slot_config.file("SidebarAIDrawerCoordinator.jsx")
-            container = container.with_file(
-                "/app/mfe/SidebarAIDrawerCoordinator.jsx", sidebar_coordinator
-            )
+        # Inject operator-specific slot files
+        for spec in extra_slot_files or []:
+            src, _, dest = spec.partition(":")
+            if not dest:
+                dest = src
+            container = container.with_file(f"/app/mfe/{dest}", slot_config.file(src))
 
         # Copy styles file if specified
         if styles_file:
             styles = slot_config.file(styles_file)
             container = container.with_file(f"/app/mfe/{styles_file}", styles)
+
+        # Apply build-time env vars (baked in by webpack via process.env.*)
+        for kv in env_vars or []:
+            key, _, val = kv.partition("=")
+            container = container.with_env_variable(key, val)
 
         # Install npm dependencies
         container = container.with_exec(["npm", "install"])
@@ -183,6 +194,10 @@ class OpenedxMfe:
                 )
             )
 
+        # Run pre-build commands (e.g. pull translations via openedx-atlas)
+        if pre_build_commands:
+            container = container.with_exec(["sh", "-c", "\n".join(pre_build_commands)])
+
         # Install webpack
         container = container.with_exec(["npm", "install", "webpack"])
 
@@ -193,6 +208,105 @@ class OpenedxMfe:
 
         # Return the dist directory
         return container.directory("/app/mfe/dist")
+
+    @function
+    async def build_legacy_configured(
+        self,
+        mfe_name: str,
+        mfe_repo: str,
+        slot_config: dagger.Directory,
+        deployment_name: str = "default",
+        release_name: str = "",
+        config_file: str = "build_config.yaml",
+        mfe_branch: str = "master",
+        node_version: str = "20.18.0",
+        env_vars: list[str] | None = None,
+        pre_build_commands: list[str] | None = None,
+    ) -> dagger.Directory:
+        """Build a legacy MFE, resolving customizations from a YAML config file.
+
+        This is the declarative counterpart to :func:`build_legacy`.  Instead of
+        passing ``extra_slot_files`` / ``styles_file`` / ``extra_npm_bundles``
+        explicitly, an operator describes them once in a ``build_config.yaml``
+        living alongside their slot configuration.  The resolved values are
+        forwarded to :func:`build_legacy`, so the build behaviour is identical.
+
+        Config schema (all keys optional)::
+
+            # Per-deployment stylesheet override copied into the MFE root.
+            styles:
+              <deployment_name>: <filename in slot_config>
+
+            # Per-MFE customizations keyed by MFE application name.
+            mfes:
+              <mfe_name>:
+                # Files copied from slot_config into the MFE root.  A plain
+                # string copies as-is; a mapping picks the source by release
+                # name and copies it to `dest`.
+                extra_slot_files:
+                  - SomeComponent.jsx
+                  - dest: Coordinator.jsx
+                    by_release:
+                      <release_name>: Coordinator.special.jsx
+                      default: Coordinator.jsx
+                # Pre-built npm bundles (see build_legacy.extra_npm_bundles).
+                extra_npm_bundles:
+                  - "@org/pkg@^1.0.0|public/static/pkg"
+
+        Args:
+            mfe_name: MFE application name (e.g. ``learning``, ``discussions``).
+            mfe_repo: Git repository URL for the MFE.
+            slot_config: Directory containing slot configuration files and the
+                ``build_config.yaml`` named by ``config_file``.
+            deployment_name: Deployment name; selects the ``styles`` entry and
+                ``{deployment_name}/common-mfe-config.env.jsx``.
+            release_name: Open edX release name; selects ``by_release`` variants.
+            config_file: Name of the YAML config inside ``slot_config``
+                (default: ``build_config.yaml``).
+            mfe_branch: Git branch (default: ``master``).
+            node_version: Node.js version (default: ``20.18.0``).
+            env_vars: Build-time environment variables in ``KEY=VALUE`` form.
+            pre_build_commands: Shell commands run after ``npm install``.
+
+        Returns:
+            Directory containing built MFE dist files.
+        """
+        import yaml
+
+        raw = await slot_config.file(config_file).contents()
+        config = yaml.safe_load(raw) or {}
+
+        styles_file = config.get("styles", {}).get(deployment_name)
+        mfe_cfg = config.get("mfes", {}).get(mfe_name.lower(), {})
+
+        extra_slot_files: list[str] = []
+        for item in mfe_cfg.get("extra_slot_files", []):
+            if isinstance(item, str):
+                extra_slot_files.append(item)
+                continue
+            dest = item["dest"]
+            variants = item.get("by_release", {})
+            src = variants.get(release_name.lower()) or variants.get("default")
+            if src is None:
+                raise ValueError(
+                    f"No source for {dest!r} matching release {release_name!r} "
+                    f"and no 'default' variant in {config_file}"
+                )
+            extra_slot_files.append(f"{src}:{dest}")
+
+        return await self.build_legacy(
+            mfe_name=mfe_name,
+            mfe_repo=mfe_repo,
+            mfe_branch=mfe_branch,
+            node_version=node_version,
+            deployment_name=deployment_name,
+            slot_config=slot_config,
+            extra_slot_files=extra_slot_files,
+            styles_file=styles_file,
+            extra_npm_bundles=list(mfe_cfg.get("extra_npm_bundles", [])),
+            env_vars=env_vars,
+            pre_build_commands=pre_build_commands,
+        )
 
     @function
     async def watch_legacy(
