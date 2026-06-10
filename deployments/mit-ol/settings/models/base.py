@@ -827,6 +827,8 @@ class SharedAqueductSettings(BaseSettings):
         default=None
     )  # OPAQUE: original str value is not serialisable
     COURSE_KEY_REGEX: str = Field(default="(?:[^/+]+(/|\\+)[^/+]+(/|\\+)[^/?]+)")
+    COURSE_LANGUAGE_ANON_THROTTLE_RATE: str = Field(default="30/min")
+    COURSE_LANGUAGE_USER_THROTTLE_RATE: str = Field(default="30/min")
     COURSE_LIVE_GLOBAL_CREDENTIALS: dict[str, Any] = Field(default_factory=lambda: {})
     COURSE_MODE_DEFAULTS: dict[str, Any] | None = Field(default=None)
     COURSE_OLX_VALIDATION_IGNORE_LIST: Any = Field(default=None)  # TODO: refine type
