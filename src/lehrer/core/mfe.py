@@ -28,11 +28,12 @@ class OpenedxMfe:
     async def build_legacy(
         self,
         mfe_name: str,
-        mfe_repo: str,
+        mfe_repo: str = "",
         mfe_branch: str = "master",
         node_version: str = "20.18.0",
         deployment_name: str = "default",
         slot_config: dagger.Directory | None = None,
+        mfe_source: dagger.Directory | None = None,
         extra_slot_files: list[str] | None = None,
         styles_file: str | None = None,
         extra_npm_bundles: list[str] | None = None,
@@ -43,8 +44,14 @@ class OpenedxMfe:
 
         Args:
             mfe_name: MFE application name (e.g., 'learning', 'discussions', 'account')
-            mfe_repo: Git repository URL for the MFE
-            mfe_branch: Git branch to build from (default: master)
+            mfe_repo: Git repository URL for the MFE.  Used to clone the source
+                when ``mfe_source`` is not supplied; ignored otherwise.
+            mfe_branch: Git branch to clone when ``mfe_source`` is not supplied
+                (default: master)
+            mfe_source: Pre-checked-out MFE source directory.  When provided, the
+                build uses it verbatim and skips cloning — pass this to build the
+                exact revision pinned by an upstream CI step rather than whatever
+                ``mfe_branch`` points at when the build runs.
             node_version: Node.js version to use (default: 20.18.0)
             deployment_name: Deployment name used to select config files from
                 ``slot_config``.  Determines which
@@ -91,6 +98,12 @@ class OpenedxMfe:
                 "for this build (e.g. --slot-config /path/to/mfe_slot_config)"
             )
 
+        if mfe_source is None and not mfe_repo:
+            raise ValueError(
+                "either mfe_source (a pre-checked-out directory) or mfe_repo "
+                "(a git URL to clone) is required"
+            )
+
         # Start with Node.js base image
         container = (
             dag.container()
@@ -108,23 +121,30 @@ class OpenedxMfe:
             )
         )
 
-        # Clone MFE repository
-        container = (
-            container.with_workdir("/app")
-            .with_exec(
-                [
-                    "git",
-                    "clone",
-                    "--branch",
-                    mfe_branch,
-                    "--depth",
-                    "1",
-                    mfe_repo,
-                    "mfe",
-                ]
+        # Obtain MFE source: use the pinned checkout if given, else clone.
+        if mfe_source is not None:
+            container = (
+                container.with_workdir("/app")
+                .with_directory("/app/mfe", mfe_source)
+                .with_workdir("/app/mfe")
             )
-            .with_workdir("/app/mfe")
-        )
+        else:
+            container = (
+                container.with_workdir("/app")
+                .with_exec(
+                    [
+                        "git",
+                        "clone",
+                        "--branch",
+                        mfe_branch,
+                        "--depth",
+                        "1",
+                        mfe_repo,
+                        "mfe",
+                    ]
+                )
+                .with_workdir("/app/mfe")
+            )
 
         # Determine config file to use
         is_learning_mfe = mfe_name.lower() == "learning"
@@ -213,8 +233,9 @@ class OpenedxMfe:
     async def build_legacy_configured(
         self,
         mfe_name: str,
-        mfe_repo: str,
         slot_config: dagger.Directory,
+        mfe_repo: str = "",
+        mfe_source: dagger.Directory | None = None,
         deployment_name: str = "default",
         release_name: str = "",
         config_file: str = "build_config.yaml",
@@ -255,9 +276,13 @@ class OpenedxMfe:
 
         Args:
             mfe_name: MFE application name (e.g. ``learning``, ``discussions``).
-            mfe_repo: Git repository URL for the MFE.
             slot_config: Directory containing slot configuration files and the
                 ``build_config.yaml`` named by ``config_file``.
+            mfe_repo: Git repository URL for the MFE.  Used to clone the source
+                when ``mfe_source`` is not supplied; ignored otherwise.
+            mfe_source: Pre-checked-out MFE source directory.  When provided, the
+                build uses it verbatim and skips cloning (see
+                :func:`build_legacy`).
             deployment_name: Deployment name; selects the ``styles`` entry and
                 ``{deployment_name}/common-mfe-config.env.jsx``.
             release_name: Open edX release name; selects ``by_release`` variants.
@@ -301,6 +326,7 @@ class OpenedxMfe:
         return await self.build_legacy(
             mfe_name=mfe_name,
             mfe_repo=mfe_repo,
+            mfe_source=mfe_source,
             mfe_branch=mfe_branch,
             node_version=node_version,
             deployment_name=deployment_name,
