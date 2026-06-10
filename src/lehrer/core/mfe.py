@@ -4,8 +4,28 @@ Contains the legacy per-MFE build functions and forward-looking OEP-65
 frontend-base stubs.
 """
 
+import posixpath
+
 import dagger
 from dagger import dag, function, object_type
+
+
+def _safe_mfe_path(path: str, *, field: str) -> str:
+    """Normalize ``path`` and confirm it stays within the MFE build root.
+
+    Destinations come from operator config, so reject absolute paths or ones
+    that escape ``/app/mfe`` via ``..`` before they are written.
+    """
+    normalized = posixpath.normpath(path)
+    if (
+        posixpath.isabs(normalized)
+        or normalized == ".."
+        or normalized.startswith("../")
+    ):
+        raise ValueError(
+            f"{field} {path!r} must be a relative path within the MFE root"
+        )
+    return normalized
 
 
 @object_type
@@ -176,16 +196,23 @@ class OpenedxMfe:
             src, _, dest = spec.partition(":")
             if not dest:
                 dest = src
+            dest = _safe_mfe_path(dest, field="extra_slot_files destination")
             container = container.with_file(f"/app/mfe/{dest}", slot_config.file(src))
 
         # Copy styles file if specified
         if styles_file:
+            safe_styles = _safe_mfe_path(styles_file, field="styles_file")
             styles = slot_config.file(styles_file)
-            container = container.with_file(f"/app/mfe/{styles_file}", styles)
+            container = container.with_file(f"/app/mfe/{safe_styles}", styles)
 
         # Apply build-time env vars (baked in by webpack via process.env.*)
         for kv in env_vars or []:
-            key, _, val = kv.partition("=")
+            key, sep, val = kv.partition("=")
+            if not sep or not key:
+                raise ValueError(
+                    f"env_vars entry {kv!r} must be in KEY=VALUE form "
+                    "with a non-empty key"
+                )
             container = container.with_env_variable(key, val)
 
         # Install npm dependencies
@@ -300,12 +327,18 @@ class OpenedxMfe:
 
         raw = await slot_config.file(config_file).contents()
         config = yaml.safe_load(raw)
-        # A present-but-empty YAML key parses as None, so coalesce each level to
-        # an empty container rather than assuming a default only fills absent keys.
-        if not isinstance(config, dict):
+        # An empty file is valid (no customizations); any other non-mapping is a
+        # mistake worth surfacing rather than silently ignoring.
+        if config is None:
             config = {}
+        elif not isinstance(config, dict):
+            raise ValueError(
+                f"{config_file} must contain a top-level YAML mapping, "
+                f"got {type(config).__name__}"
+            )
 
-        styles_file = (config.get("styles") or {}).get(deployment_name)
+        styles = config.get("styles") or {}
+        styles_file = styles.get(deployment_name)
         mfe_cfg = (config.get("mfes") or {}).get(mfe_name.lower()) or {}
 
         extra_slot_files: list[str] = []
@@ -313,8 +346,17 @@ class OpenedxMfe:
             if isinstance(item, str):
                 extra_slot_files.append(item)
                 continue
+            if not isinstance(item, dict) or "dest" not in item:
+                raise ValueError(
+                    f"extra_slot_files entry {item!r} in {config_file} must be "
+                    "a string or a mapping with a 'dest' key"
+                )
             dest = item["dest"]
             variants = item.get("by_release") or {}
+            if not isinstance(variants, dict):
+                raise ValueError(
+                    f"by_release for {dest!r} in {config_file} must be a mapping"
+                )
             src = variants.get(release_name.lower()) or variants.get("default")
             if src is None:
                 raise ValueError(
