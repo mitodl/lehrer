@@ -379,6 +379,45 @@ The `mfe_slot_config` directory contains:
 
 These files are copied into the MFE build to customize behavior per deployment.
 
+### Config-driven legacy builds (`build-legacy-configured`)
+
+Rather than passing `--extra-slot-files`, `--styles-file`, and
+`--extra-npm-bundles` on every invocation, an operator can describe their
+customizations once in a `build_config.yaml` that lives alongside the slot
+configuration. `build-legacy-configured` reads it and resolves the explicit
+`build-legacy` arguments per deployment and Open edX release:
+
+```bash
+dagger call mfe build-legacy-configured \
+  --mfe-name learning \
+  --slot-config ./mfe_slot_config/legacy \
+  --mfe-source ./frontend-app-learning \
+  --deployment-name mitxonline \
+  --release-name master \
+  export --path ./dist
+```
+
+The config structure is defined by the Pydantic models in
+`src/lehrer/core/mfe_config.py`, which are both the runtime validation layer
+(a malformed file fails fast with field-level errors) and the source of a
+publishable JSON Schema.
+
+### Validating `build_config.yaml`
+
+Generate the JSON Schema for editor or agentic validation:
+
+```bash
+dagger call mfe build-config-schema > build_config.schema.json
+```
+
+A copy generated from the models is committed at the repo root as
+`build_config.schema.json` (kept in sync by a pre-commit hook). Reference it
+from the top of a `build_config.yaml` so editors validate as you type:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/mitodl/lehrer/main/build_config.schema.json
+```
+
 ## Composing individual build steps
 
 All build parameters are explicit — no implicit file copying from a build context.

@@ -1,10 +1,14 @@
 ---
+# yaml-language-server: $schema=../../../../build_config.schema.json
 # MIT Open Learning legacy MFE build customizations.
 #
 # Consumed by lehrer's generic OpenedxMfe.build_legacy_configured.  Pipelines
 # call `dagger call mfe build-legacy-configured` with --deployment-name and
 # --release-name; the mappings below are resolved into the explicit
 # build_legacy arguments (extra_slot_files / styles_file / extra_npm_bundles).
+#
+# The $schema modeline validates this file in editors and agentic tools.
+# Regenerate the schema with `dagger call mfe build-config-schema`.
 
 # Per-deployment stylesheet override copied into the MFE root.
 styles:
@@ -18,7 +22,7 @@ mfes:
     extra_slot_files:
     - AIDrawerManagerSidebar.jsx
     - ResponsiveCourseTabs.jsx
-      # The AI-drawer coordinator ships in two variants; pick by release.
+        # The AI-drawer coordinator ships in two variants; pick by release.
     - dest: SidebarAIDrawerCoordinator.jsx
       by_release:
         ulmo: SidebarAIDrawerCoordinator.ulmo.jsx

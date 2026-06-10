@@ -8,6 +8,9 @@ import posixpath
 
 import dagger
 from dagger import dag, function, object_type
+from pydantic import ValidationError
+
+from lehrer.core.mfe_config import BuildConfig, json_schema
 
 
 def _safe_mfe_path(path: str, *, field: str) -> str:
@@ -279,6 +282,11 @@ class OpenedxMfe:
         living alongside their slot configuration.  The resolved values are
         forwarded to :func:`build_legacy`, so the build behaviour is identical.
 
+        The config is validated against
+        :class:`~lehrer.core.mfe_config.BuildConfig`; run
+        ``dagger call mfe build-config-schema`` for a JSON Schema operators can
+        wire into their editor or agentic tooling.
+
         Config schema (all keys optional)::
 
             # Per-deployment stylesheet override copied into the MFE root.
@@ -326,44 +334,15 @@ class OpenedxMfe:
         import yaml
 
         raw = await slot_config.file(config_file).contents()
-        config = yaml.safe_load(raw)
-        # An empty file is valid (no customizations); any other non-mapping is a
-        # mistake worth surfacing rather than silently ignoring.
-        if config is None:
-            config = {}
-        elif not isinstance(config, dict):
-            raise ValueError(
-                f"{config_file} must contain a top-level YAML mapping, "
-                f"got {type(config).__name__}"
-            )
+        # An empty file is valid (no customizations); anything malformed is
+        # surfaced by BuildConfig as a field-level validation error.
+        try:
+            config = BuildConfig.model_validate(yaml.safe_load(raw) or {})
+        except ValidationError as exc:
+            msg = f"invalid {config_file}: {exc}"
+            raise ValueError(msg) from exc
 
-        styles = config.get("styles") or {}
-        styles_file = styles.get(deployment_name)
-        mfe_cfg = (config.get("mfes") or {}).get(mfe_name.lower()) or {}
-
-        extra_slot_files: list[str] = []
-        for item in mfe_cfg.get("extra_slot_files") or []:
-            if isinstance(item, str):
-                extra_slot_files.append(item)
-                continue
-            if not isinstance(item, dict) or "dest" not in item:
-                raise ValueError(
-                    f"extra_slot_files entry {item!r} in {config_file} must be "
-                    "a string or a mapping with a 'dest' key"
-                )
-            dest = item["dest"]
-            variants = item.get("by_release") or {}
-            if not isinstance(variants, dict):
-                raise ValueError(
-                    f"by_release for {dest!r} in {config_file} must be a mapping"
-                )
-            src = variants.get(release_name.lower()) or variants.get("default")
-            if src is None:
-                raise ValueError(
-                    f"No source for {dest!r} matching release {release_name!r} "
-                    f"and no 'default' variant in {config_file}"
-                )
-            extra_slot_files.append(f"{src}:{dest}")
+        mfe_cfg = config.mfe(mfe_name)
 
         return await self.build_legacy(
             mfe_name=mfe_name,
@@ -373,12 +352,24 @@ class OpenedxMfe:
             node_version=node_version,
             deployment_name=deployment_name,
             slot_config=slot_config,
-            extra_slot_files=extra_slot_files,
-            styles_file=styles_file,
-            extra_npm_bundles=list(mfe_cfg.get("extra_npm_bundles") or []),
+            extra_slot_files=mfe_cfg.resolve_extra_slot_files(release_name),
+            styles_file=config.styles.get(deployment_name),
+            extra_npm_bundles=list(mfe_cfg.extra_npm_bundles),
             env_vars=env_vars,
             pre_build_commands=pre_build_commands,
         )
+
+    @function
+    def build_config_schema(self) -> str:
+        """Return the JSON Schema for ``build_config.yaml`` as JSON text.
+
+        Operators can publish this for editor and agentic validation, e.g.::
+
+            dagger call mfe build-config-schema > build_config.schema.json
+        """
+        import json
+
+        return json.dumps(json_schema(), indent=2)
 
     @function
     async def watch_legacy(
