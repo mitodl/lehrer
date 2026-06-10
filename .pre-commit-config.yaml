@@ -20,6 +20,7 @@ repos:
         sdk/
       )
   - id: check-added-large-files
+    args: [--maxkb=1024]
   - id: check-merge-conflict
   - id: check-toml
   - id: debug-statements
