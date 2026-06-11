@@ -4,8 +4,31 @@ Contains the legacy per-MFE build functions and forward-looking OEP-65
 frontend-base stubs.
 """
 
+import posixpath
+
 import dagger
 from dagger import dag, function, object_type
+from pydantic import ValidationError
+
+from lehrer.core.mfe_config import BuildConfig, json_schema
+
+
+def _safe_mfe_path(path: str, *, field: str) -> str:
+    """Normalize ``path`` and confirm it stays within the MFE build root.
+
+    Destinations come from operator config, so reject absolute paths or ones
+    that escape ``/app/mfe`` via ``..`` before they are written.
+    """
+    normalized = posixpath.normpath(path)
+    if (
+        posixpath.isabs(normalized)
+        or normalized == ".."
+        or normalized.startswith("../")
+    ):
+        raise ValueError(
+            f"{field} {path!r} must be a relative path within the MFE root"
+        )
+    return normalized
 
 
 @object_type
@@ -28,31 +51,48 @@ class OpenedxMfe:
     async def build_legacy(
         self,
         mfe_name: str,
-        mfe_repo: str,
+        mfe_repo: str = "",
         mfe_branch: str = "master",
         node_version: str = "20.18.0",
         deployment_name: str = "default",
         slot_config: dagger.Directory | None = None,
-        enable_ai_drawer: bool = False,
+        mfe_source: dagger.Directory | None = None,
+        extra_slot_files: list[str] | None = None,
         styles_file: str | None = None,
         extra_npm_bundles: list[str] | None = None,
+        env_vars: list[str] | None = None,
+        pre_build_commands: list[str] | None = None,
     ) -> dagger.Directory:
         """Build an Open edX Micro Frontend (MFE) — legacy webpack build
 
         Args:
             mfe_name: MFE application name (e.g., 'learning', 'discussions', 'account')
-            mfe_repo: Git repository URL for the MFE
-            mfe_branch: Git branch to build from (default: master)
+            mfe_repo: Git repository URL for the MFE.  Used to clone the source
+                when ``mfe_source`` is not supplied; ignored otherwise.
+            mfe_branch: Git branch to clone when ``mfe_source`` is not supplied
+                (default: master)
+            mfe_source: Pre-checked-out MFE source directory.  When provided, the
+                build uses it verbatim and skips cloning — pass this to build the
+                exact revision pinned by an upstream CI step rather than whatever
+                ``mfe_branch`` points at when the build runs.
             node_version: Node.js version to use (default: 20.18.0)
             deployment_name: Deployment name used to select config files from
                 ``slot_config``.  Determines which
                 ``{deployment_name}/common-mfe-config.env.jsx`` is loaded.
                 Default: ``"default"``.
             slot_config: Directory containing slot configuration files.
-                **Required** — pass the directory from your operator slot config
-                pass the directory from your operator config, e.g. ``--slot-config /path/to/mfe_slot_config/legacy``.
-            enable_ai_drawer: Enable AI drawer components (for learning MFE)
-            styles_file: Deployment-specific styles file to include
+                **Required** — pass the directory from your operator slot config,
+                e.g. ``--slot-config /path/to/mfe_slot_config/legacy``.
+            extra_slot_files: Additional files to inject from ``slot_config`` into
+                the MFE root before building.  Each entry is either
+                ``"filename"`` (source and destination share the same name) or
+                ``"source:dest"`` (rename on copy).  Example::
+
+                    ["CustomBanner.jsx",
+                     "MyComponent.v2.jsx:MyComponent.jsx"]
+
+            styles_file: A file from ``slot_config`` to copy into the MFE root
+                as a deployment-specific stylesheet override.
             extra_npm_bundles: Additional npm packages to pack and copy as
                 static bundles.  Each entry has the format
                 ``"npm_package_spec|target_directory"``, e.g.::
@@ -62,14 +102,15 @@ class OpenedxMfe:
                 The package is packed with ``npm pack``, extracted, and its
                 ``package/dist/bundles/*`` contents are copied to
                 ``target_directory``.  Default: empty list — no extra bundles.
+            env_vars: Build-time environment variables in ``KEY=VALUE`` form.
+                Applied before ``npm run build`` so webpack bakes them in via
+                ``process.env.*``.
+            pre_build_commands: Shell commands to run after ``npm install`` but
+                before ``npm run build``.  Use for translation pulls, e.g.:
+                ``["export ATLAS_OPTIONS='...'", "make pull_translations"]``.
 
         Returns:
             Directory containing built MFE dist files
-
-        Note:
-            Set environment variables using with_env_variable() on the returned container.
-            For example:
-              dir = await build_legacy(...).with_env_variable("LMS_BASE_URL", "...").directory("/app/mfe/dist")
         """
         if extra_npm_bundles is None:
             extra_npm_bundles = []
@@ -78,6 +119,12 @@ class OpenedxMfe:
             raise ValueError(
                 "slot_config is required — pass the MFE slot configuration directory "
                 "for this build (e.g. --slot-config /path/to/mfe_slot_config)"
+            )
+
+        if mfe_source is None and not mfe_repo:
+            raise ValueError(
+                "either mfe_source (a pre-checked-out directory) or mfe_repo "
+                "(a git URL to clone) is required"
             )
 
         # Start with Node.js base image
@@ -97,23 +144,30 @@ class OpenedxMfe:
             )
         )
 
-        # Clone MFE repository
-        container = (
-            container.with_workdir("/app")
-            .with_exec(
-                [
-                    "git",
-                    "clone",
-                    "--branch",
-                    mfe_branch,
-                    "--depth",
-                    "1",
-                    mfe_repo,
-                    "mfe",
-                ]
+        # Obtain MFE source: use the pinned checkout if given, else clone.
+        if mfe_source is not None:
+            container = (
+                container.with_workdir("/app")
+                .with_directory("/app/mfe", mfe_source)
+                .with_workdir("/app/mfe")
             )
-            .with_workdir("/app/mfe")
-        )
+        else:
+            container = (
+                container.with_workdir("/app")
+                .with_exec(
+                    [
+                        "git",
+                        "clone",
+                        "--branch",
+                        mfe_branch,
+                        "--depth",
+                        "1",
+                        mfe_repo,
+                        "mfe",
+                    ]
+                )
+                .with_workdir("/app/mfe")
+            )
 
         # Determine config file to use
         is_learning_mfe = mfe_name.lower() == "learning"
@@ -140,22 +194,29 @@ class OpenedxMfe:
                 "/app/mfe/common-mfe-config.env.jsx", common_config_file
             )
 
-        # Copy AI drawer components if enabled
-        if enable_ai_drawer and is_learning_mfe:
-            ai_drawer_sidebar = slot_config.file("AIDrawerManagerSidebar.jsx")
-            container = container.with_file(
-                "/app/mfe/AIDrawerManagerSidebar.jsx", ai_drawer_sidebar
-            )
-
-            sidebar_coordinator = slot_config.file("SidebarAIDrawerCoordinator.jsx")
-            container = container.with_file(
-                "/app/mfe/SidebarAIDrawerCoordinator.jsx", sidebar_coordinator
-            )
+        # Inject operator-specific slot files
+        for spec in extra_slot_files or []:
+            src, _, dest = spec.partition(":")
+            if not dest:
+                dest = src
+            dest = _safe_mfe_path(dest, field="extra_slot_files destination")
+            container = container.with_file(f"/app/mfe/{dest}", slot_config.file(src))
 
         # Copy styles file if specified
         if styles_file:
+            safe_styles = _safe_mfe_path(styles_file, field="styles_file")
             styles = slot_config.file(styles_file)
-            container = container.with_file(f"/app/mfe/{styles_file}", styles)
+            container = container.with_file(f"/app/mfe/{safe_styles}", styles)
+
+        # Apply build-time env vars (baked in by webpack via process.env.*)
+        for kv in env_vars or []:
+            key, sep, val = kv.partition("=")
+            if not sep or not key:
+                raise ValueError(
+                    f"env_vars entry {kv!r} must be in KEY=VALUE form "
+                    "with a non-empty key"
+                )
+            container = container.with_env_variable(key, val)
 
         # Install npm dependencies
         container = container.with_exec(["npm", "install"])
@@ -183,6 +244,10 @@ class OpenedxMfe:
                 )
             )
 
+        # Run pre-build commands (e.g. pull translations via openedx-atlas)
+        if pre_build_commands:
+            container = container.with_exec(["sh", "-c", "\n".join(pre_build_commands)])
+
         # Install webpack
         container = container.with_exec(["npm", "install", "webpack"])
 
@@ -193,6 +258,118 @@ class OpenedxMfe:
 
         # Return the dist directory
         return container.directory("/app/mfe/dist")
+
+    @function
+    async def build_legacy_configured(
+        self,
+        mfe_name: str,
+        slot_config: dagger.Directory,
+        mfe_repo: str = "",
+        mfe_source: dagger.Directory | None = None,
+        deployment_name: str = "default",
+        release_name: str = "",
+        config_file: str = "build_config.yaml",
+        mfe_branch: str = "master",
+        node_version: str = "20.18.0",
+        env_vars: list[str] | None = None,
+        pre_build_commands: list[str] | None = None,
+    ) -> dagger.Directory:
+        """Build a legacy MFE, resolving customizations from a YAML config file.
+
+        This is the declarative counterpart to :func:`build_legacy`.  Instead of
+        passing ``extra_slot_files`` / ``styles_file`` / ``extra_npm_bundles``
+        explicitly, an operator describes them once in a ``build_config.yaml``
+        living alongside their slot configuration.  The resolved values are
+        forwarded to :func:`build_legacy`, so the build behaviour is identical.
+
+        The config is validated against
+        :class:`~lehrer.core.mfe_config.BuildConfig`; run
+        ``dagger call mfe build-config-schema`` for a JSON Schema operators can
+        wire into their editor or agentic tooling.
+
+        Config schema (all keys optional)::
+
+            # Per-deployment stylesheet override copied into the MFE root.
+            styles:
+              <deployment_name>: <filename in slot_config>
+
+            # Per-MFE customizations keyed by MFE application name.
+            mfes:
+              <mfe_name>:
+                # Files copied from slot_config into the MFE root.  A plain
+                # string copies as-is; a mapping picks the source by release
+                # name and copies it to `dest`.
+                extra_slot_files:
+                  - SomeComponent.jsx
+                  - dest: Coordinator.jsx
+                    by_release:
+                      <release_name>: Coordinator.special.jsx
+                      default: Coordinator.jsx
+                # Pre-built npm bundles (see build_legacy.extra_npm_bundles).
+                extra_npm_bundles:
+                  - "@org/pkg@^1.0.0|public/static/pkg"
+
+        Args:
+            mfe_name: MFE application name (e.g. ``learning``, ``discussions``).
+            slot_config: Directory containing slot configuration files and the
+                ``build_config.yaml`` named by ``config_file``.
+            mfe_repo: Git repository URL for the MFE.  Used to clone the source
+                when ``mfe_source`` is not supplied; ignored otherwise.
+            mfe_source: Pre-checked-out MFE source directory.  When provided, the
+                build uses it verbatim and skips cloning (see
+                :func:`build_legacy`).
+            deployment_name: Deployment name; selects the ``styles`` entry and
+                ``{deployment_name}/common-mfe-config.env.jsx``.
+            release_name: Open edX release name; selects ``by_release`` variants.
+            config_file: Name of the YAML config inside ``slot_config``
+                (default: ``build_config.yaml``).
+            mfe_branch: Git branch (default: ``master``).
+            node_version: Node.js version (default: ``20.18.0``).
+            env_vars: Build-time environment variables in ``KEY=VALUE`` form.
+            pre_build_commands: Shell commands run after ``npm install``.
+
+        Returns:
+            Directory containing built MFE dist files.
+        """
+        import yaml
+
+        raw = await slot_config.file(config_file).contents()
+        # An empty file is valid (no customizations); anything malformed is
+        # surfaced by BuildConfig as a field-level validation error.
+        try:
+            config = BuildConfig.model_validate(yaml.safe_load(raw) or {})
+        except ValidationError as exc:
+            msg = f"invalid {config_file}: {exc}"
+            raise ValueError(msg) from exc
+
+        mfe_cfg = config.mfe(mfe_name)
+
+        return await self.build_legacy(
+            mfe_name=mfe_name,
+            mfe_repo=mfe_repo,
+            mfe_source=mfe_source,
+            mfe_branch=mfe_branch,
+            node_version=node_version,
+            deployment_name=deployment_name,
+            slot_config=slot_config,
+            extra_slot_files=mfe_cfg.resolve_extra_slot_files(release_name),
+            styles_file=config.styles.get(deployment_name),
+            extra_npm_bundles=list(mfe_cfg.extra_npm_bundles),
+            env_vars=env_vars,
+            pre_build_commands=pre_build_commands,
+        )
+
+    @function
+    def build_config_schema(self) -> str:
+        """Return the JSON Schema for ``build_config.yaml`` as JSON text.
+
+        Operators can publish this for editor and agentic validation, e.g.::
+
+            dagger call mfe build-config-schema > build_config.schema.json
+        """
+        import json
+
+        return json.dumps(json_schema(), indent=2)
 
     @function
     async def watch_legacy(
