@@ -10,6 +10,7 @@ import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboa
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxHeaderApp } from "@shared/header";
 import { createStyleOverrideApp } from "@shared/styles/styleLoader";
+import { createInstructorDashboardCustomApp } from "@shared/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
 
@@ -33,6 +34,7 @@ const siteConfig: SiteConfig = {
 		createMITOLFooterApp(),
 		createMITxHeaderApp(),
 		instructorDashboardApp,
+		createInstructorDashboardCustomApp(),
 		// TODO: add further module libraries as they are verified against the named release
 	],
 };
