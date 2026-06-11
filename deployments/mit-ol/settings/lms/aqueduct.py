@@ -43,6 +43,93 @@ class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
 
     # List from 81-lms-general-config; merged into AUTHENTICATION_BACKENDS below.
     THIRD_PARTY_AUTH_BACKENDS: list[str] | None = Field(default=None)
+    # Legacy code paths still read these values from settings.FEATURES.
+    FEATURES_COMPAT_KEYS: tuple[str, ...] = (
+        "ALLOW_ALL_ADVANCED_COMPONENTS",
+        "ALLOW_COURSE_STAFF_GRADE_DOWNLOADS",
+        "ALLOW_HIDING_DISCUSSION_TAB",
+        "ALLOW_PUBLIC_ACCOUNT_CREATION",
+        "AUTH_USE_CERTIFICATES",
+        "AUTH_USE_OPENID_PROVIDER",
+        "BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH",
+        "DISABLE_START_DATES",
+        "DISABLE_LOGIN_BUTTON",
+        "EMBARGO",
+        "ENABLE_AUTO_COURSE_REGISTRATION",
+        "ENABLE_AUTO_GITHUB_REPO_CREATION",
+        "ENABLE_BLAKE2B_HASHING",
+        "ENABLE_BULK_ENROLLMENT_VIEW",
+        "ENABLE_BULK_USER_RETIREMENT",
+        "ENABLE_COMBINED_LOGIN_REGISTRATION",
+        "ENABLE_COUNTRY_ACCESS",
+        "ENABLE_CORS_HEADERS",
+        "ENABLE_COURSEWARE_INDEX",
+        "ENABLE_COURSEWARE_SEARCH",
+        "ENABLE_COURSE_BLOCKS_NAVIGATION_API",
+        "ENABLE_COURSE_HOME_REDIRECT",
+        "ENABLE_CREDIT_API",
+        "ENABLE_CREDIT_ELIGIBILITY",
+        "ENABLE_CROSS_DOMAIN_CSRF_COOKIE",
+        "ENABLE_CSMH_EXTENDED",
+        "ENABLE_DISCUSSION_HOME_PANEL",
+        "ENABLE_DISCUSSION_SERVICE",
+        "ENABLE_EDX_USERNAME_CHANGER",
+        "ENABLE_ENROLLMENT_RESET",
+        "ENABLE_ENROLLMENT_TRACK_USER_PARTITION",
+        "ENABLE_EXAM_SETTINGS_HTML_VIEW",
+        "ENABLE_EXPORT_GIT",
+        "ENABLE_FORUM_DAILY_DIGEST",
+        "ENABLE_GIT_AUTO_EXPORT",
+        "ENABLE_GRADE_DOWNLOADS",
+        "ENABLE_INSTRUCTOR_ANALYTICS",
+        "ENABLE_INSTRUCTOR_EMAIL",
+        "ENABLE_INSTRUCTOR_REMOTE_GRADEBOOK_CONTROLS",
+        "ENABLE_LIBRARY_AUTHORING_MICROFRONTEND",
+        "ENABLE_LIBRARY_INDEX",
+        "ENABLE_LTI_PROVIDER",
+        "ENABLE_MKTG_SITE",
+        "ENABLE_MOBILE_REST_API",
+        "ENABLE_NEW_BULK_EMAIL_EXPERIENCE",
+        "ENABLE_OAUTH2_PROVIDER",
+        "ENABLE_ORA_USERNAMES_ON_DATA_EXPORT",
+        "ENABLE_OTHER_COURSE_SETTINGS",
+        "ENABLE_PAID_COURSE_REGISTRATION",
+        "ENABLE_PREREQUISITE_COURSES",
+        "ENABLE_PROCTORED_EXAMS",
+        "ENABLE_READING_FROM_MULTIPLE_HISTORY_TABLES",
+        "ENABLE_RENDER_XBLOCK_API",
+        "ENABLE_SHOPPING_CART",
+        "ENABLE_SPECIAL_EXAMS",
+        "ENABLE_SYSADMIN_DASHBOARD",
+        "ENABLE_TEAMS",
+        "ENABLE_THIRD_PARTY_AUTH",
+        "ENABLE_TEXTBOOK",
+        "ENABLE_UNICODE_USERNAME",
+        "ENABLE_V2_CERT_DISPLAY_SETTINGS",
+        "ENABLE_VIDEO_UPLOAD_PIPELINE",
+        "MAX_ENROLLMENT_INSTR_BUTTONS",
+        "REQUIRE_COURSE_EMAIL_AUTH",
+        "RESTRICT_ENROLL_BY_REG_METHOD",
+        "SESSION_COOKIE_SECURE",
+        "SHOW_FOOTER_LANGUAGE_SELECTOR",
+        "SHOW_HEADER_LANGUAGE_SELECTOR",
+        "SKIP_EMAIL_VALIDATION",
+    )
+
+    @model_validator(mode="after")
+    def _derive_features_compat(self) -> LMSProductionSettings:
+        """Mirror select module-level settings into FEATURES for compatibility."""
+        features = getattr(self, "FEATURES", None)
+        if not isinstance(features, dict):
+            features = {}
+        for key in self.FEATURES_COMPAT_KEYS:
+            if key in features:
+                continue
+            value = getattr(self, key, None)
+            if value is not None:
+                features[key] = value
+        self.FEATURES = features  # type: ignore[attr-defined]
+        return self
 
     @model_validator(mode="after")
     def _derive_urlconf(self) -> LMSProductionSettings:
