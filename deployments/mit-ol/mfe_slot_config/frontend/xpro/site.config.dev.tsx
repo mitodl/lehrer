@@ -9,9 +9,10 @@ import {
 import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createXProHeaderApp } from "@shared/header";
-import { createStyleOverrideApp } from "@shared/styles/styleLoader";
+import { createInstructorDashboardCustomApp } from "@shared/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
+import "@shared/styles/mitx.scss";
 
 const siteConfig: SiteConfig = {
 	siteId: "xpro",
@@ -26,10 +27,10 @@ const siteConfig: SiteConfig = {
 		shellApp,
 		headerApp,
 		footerApp,
-		createStyleOverrideApp("@shared/styles/mitx.scss"),
 		createMITOLFooterApp(),
 		createXProHeaderApp(),
 		instructorDashboardApp,
+		createInstructorDashboardCustomApp(),
 	],
 };
 

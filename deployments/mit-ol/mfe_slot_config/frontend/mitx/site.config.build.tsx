@@ -9,9 +9,10 @@ import {
 import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxHeaderApp } from "@shared/header";
-import { createStyleOverrideApp } from "@shared/styles/styleLoader";
+import { createInstructorDashboardCustomApp } from "@shared/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
+import "@shared/styles/mitx.scss";
 
 // Covers both mitx and mitx-staging deployments via a single build.
 // Production defaults — all fields are overridden at runtime by /api/frontend_site_config/v1/,
@@ -29,10 +30,10 @@ const siteConfig: SiteConfig = {
 		shellApp,
 		headerApp,
 		footerApp,
-		createStyleOverrideApp("@shared/styles/mitx.scss"),
 		createMITOLFooterApp(),
 		createMITxHeaderApp(),
 		instructorDashboardApp,
+		createInstructorDashboardCustomApp(),
 		// TODO: add further module libraries as they are verified against the named release
 	],
 };

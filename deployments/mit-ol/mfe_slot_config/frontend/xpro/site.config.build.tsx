@@ -9,9 +9,10 @@ import {
 import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createXProHeaderApp } from "@shared/header";
-import { createStyleOverrideApp } from "@shared/styles/styleLoader";
+import { createInstructorDashboardCustomApp } from "@shared/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
+import "@shared/styles/mitx.scss";
 
 // xPRO nav model differs from mitxonline: the marketing site (xpro.mit.edu) is separate from
 // the LMS (courses.xpro.mit.edu). Production defaults — all fields are overridden at runtime
@@ -29,10 +30,10 @@ const siteConfig: SiteConfig = {
 		shellApp,
 		headerApp,
 		footerApp,
-		createStyleOverrideApp("@shared/styles/mitx.scss"), // xPRO uses the mitx/residential design tokens/layout style defaults
 		createMITOLFooterApp(),
 		createXProHeaderApp(),
 		instructorDashboardApp,
+		createInstructorDashboardCustomApp(),
 		// TODO: add further module libraries as they are verified against the named release
 	],
 };
