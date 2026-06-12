@@ -303,6 +303,8 @@ class AqueductSettings(SharedAqueductSettings):
             Path("/openedx/edx-platform/common/templates"),
             Path("/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"),
             Path("/openedx/edx-platform/common/static"),
+            Path("/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"),
+            Path("/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"),
         ]
     )
     DEV_CONTENT: bool = Field(default=True)
@@ -1768,6 +1770,8 @@ class AqueductSettings(SharedAqueductSettings):
                         "/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"
                     ),
                     Path("/openedx/edx-platform/common/static"),
+                    Path("/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"),
+                    Path("/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"),
                 ],
                 "OPTIONS": {
                     "loaders": [
@@ -1818,6 +1822,8 @@ class AqueductSettings(SharedAqueductSettings):
                     Path(
                         "/openedx/edx-platform/openedx/features/course_experience/templates"
                     ),
+                    Path("/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"),
+                    Path("/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"),
                 ],
                 "OPTIONS": {
                     "context_processors": [
