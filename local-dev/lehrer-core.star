@@ -155,16 +155,16 @@ _cfg = _deploy_cfg()
 custom_build(
     ref=_platform_image,
     command=(
-        "dagger call platform build-platform"
+        "dagger call platform build-platform" +
         " --deployment-name " + LEHRER_DEPLOY_NAME +
         " --release-name " + LEHRER_RELEASE_NAME +
         " --settings-namespace " + LEHRER_SETTINGS_NS +
         " --pip-package-lists " + _cfg + "/pip_package_lists" +
         " --pip-package-overrides " + _cfg + "/pip_package_overrides" +
         " --custom-settings " + _cfg + "/settings" +
-        " publish-platform"
+        " publish-platform" +
         " --registry " + LEHRER_REGISTRY +
-        " --repository openedx-platform"
+        " --repository openedx-platform" +
         " --tag dev"
     ),
     deps=[
@@ -185,10 +185,10 @@ _codejail_image = _img("openedx-codejail")
 custom_build(
     ref=_codejail_image,
     command=(
-        "dagger call codejail build"
+        "dagger call codejail build" +
         " --release-name " + LEHRER_RELEASE_NAME +
-        " --codejail-config " + _cfg + "/codejail_config"
-        " publish"
+        " --codejail-config " + _cfg + "/codejail_config" +
+        " publish" +
         " --address " + _push_addr("openedx-codejail")
     ),
     deps=[_cfg + "/codejail_config"],
@@ -205,11 +205,11 @@ _notes_image = _img("openedx-notes")
 custom_build(
     ref=_notes_image,
     command=(
-        "dagger call notes build"
+        "dagger call notes build" +
         " --release-name " + LEHRER_RELEASE_NAME +
         " --notes-repo " + _notes_repo() +
-        " --notes-config " + _cfg + "/notes_config"
-        " publish"
+        " --notes-config " + _cfg + "/notes_config" +
+        " publish" +
         " --address " + _push_addr("openedx-notes")
     ),
     deps=[_cfg + "/notes_config"],
@@ -230,7 +230,7 @@ _local_dev = _local_dev_dir()
 _site_projects = [
     p.split("/")[-1]
     for p in str(local(
-        "find " + _frontend_dir + " -maxdepth 1 -mindepth 1 -type d"
+        "find " + _frontend_dir + " -maxdepth 1 -mindepth 1 -type d" +
         " -not -name shared -not -name src",
         quiet=True,
     )).strip().splitlines()
@@ -253,15 +253,15 @@ for _site_name in _site_projects:
     custom_build(
         ref=_mfe_ref,
         command=(
-            "set -e && "
-            "mkdir -p " + _tmp_dir + " && "
-            "dagger call mfe build-site"
+            "set -e && " +
+            "mkdir -p " + _tmp_dir + " && " +
+            "dagger call mfe build-site" +
             " --site-project " + _site_dir +
             " --shared-src " + _shared_src +
-            " export --path " + _tmp_dir + "/dist && "
-            "cp " + _local_dev + "/nginx-mfe.conf " + _tmp_dir + "/nginx-mfe.conf && "
-            "docker build -t $EXPECTED_REF"
-            " -f " + _local_dev + "/Dockerfile.mfe"
+            " export --path " + _tmp_dir + "/dist && " +
+            "cp " + _local_dev + "/nginx-mfe.conf " + _tmp_dir + "/nginx-mfe.conf && " +
+            "docker build -t $EXPECTED_REF" +
+            " -f " + _local_dev + "/Dockerfile.mfe" +
             " " + _tmp_dir
         ),
         deps=[_site_dir, _shared_src],
@@ -278,7 +278,7 @@ if LEHRER_MFE_HOT_RELOAD:
         local_resource(
             name="mfe-dev-" + _site_name,
             serve_cmd=(
-                "dagger call mfe watch-site"
+                "dagger call mfe watch-site" +
                 " --site-project " + _site_dir +
                 " --shared-src " + _shared_src +
                 " up --ports 8080:8080"
