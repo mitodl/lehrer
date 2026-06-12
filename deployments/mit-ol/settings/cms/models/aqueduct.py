@@ -1055,7 +1055,7 @@ class AqueductSettings(SharedAqueductSettings):
                 "BACKEND": "common.djangoapps.edxmako.backend.Mako",
                 "APP_DIRS": False,
                 "DIRS": [
-                    "/openedx/edx-platform/lms/templates",
+                    Path("/openedx/edx-platform/cms/templates"),
                     Path("/openedx/edx-platform/common/templates"),
                     Path(
                         "/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"
@@ -1100,7 +1100,7 @@ class AqueductSettings(SharedAqueductSettings):
                 "BACKEND": "common.djangoapps.edxmako.backend.Mako",
                 "APP_DIRS": False,
                 "DIRS": [
-                    "/openedx/edx-platform/lms/templates",
+                    Path("/openedx/edx-platform/cms/templates"),
                     Path("/openedx/edx-platform/common/templates"),
                     Path(
                         "/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"
