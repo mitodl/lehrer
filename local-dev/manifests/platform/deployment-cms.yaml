@@ -1,0 +1,64 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cms
+  namespace: openedx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cms
+  template:
+    metadata:
+      labels:
+        app: cms
+    spec:
+      containers:
+      - name: cms
+        image: k3d-lehrer-registry:5000/openedx-platform:dev
+        command:
+        - gunicorn
+        - "--workers=2"
+        - "--name=cms"
+        - "--bind=0.0.0.0:8010"
+        - "--max-requests=1000"
+        - "--timeout=300"
+        - "cms.wsgi:application"
+        ports:
+        - containerPort: 8010
+        env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: "cms.envs.aqueduct"
+        envFrom:
+        - configMapRef:
+            name: cms-config
+        - secretRef:
+            name: openedx-secrets
+        readinessProbe:
+          httpGet:
+            path: /heartbeat
+            port: 8010
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          failureThreshold: 10
+        livenessProbe:
+          httpGet:
+            path: /heartbeat
+            port: 8010
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          failureThreshold: 5
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+        volumeMounts:
+        - name: edx-data
+          mountPath: /openedx/data
+      volumes:
+      - name: edx-data
+        emptyDir: {}

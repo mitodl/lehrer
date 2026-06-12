@@ -1,0 +1,56 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notes
+  namespace: openedx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notes
+  template:
+    metadata:
+      labels:
+        app: notes
+    spec:
+      containers:
+      - name: notes
+        image: k3d-lehrer-registry:5000/openedx-notes:dev
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - secretRef:
+            name: openedx-secrets
+        env:
+        - name: DB_HOST
+          value: "mysql.openedx.svc.cluster.local"
+        - name: DB_NAME
+          value: "notes"
+        - name: DB_USER
+          value: "edxapp"
+        - name: DB_PORT
+          value: "3306"
+        - name: ELASTICSEARCH_DSL_HOST
+          value: "opensearch-cluster-master.openedx.svc.cluster.local"
+        - name: ELASTICSEARCH_DSL_PORT
+          value: "9200"
+        - name: ELASTICSEARCH_DSL_USE_SSL
+          value: "false"
+        - name: ELASTICSEARCH_DSL_VERIFY_CERTS
+          value: "false"
+        - name: ALLOWED_HOSTS
+          value: "*"
+        readinessProbe:
+          httpGet:
+            path: /api/v1/
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

@@ -1,0 +1,19 @@
+---
+# bitnami/mongodb — single node, no replication, no persistence (dev use only)
+auth:
+  enabled: true
+  rootPassword: "localdev"  # pragma: allowlist secret
+  username: "edxapp"
+  password: "edxapp"  # pragma: allowlist secret
+  database: "edxapp"
+
+persistence:
+  enabled: false
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"

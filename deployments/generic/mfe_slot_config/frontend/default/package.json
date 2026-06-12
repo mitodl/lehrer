@@ -1,0 +1,25 @@
+{
+  "name": "@openedx/site-generic",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generic Open edX OEP-65 Site Project — no operator customizations",
+  "browserslist": [
+    "extends @edx/browserslist-config"
+  ],
+  "scripts": {
+    "build": "openedx build",
+    "dev": "openedx dev",
+    "serve": "openedx serve"
+  },
+  "dependencies": {
+    "@openedx/frontend-base": "^1.0.0-alpha.49",
+    "@openedx/paragon": "^23",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-router": "^6",
+    "react-router-dom": "^6"
+  },
+  "devDependencies": {
+    "@edx/browserslist-config": "^1.5.0"
+  }
+}

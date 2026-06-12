@@ -1,0 +1,7 @@
+FROM nginx:1.27-alpine
+# dist/ is pre-exported by `dagger call mfe build-site ... export --path ...`
+# into local-dev/tmp-dist/<site-name>/dist/ and the build context is set to
+# local-dev/tmp-dist/<site-name>/ so that this COPY picks it up correctly.
+COPY dist/ /usr/share/nginx/html
+COPY nginx-mfe.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
