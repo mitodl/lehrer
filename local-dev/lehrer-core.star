@@ -172,7 +172,7 @@ def setup(cfg):
             "set -e && " +
             push_rewrite +
             "tmp=$(mktemp /tmp/lehrer-platform-XXXXXX.tar) && " +
-            "dagger call platform build-platform" +
+            "dagger --progress=plain call platform build-platform" +
             " --deployment-name " + deploy_name +
             " --release-name " + release_name +
             " --settings-namespace " + settings_ns +
@@ -205,7 +205,7 @@ def setup(cfg):
             "set -e && " +
             push_rewrite +
             "tmp=$(mktemp /tmp/lehrer-codejail-XXXXXX.tar) && " +
-            "dagger call codejail build" +
+            "dagger --progress=plain call codejail build" +
             " --release-name " + release_name +
             " --codejail-config " + dep_cfg + "/codejail_config" +
             " export --path $tmp && " +
@@ -230,7 +230,7 @@ def setup(cfg):
             "set -e && " +
             push_rewrite +
             "tmp=$(mktemp /tmp/lehrer-notes-XXXXXX.tar) && " +
-            "dagger call notes build" +
+            "dagger --progress=plain call notes build" +
             " --release-name " + release_name +
             " --notes-repo " + notes_repo +
             " --notes-config " + dep_cfg + "/notes_config" +
@@ -277,7 +277,7 @@ def setup(cfg):
             command=(
                 "set -e && " +
                 "mkdir -p " + tmp_dir + " && " +
-                "dagger call mfe build-site" +
+                "dagger --progress=plain call mfe build-site" +
                 " --site-project " + site_dir +
                 shared_src_flag +
                 " export --path " + tmp_dir + "/dist && " +
@@ -295,7 +295,7 @@ def setup(cfg):
             local_resource(
                 name="mfe-dev-" + site_name,
                 serve_cmd=(
-                    "dagger call mfe watch-site" +
+                    "dagger --progress=plain call mfe watch-site" +
                     " --site-project " + site_dir +
                     shared_src_flag +
                     " up --ports 8080:8080"
@@ -317,6 +317,7 @@ def setup(cfg):
     k8s_yaml(local_dev + "/manifests/platform/deployment-lms.yaml")
     k8s_yaml(local_dev + "/manifests/platform/deployment-cms.yaml")
     k8s_yaml(local_dev + "/manifests/platform/deployment-worker.yaml")
+    k8s_yaml(local_dev + "/manifests/platform/deployment-cms-worker.yaml")
 
     k8s_resource(
         "lms",
@@ -332,6 +333,11 @@ def setup(cfg):
     )
     k8s_resource(
         "lms-worker",
+        resource_deps=infra_deps,
+        labels=["platform"],
+    )
+    k8s_resource(
+        "cms-worker",
         resource_deps=infra_deps,
         labels=["platform"],
     )
