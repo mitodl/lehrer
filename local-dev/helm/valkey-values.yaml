@@ -1,0 +1,21 @@
+---
+# valkey/valkey — standalone Valkey (Redis-compatible) for local dev.
+# Release name "redis" keeps the service name "redis-master" to match
+# the CELERY_BROKER_HOSTNAME in the platform configmaps.
+architecture: standalone
+
+auth:
+  enabled: false
+
+master:
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 1Gi
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"

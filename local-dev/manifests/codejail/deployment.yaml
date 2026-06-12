@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: codejail
-        image: k3d-lehrer-registry:5000/openedx-codejail:dev
+        image: lehrer-registry:5000/openedx-codejail:dev
         ports:
         - containerPort: 8000
         securityContext:

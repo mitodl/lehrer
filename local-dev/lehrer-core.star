@@ -51,16 +51,32 @@ def setup(cfg):
     apply_configmaps = cfg["apply_platform_configmaps"]
 
     # Absolute path to the deployment config directory.
+    # Relative paths are treated as relative to local_dev (where tilt up is run from).
     if deploy_config.startswith("/"):
-        dep_cfg = deploy_config
+        dep_cfg = deploy_config.rstrip("/")
     else:
-        dep_cfg = local_dev + "/.." + "/" + deploy_config
+        dep_cfg = (local_dev + "/" + deploy_config).rstrip("/")
+
+    # Set the default registry to the cluster-side address so $EXPECTED_REF uses it.
+    # Build commands then rewrite $EXPECTED_REF to the host-side address for docker push
+    # (since registry_k8s only resolves from inside the cluster, not from the host).
+    # This explicit call also resets any previously-persisted default_registry state.
+    default_registry(registry_k8s)
 
     def img(name):
         return registry_k8s + "/" + name + ":dev"
 
-    def push_addr(name):
-        return registry + "/" + name + ":dev"
+    # Rewrite $EXPECTED_REF to a host-accessible push reference.
+    # Tilt may persist old default_registry state, causing $EXPECTED_REF to have a mangled
+    # repo name (e.g. "lehrer-registry_5000_openedx-codejail" with underscores instead of
+    # "lehrer-registry:5000/openedx-codejail"). Strip the mangled infix first, then replace
+    # the cluster-side host (registry_k8s) with the host-accessible address (registry).
+    # Both transformations are safe no-ops when the other case is active.
+    push_rewrite = (
+        "PUSH_REF=$(echo \"$EXPECTED_REF\" " +
+        "| sed 's|lehrer-registry_5000_||g' " +
+        "| sed 's|" + registry_k8s + "|" + registry + "|g') && "
+    )
 
     def helm_values(filename):
         if helm_override_dir:
@@ -73,7 +89,6 @@ def setup(cfg):
     # Infrastructure (Helm)
     # ------------------------------------------------------------------ #
 
-    helm_repo("bitnami", "https://charts.bitnami.com/bitnami", labels=["infra"])
     helm_repo(
         "opensearch-helm",
         "https://opensearch-project.github.io/helm-charts",
@@ -81,29 +96,39 @@ def setup(cfg):
     )
 
     if manage_infra or mysql_managed:
+        # Install the MariaDB operator in its own namespace, then apply the
+        # MariaDB CR (+ Database/Grant CRs) in the application namespace.
+        helm_repo("mariadb", "https://helm.mariadb.com/mariadb-operator", labels=["infra"])
         helm_resource(
-            "mysql",
-            "bitnami/mysql",
-            namespace=namespace,
-            flags=["--values", helm_values("mysql-values.yaml"), "--create-namespace"],
+            "mariadb-operator",
+            "mariadb/mariadb-operator",
+            namespace="mariadb-operator",
+            flags=["--values", helm_values("mariadb-operator-values.yaml"), "--create-namespace"],
             labels=["infra"],
         )
+        k8s_yaml(local_dev + "/manifests/infra/mariadb.yaml")
 
     if manage_infra or mongo_managed:
+        # Install the MongoDB Community Operator, then apply the MongoDBCommunity CR.
+        helm_repo("mongodb", "https://mongodb.github.io/helm-charts", labels=["infra"])
         helm_resource(
-            "mongodb",
-            "bitnami/mongodb",
-            namespace=namespace,
-            flags=["--values", helm_values("mongodb-values.yaml"), "--create-namespace"],
+            "mongodb-operator",
+            "mongodb/community-operator",
+            namespace="mongodb-operator",
+            flags=["--values", helm_values("mongodb-operator-values.yaml"), "--create-namespace"],
             labels=["infra"],
         )
+        k8s_yaml(local_dev + "/manifests/infra/mongodb.yaml")
 
     if manage_infra:
+        # Valkey (Redis-compatible fork) — standalone, release name "redis" keeps
+        # the service name "redis-master" as expected by the platform configmap.
+        helm_repo("valkey", "https://valkey.io/valkey-helm/", labels=["infra"])
         helm_resource(
             "redis",
-            "bitnami/redis",
+            "valkey/valkey",
             namespace=namespace,
-            flags=["--values", helm_values("redis-values.yaml"), "--create-namespace"],
+            flags=["--values", helm_values("valkey-values.yaml"), "--create-namespace"],
             labels=["infra"],
         )
         helm_resource(
@@ -118,11 +143,13 @@ def setup(cfg):
             labels=["infra"],
         )
 
+    # Platform depends on operators being deployed; the operators then manage
+    # the database StatefulSets from their CRs (MariaDB, MongoDBCommunity).
     infra_deps = []
     if manage_infra or mysql_managed:
-        infra_deps.append("mysql")
+        infra_deps.append("mariadb-operator")
     if manage_infra or mongo_managed:
-        infra_deps.append("mongodb")
+        infra_deps.append("mongodb-operator")
     if manage_infra:
         infra_deps.append("redis")
         infra_deps.append("opensearch")
@@ -142,6 +169,9 @@ def setup(cfg):
     custom_build(
         ref=platform_image,
         command=(
+            "set -e && " +
+            push_rewrite +
+            "tmp=$(mktemp /tmp/lehrer-platform-XXXXXX.tar) && " +
             "dagger call platform build-platform" +
             " --deployment-name " + deploy_name +
             " --release-name " + release_name +
@@ -149,10 +179,11 @@ def setup(cfg):
             " --pip-package-lists " + dep_cfg + "/pip_package_lists" +
             " --pip-package-overrides " + dep_cfg + "/pip_package_overrides" +
             " --custom-settings " + dep_cfg + "/settings" +
-            " publish-platform" +
-            " --registry " + registry +
-            " --repository openedx-platform" +
-            " --tag dev"
+            " export --path $tmp && " +
+            "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
+            "docker tag $loaded $PUSH_REF && " +
+            "docker push $PUSH_REF && " +
+            "rm -f $tmp"
         ),
         deps=[
             dep_cfg + "/pip_package_lists",
@@ -160,7 +191,6 @@ def setup(cfg):
             dep_cfg + "/settings",
         ],
         skips_local_docker=True,
-        labels=["platform"],
     )
 
     # ------------------------------------------------------------------ #
@@ -172,15 +202,20 @@ def setup(cfg):
     custom_build(
         ref=codejail_image,
         command=(
+            "set -e && " +
+            push_rewrite +
+            "tmp=$(mktemp /tmp/lehrer-codejail-XXXXXX.tar) && " +
             "dagger call codejail build" +
             " --release-name " + release_name +
             " --codejail-config " + dep_cfg + "/codejail_config" +
-            " publish" +
-            " --address " + push_addr("openedx-codejail")
+            " export --path $tmp && " +
+            "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
+            "docker tag $loaded $PUSH_REF && " +
+            "docker push $PUSH_REF && " +
+            "rm -f $tmp"
         ),
         deps=[dep_cfg + "/codejail_config"],
         skips_local_docker=True,
-        labels=["codejail"],
     )
 
     # ------------------------------------------------------------------ #
@@ -192,16 +227,21 @@ def setup(cfg):
     custom_build(
         ref=notes_image,
         command=(
+            "set -e && " +
+            push_rewrite +
+            "tmp=$(mktemp /tmp/lehrer-notes-XXXXXX.tar) && " +
             "dagger call notes build" +
             " --release-name " + release_name +
             " --notes-repo " + notes_repo +
             " --notes-config " + dep_cfg + "/notes_config" +
-            " publish" +
-            " --address " + push_addr("openedx-notes")
+            " export --path $tmp && " +
+            "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
+            "docker tag $loaded $PUSH_REF && " +
+            "docker push $PUSH_REF && " +
+            "rm -f $tmp"
         ),
         deps=[dep_cfg + "/notes_config"],
         skips_local_docker=True,
-        labels=["notes"],
     )
 
     # ------------------------------------------------------------------ #
@@ -210,6 +250,9 @@ def setup(cfg):
 
     frontend_dir = dep_cfg + "/mfe_slot_config/frontend"
     shared_src = frontend_dir + "/shared"
+    has_shared = os.path.exists(shared_src)
+    shared_src_flag = (" --shared-src " + shared_src) if has_shared else ""
+    mfe_deps_base = [shared_src] if has_shared else []
 
     site_projects = [
         p.split("/")[-1]
@@ -236,15 +279,14 @@ def setup(cfg):
                 "mkdir -p " + tmp_dir + " && " +
                 "dagger call mfe build-site" +
                 " --site-project " + site_dir +
-                " --shared-src " + shared_src +
+                shared_src_flag +
                 " export --path " + tmp_dir + "/dist && " +
                 "cp " + local_dev + "/nginx-mfe.conf " + tmp_dir + "/nginx-mfe.conf && " +
                 "docker build -t $EXPECTED_REF" +
                 " -f " + local_dev + "/Dockerfile.mfe" +
                 " " + tmp_dir
             ),
-            deps=[site_dir, shared_src],
-            labels=["mfe"],
+            deps=[site_dir] + mfe_deps_base,
         )
 
     if mfe_hot_reload:
@@ -255,10 +297,10 @@ def setup(cfg):
                 serve_cmd=(
                     "dagger call mfe watch-site" +
                     " --site-project " + site_dir +
-                    " --shared-src " + shared_src +
+                    shared_src_flag +
                     " up --ports 8080:8080"
                 ),
-                deps=[site_dir, shared_src],
+                deps=[site_dir] + mfe_deps_base,
                 labels=["mfe"],
             )
 
@@ -278,21 +320,18 @@ def setup(cfg):
 
     k8s_resource(
         "lms",
-        image_deps=[platform_image],
         resource_deps=infra_deps,
         port_forwards=["8000:8000"],
         labels=["platform"],
     )
     k8s_resource(
         "cms",
-        image_deps=[platform_image],
         resource_deps=infra_deps,
         port_forwards=["8010:8010"],
         labels=["platform"],
     )
     k8s_resource(
         "lms-worker",
-        image_deps=[platform_image],
         resource_deps=infra_deps,
         labels=["platform"],
     )
@@ -306,7 +345,6 @@ def setup(cfg):
 
     k8s_resource(
         "codejail",
-        image_deps=[codejail_image],
         port_forwards=["8002:8000"],
         labels=["codejail"],
     )
@@ -320,7 +358,6 @@ def setup(cfg):
 
     k8s_resource(
         "notes",
-        image_deps=[notes_image],
         resource_deps=infra_deps,
         port_forwards=["8001:8000"],
         labels=["notes"],
@@ -383,7 +420,6 @@ def setup(cfg):
 
         k8s_resource(
             "mfe-" + site_name,
-            image_deps=[mfe_images[site_name]],
             labels=["mfe"],
         )
 

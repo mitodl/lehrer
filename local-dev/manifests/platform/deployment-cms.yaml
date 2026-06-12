@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: cms
-        image: k3d-lehrer-registry:5000/openedx-platform:dev
+        image: lehrer-registry:5000/openedx-platform:dev
         command:
         - gunicorn
         - "--workers=2"

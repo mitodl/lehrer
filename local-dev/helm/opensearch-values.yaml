@@ -10,8 +10,6 @@ config:
 extraEnvs:
 - name: DISABLE_SECURITY_PLUGIN
   value: "true"
-- name: discovery.type
-  value: single-node
 
 persistence:
   enabled: false

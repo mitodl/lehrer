@@ -32,9 +32,9 @@ config.define_bool(
 cfg = config.parse()
 
 setup({
-    "deploy_config":   cfg.get("deployment-config", config.main_dir + "/../deployments/generic"),
+    "deploy_config":   cfg.get("deployment-config") or config.main_dir + "/../deployments/generic",
     "registry":        "localhost:5100",
-    "registry_k8s":    "k3d-lehrer-registry:5000",
+    "registry_k8s":    "lehrer-registry:5000",
     "redis_host":      "redis-master.openedx.svc.cluster.local",
     "opensearch_host": "opensearch-cluster-master.openedx.svc.cluster.local",
     "namespace":       "openedx",
@@ -50,7 +50,7 @@ setup({
     "cms_base_url":    "http://localhost:8010",
     "notes_public_url": "http://localhost:8001",
     "apply_platform_configmaps": True,
-    "release_name":    cfg.get("release-name", "master"),
-    "deploy_name":     cfg.get("deployment-name", "generic"),
-    "settings_ns":     cfg.get("settings-namespace", "production"),
+    "release_name":    cfg.get("release-name") or "master",
+    "deploy_name":     cfg.get("deployment-name") or "generic",
+    "settings_ns":     cfg.get("settings-namespace") or "production",
 })
