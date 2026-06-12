@@ -9,10 +9,10 @@ import {
 import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxOnlineHeaderApp } from "@shared/header";
-import { createStyleOverrideApp } from "@shared/styles/styleLoader";
 import { createInstructorDashboardCustomApp } from "@shared/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
+import "@shared/styles/mitxonline.scss";
 
 // Production defaults — all fields are overridden at runtime by /api/frontend_site_config/v1/,
 // which reads from the FRONTEND_SITE_CONFIG Django setting in the LMS configmap.
@@ -35,7 +35,6 @@ const siteConfig: SiteConfig = {
 		shellApp,
 		headerApp,
 		footerApp,
-		createStyleOverrideApp("@shared/styles/mitxonline.scss"),
 		createMITOLFooterApp(),
 		createMITxOnlineHeaderApp(),
 		instructorDashboardApp,

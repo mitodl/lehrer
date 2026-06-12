@@ -9,10 +9,10 @@ import {
 import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxOnlineHeaderApp } from "@shared/header";
-import { createStyleOverrideApp } from "@shared/styles/styleLoader";
 import { createInstructorDashboardCustomApp } from "@shared/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
+import "@shared/styles/mitxonline.scss";
 
 const siteConfig: SiteConfig = {
 	siteId: "mitol",
@@ -22,15 +22,35 @@ const siteConfig: SiteConfig = {
 	loginUrl: "http://local.openedx.io:8000/login",
 	logoutUrl: "http://local.openedx.io:8000/logout",
 	environment: EnvironmentTypes.DEVELOPMENT,
-	runtimeConfigJsonUrl: "/api/frontend_site_config/v1/",
+	headerLogoImageUrl: "https://edx-cdn.org/v3/default/logo.svg",
+	commonAppConfig: {
+		mitolHeader: {
+			mitLearnBaseUrl: "https://learn.mit.edu",
+			marketingSiteBaseUrl: "http://local.openedx.io:8000",
+		},
+		mitolFooter: {
+			copyrightText: "© 2026 Massachusetts Institute of Technology",
+			aboutUrl: "https://learn.mit.edu/about",
+			termsOfServiceUrl: "http://local.openedx.io:8000/tos",
+			privacyPolicyUrl: "http://local.openedx.io:8000/privacy",
+			accessibilityUrl: "https://accessibility.mit.edu/",
+			supportUrl: "https://mitxonline.zendesk.com/hc/en-us",
+			honorCodeUrl: "http://local.openedx.io:8000/honor",
+		},
+	},
 	apps: [
 		shellApp,
 		headerApp,
 		footerApp,
-		createStyleOverrideApp("@shared/styles/mitxonline.scss"),
 		createMITOLFooterApp(),
 		createMITxOnlineHeaderApp(),
-		instructorDashboardApp,
+		{
+			...instructorDashboardApp,
+			config: {
+				...instructorDashboardApp.config,
+				SUPPORT_URL: "https://support.learn.mit.edu/",
+			},
+		},
 		createInstructorDashboardCustomApp(),
 	],
 };
