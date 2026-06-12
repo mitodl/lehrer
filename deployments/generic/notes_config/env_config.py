@@ -84,9 +84,17 @@ STORAGES = {
     },
 }
 
+_jwt_issuer_raw = os.environ.get("JWT_ISSUER", "[]")
+try:
+    _jwt_issuer = json.loads(_jwt_issuer_raw)
+    if isinstance(_jwt_issuer, str):
+        _jwt_issuer = [_jwt_issuer]
+except json.JSONDecodeError:
+    _jwt_issuer = [_jwt_issuer_raw]
+
 JWT_AUTH = {
     "JWT_AUTH_HEADER_PREFIX": "JWT",
-    "JWT_ISSUER": json.loads(os.environ.get("JWT_ISSUER", "[]")),
+    "JWT_ISSUER": _jwt_issuer,
     "JWT_PUBLIC_SIGNING_JWK_SET": os.environ.get("JWT_PUBLIC_SIGNING_JWK_SET"),
     "JWT_AUTH_COOKIE_HEADER_PAYLOAD": "edx-jwt-cookie-header-payload",
     "JWT_AUTH_COOKIE_SIGNATURE": "edx-jwt-cookie-signature",

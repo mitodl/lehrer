@@ -32,11 +32,12 @@ from __future__ import annotations
 
 import os
 import tempfile
+from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettingsSource
-from pathlib import Path
 
 
 class PathString(str):
@@ -88,6 +89,8 @@ def _sorted_yaml_files(settings_dir: str) -> list[Path]:
 
         <settings_dir>/*.yaml
     """
+    if not settings_dir:
+        return []
     base = Path(settings_dir)
     if not base.is_dir():
         return []
@@ -232,9 +235,11 @@ class ProductionSettingsMixin(BaseSettings):
         vars (hostname from a ConfigMap, password from a Secret).
         """
         if self.CELERY_BROKER_TRANSPORT and not getattr(self, "BROKER_URL", None):
+            user = quote(self.CELERY_BROKER_USER or "", safe="")
+            password = quote(self.CELERY_BROKER_PASSWORD or "", safe="")
             self.BROKER_URL = (  # type: ignore[attr-defined]
                 f"{self.CELERY_BROKER_TRANSPORT}://"
-                f"{self.CELERY_BROKER_USER}:{self.CELERY_BROKER_PASSWORD}"
+                f"{user}:{password}"
                 f"@{self.CELERY_BROKER_HOSTNAME}/{self.CELERY_BROKER_VHOST}"
             )
         if isinstance(self.CELERY_BROKER_USE_SSL, dict):
