@@ -107,6 +107,22 @@ def setup(cfg):
             labels=["infra"],
         )
         k8s_yaml(local_dev + "/manifests/infra/mariadb.yaml")
+        # Group all MariaDB CRs so Tilt waits for the operator CRDs before
+        # applying them (Database/Grant kinds don't exist until the chart installs).
+        k8s_resource(
+            new_name="mysql",
+            objects=[
+                "mariadb-root-secret:Secret:openedx",
+                "mysql:MariaDB:openedx",
+                "notes:Database:openedx",
+                "edxapp-csmh:Database:openedx",
+                "edxapp-grant-edxapp:Grant:openedx",
+                "edxapp-grant-notes:Grant:openedx",
+                "edxapp-grant-csmh:Grant:openedx",
+            ],
+            resource_deps=["mariadb-operator"],
+            labels=["infra"],
+        )
 
     if manage_infra or mongo_managed:
         # Install the MongoDB Community Operator, then apply the MongoDBCommunity CR.
@@ -119,6 +135,16 @@ def setup(cfg):
             labels=["infra"],
         )
         k8s_yaml(local_dev + "/manifests/infra/mongodb.yaml")
+        # Group MongoDB CRs so Tilt waits for the operator CRDs before applying.
+        k8s_resource(
+            new_name="mongodb",
+            objects=[
+                "mongodb-edxapp-secret:Secret:openedx",
+                "mongodb:MongoDBCommunity:openedx",
+            ],
+            resource_deps=["mongodb-operator"],
+            labels=["infra"],
+        )
 
     if manage_infra:
         # Valkey (Redis-compatible fork) — standalone, release name "redis" keeps
@@ -143,13 +169,13 @@ def setup(cfg):
             labels=["infra"],
         )
 
-    # Platform depends on operators being deployed; the operators then manage
-    # the database StatefulSets from their CRs (MariaDB, MongoDBCommunity).
+    # Platform depends on the database CRs being submitted (not just the operators),
+    # so Tilt won't start platform pods before the MariaDB/MongoDB CRDs exist.
     infra_deps = []
     if manage_infra or mysql_managed:
-        infra_deps.append("mariadb-operator")
+        infra_deps.append("mysql")
     if manage_infra or mongo_managed:
-        infra_deps.append("mongodb-operator")
+        infra_deps.append("mongodb")
     if manage_infra:
         infra_deps.append("redis")
         infra_deps.append("opensearch")
