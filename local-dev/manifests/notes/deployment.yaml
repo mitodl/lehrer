@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: notes
-        image: k3d-lehrer-registry:5000/openedx-notes:dev
+        image: lehrer-registry:5000/openedx-notes:dev
         ports:
         - containerPort: 8000
         envFrom:
@@ -33,6 +33,8 @@ spec:
             secretKeyRef:
               name: openedx-secrets
               key: NOTES_OAUTH_CLIENT_SECRET
+        - name: DJANGO_SETTINGS_MODULE
+          value: "notesserver.settings.env_config"
         - name: DB_HOST
           value: "mysql.openedx.svc.cluster.local"
         - name: DB_NAME
@@ -53,7 +55,7 @@ spec:
           value: "*"
         readinessProbe:
           httpGet:
-            path: /api/v1/
+            path: /heartbeat/
             port: 8000
           initialDelaySeconds: 20
           periodSeconds: 10

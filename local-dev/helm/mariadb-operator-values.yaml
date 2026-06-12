@@ -1,0 +1,13 @@
+---
+# mariadb-operator/mariadb-operator — minimal operator config for local dev.
+# Install CRDs with the chart — safe for fresh local dev clusters.
+crds:
+  enabled: true
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

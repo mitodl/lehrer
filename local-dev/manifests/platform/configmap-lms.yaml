@@ -13,16 +13,19 @@ data:
 
   # Redis (standalone in openedx namespace; overridden in integrated mode to use valkey)
   CELERY_BROKER_TRANSPORT: "redis"
-  CELERY_BROKER_HOSTNAME: "redis-master.openedx.svc.cluster.local"
+  CELERY_BROKER_HOSTNAME: "redis-valkey.openedx.svc.cluster.local"
   CELERY_BROKER_USER: ""
   CELERY_BROKER_PASSWORD: ""
   CELERY_BROKER_VHOST: ""
 
-  # MongoDB (edx-platform modulestore)
-  MONGODB_HOST: "mongodb.openedx.svc.cluster.local"
+  # MongoDB (edx-platform modulestore) — MongoDB Community Operator creates
+  # Service "mongodb-svc"; single-member replica set named "mongodb".
+  MONGODB_HOST: "mongodb-svc.openedx.svc.cluster.local"
   MONGODB_PORT: "27017"
   MONGODB_USER: "edxapp"
   MONGODB_DB: "edxapp"
+  MONGODB_REPLICASET: "mongodb"
+  MONGODB_AUTH_SOURCE: "admin"
 
   # OpenSearch
   ELASTIC_SEARCH_HOST: "opensearch-cluster-master.openedx.svc.cluster.local"

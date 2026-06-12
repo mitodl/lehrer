@@ -38,8 +38,10 @@ kubectl apply -f "$LOCAL_DEV_DIR/manifests/namespace.yaml"
 # ---------------------------------------------------------------------------
 
 echo "==> Adding Helm repositories..."
-helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
 helm repo add opensearch-helm https://opensearch-project.github.io/helm-charts 2>/dev/null || true
+helm repo add mariadb https://helm.mariadb.com/mariadb-operator 2>/dev/null || true
+helm repo add mongodb https://mongodb.github.io/helm-charts 2>/dev/null || true
+helm repo add valkey https://valkey.io/valkey-helm/ 2>/dev/null || true
 helm repo update
 
 # ---------------------------------------------------------------------------

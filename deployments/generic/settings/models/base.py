@@ -173,6 +173,16 @@ class ProductionSettingsMixin(BaseSettings):
     LOGGING_ENV: str = Field(default="sandbox")
     LOCAL_LOGLEVEL: str = Field(default="INFO")
 
+    # MongoDB connection scalars — consumed by _derive_doc_store_config to build
+    # DOC_STORE_CONFIG (a nested dict that can't arrive cleanly as a single env var).
+    MONGODB_HOST: str = Field(default="")
+    MONGODB_PORT: int = Field(default=27017)
+    MONGODB_USER: str = Field(default="")
+    MONGO_PASSWORD: str = Field(default="")  # key name used in openedx-secrets Secret
+    MONGODB_DB: str = Field(default="edxapp")
+    MONGODB_REPLICASET: str = Field(default="")
+    MONGODB_AUTH_SOURCE: str = Field(default="")
+
     # ------------------------------------------------------------------
     # Source customisation
     # ------------------------------------------------------------------
@@ -293,6 +303,33 @@ class ProductionSettingsMixin(BaseSettings):
         """Use ELASTIC_SEARCH_CONFIG_ES7 as the authoritative search config."""
         if self.ELASTIC_SEARCH_CONFIG_ES7:
             self.ELASTIC_SEARCH_CONFIG = self.ELASTIC_SEARCH_CONFIG_ES7  # type: ignore[attr-defined]
+        return self
+
+    @model_validator(mode="after")
+    def _derive_doc_store_config(self) -> ProductionSettingsMixin:
+        """Build DOC_STORE_CONFIG from MONGODB_* env vars.
+
+        edx-platform's modulestore uses DOC_STORE_CONFIG as a nested dict, so it
+        can't arrive cleanly as a single env var. The individual scalars come from
+        the platform ConfigMap (host, port, user, db, replicaSet, authsource) and
+        the openedx-secrets Secret (MONGO_PASSWORD).
+        """
+        if not self.MONGODB_HOST:
+            return self
+        config: dict = {
+            "host": self.MONGODB_HOST,
+            "port": self.MONGODB_PORT,
+            "db": self.MONGODB_DB,
+        }
+        if self.MONGODB_USER:
+            config["user"] = self.MONGODB_USER
+        if self.MONGO_PASSWORD:
+            config["password"] = self.MONGO_PASSWORD
+        if self.MONGODB_AUTH_SOURCE:
+            config["authsource"] = self.MONGODB_AUTH_SOURCE
+        if self.MONGODB_REPLICASET:
+            config["replicaSet"] = self.MONGODB_REPLICASET
+        self.DOC_STORE_CONFIG = config  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")

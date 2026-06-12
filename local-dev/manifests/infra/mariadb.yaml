@@ -1,0 +1,119 @@
+---
+# Root password for the MariaDB instance (separate from the app user secret
+# so the operator can manage the root account independently).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mariadb-root-secret
+  namespace: openedx
+stringData:
+  password: "openedx-dev"  # pragma: allowlist secret
+---
+# MariaDB instance managed by the mariadb-operator.
+# The operator creates Service "mysql" matching mysql.openedx.svc.cluster.local.
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: MariaDB
+metadata:
+  name: mysql
+  namespace: openedx
+spec:
+  rootPasswordSecretKeyRef:
+    name: mariadb-root-secret
+    key: password
+    generate: false
+
+  # Initial application database and user
+  database: edxapp
+  username: edxapp
+  passwordSecretKeyRef:
+    name: openedx-secrets
+    key: MYSQL_PASSWORD
+
+  storage:
+    size: 5Gi
+    storageClassName: local-path
+
+  myCnf: |
+    [mysqld]
+    character-set-server = utf8mb4
+    collation-server     = utf8mb4_unicode_ci
+    sql_mode             = ''
+    max_allowed_packet   = 128M
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+---
+# notes database for edx-notes-api
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Database
+metadata:
+  name: notes
+  namespace: openedx
+spec:
+  mariaDbRef:
+    name: mysql
+  characterSet: utf8mb4
+  collate: utf8mb4_unicode_ci
+---
+# edxapp_csmh database for courseware student module history
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Database
+metadata:
+  name: edxapp-csmh
+  namespace: openedx
+spec:
+  mariaDbRef:
+    name: mysql
+  characterSet: utf8mb4
+  collate: utf8mb4_unicode_ci
+---
+# Grant edxapp user access to all three databases
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: edxapp-grant-edxapp
+  namespace: openedx
+spec:
+  mariaDbRef:
+    name: mysql
+  privileges:
+  - "ALL PRIVILEGES"
+  database: "edxapp"
+  table: "*"
+  username: edxapp
+  grantOption: false
+---
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: edxapp-grant-notes
+  namespace: openedx
+spec:
+  mariaDbRef:
+    name: mysql
+  privileges:
+  - "ALL PRIVILEGES"
+  database: "notes"
+  table: "*"
+  username: edxapp
+  grantOption: false
+---
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: edxapp-grant-csmh
+  namespace: openedx
+spec:
+  mariaDbRef:
+    name: mysql
+  privileges:
+  - "ALL PRIVILEGES"
+  database: "edxapp_csmh"
+  table: "*"
+  username: edxapp
+  grantOption: false

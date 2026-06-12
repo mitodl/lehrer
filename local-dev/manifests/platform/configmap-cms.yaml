@@ -11,15 +11,17 @@ data:
   MYSQL_USER: "edxapp"
 
   CELERY_BROKER_TRANSPORT: "redis"
-  CELERY_BROKER_HOSTNAME: "redis-master.openedx.svc.cluster.local"
+  CELERY_BROKER_HOSTNAME: "redis-valkey.openedx.svc.cluster.local"
   CELERY_BROKER_USER: ""
   CELERY_BROKER_PASSWORD: ""
   CELERY_BROKER_VHOST: ""
 
-  MONGODB_HOST: "mongodb.openedx.svc.cluster.local"
+  MONGODB_HOST: "mongodb-svc.openedx.svc.cluster.local"
   MONGODB_PORT: "27017"
   MONGODB_USER: "edxapp"
   MONGODB_DB: "edxapp"
+  MONGODB_REPLICASET: "mongodb"
+  MONGODB_AUTH_SOURCE: "admin"
 
   ELASTIC_SEARCH_HOST: "opensearch-cluster-master.openedx.svc.cluster.local"
   ELASTIC_SEARCH_PORT: "9200"
