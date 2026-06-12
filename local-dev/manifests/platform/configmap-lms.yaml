@@ -1,0 +1,63 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lms-config
+  namespace: openedx
+data:
+  # Infrastructure service names (Helm-installed, within the openedx namespace)
+  MYSQL_HOST: "mysql.openedx.svc.cluster.local"
+  MYSQL_PORT: "3306"
+  MYSQL_DB_NAME: "edxapp"
+  MYSQL_USER: "edxapp"
+
+  # Redis (standalone in openedx namespace; overridden in integrated mode to use valkey)
+  CELERY_BROKER_TRANSPORT: "redis"
+  CELERY_BROKER_HOSTNAME: "redis-valkey.openedx.svc.cluster.local"
+  CELERY_BROKER_USER: ""
+  CELERY_BROKER_PASSWORD: ""
+  CELERY_BROKER_VHOST: ""
+
+  # MongoDB (edx-platform modulestore) — MongoDB Community Operator creates
+  # Service "mongodb-svc"; single-member replica set named "mongodb".
+  MONGODB_HOST: "mongodb-svc.openedx.svc.cluster.local"
+  MONGODB_PORT: "27017"
+  MONGODB_USER: "edxapp"
+  MONGODB_DB: "edxapp"
+  MONGODB_REPLICASET: "mongodb"
+  MONGODB_AUTH_SOURCE: "admin"
+
+  # OpenSearch
+  ELASTIC_SEARCH_HOST: "opensearch-cluster-master.openedx.svc.cluster.local"
+  ELASTIC_SEARCH_PORT: "9200"
+
+  # Codejail service
+  CODE_JAIL_REST_SERVICE_HOST: "http://codejail.openedx.svc.cluster.local:8000"
+  ENABLE_CODEJAIL_REST_SERVICE: "true"
+
+  # edx-notes service
+  EDXNOTES_INTERNAL_API: "http://notes.openedx.svc.cluster.local:8000/api/v1"
+  EDXNOTES_PUBLIC_API: "http://localhost:8001/api/v1"
+  ENABLE_EDXNOTES: "true"
+
+  # Service URLs (accessible from the browser)
+  LMS_BASE_URL: "http://localhost:8000"
+  CMS_BASE_URL: "http://localhost:8010"
+
+  # Static files
+  STATIC_ROOT_BASE: "/openedx/staticfiles"
+
+  # Logging
+  LOG_DIR: "/openedx/data/var/log/edx"
+  LOGGING_ENV: "sandbox"
+  LOCAL_LOGLEVEL: "INFO"
+
+  # Development flags
+  DEBUG: "false"
+  ALLOWED_HOSTS: "*"
+  HTTPS: "off"
+
+  # Disable the OL settings YAML loader — all config arrives via env vars
+  OL_SETTINGS_DIR: ""
+
+  SERVICE_VARIANT: "lms"

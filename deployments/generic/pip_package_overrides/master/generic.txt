@@ -1,0 +1,4 @@
+# Generic Open edX deployment — no pip package source-build overrides.
+# Packages listed here are installed from source (--no-binary) to work around
+# binary wheel compatibility issues (e.g. lxml, xmlsec on non-standard architectures).
+# List packages one per line using pip requirements format.

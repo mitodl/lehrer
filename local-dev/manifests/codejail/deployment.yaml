@@ -1,0 +1,42 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: codejail
+  namespace: openedx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: codejail
+  template:
+    metadata:
+      labels:
+        app: codejail
+    spec:
+      containers:
+      - name: codejail
+        image: lehrer-registry:5000/openedx-codejail:dev
+        ports:
+        - containerPort: 8000
+        securityContext:
+            # codejail requires SYS_PTRACE for sandbox isolation and
+            # allowPrivilegeEscalation for sudo to switch to the sandbox user.
+          capabilities:
+            add:
+            - SYS_PTRACE
+            - NET_ADMIN
+          allowPrivilegeEscalation: true
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

@@ -31,3 +31,4 @@ exclude = [
 #                              — setup() must be called before Django imports;
 #                                E402 (module-level import not at top) is intentional.
 "deployments/mit-ol/settings/**" = ["E402", "F401", "F403", "F405"]
+"deployments/generic/settings/**" = ["E402", "F401", "F403", "F405"]

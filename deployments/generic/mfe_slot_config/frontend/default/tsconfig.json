@@ -1,0 +1,14 @@
+{
+  "extends": "@openedx/frontend-base/tools/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "site.config.build.tsx",
+    "site.config.dev.tsx"
+  ]
+}
