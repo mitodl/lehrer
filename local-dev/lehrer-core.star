@@ -136,8 +136,10 @@ def setup(cfg):
         )
         k8s_yaml(local_dev + "/manifests/infra/mongodb.yaml")
         # Group MongoDB CRs so Tilt waits for the operator CRDs before applying.
+        # Name is "mongodb-cr" (not "mongodb") to avoid collision with the
+        # helm_repo("mongodb", ...) local_resource that Tilt registers.
         k8s_resource(
-            new_name="mongodb",
+            new_name="mongodb-cr",
             objects=[
                 "mongodb-edxapp-secret:Secret:openedx",
                 "mongodb:MongoDBCommunity:openedx",
@@ -175,7 +177,7 @@ def setup(cfg):
     if manage_infra or mysql_managed:
         infra_deps.append("mysql")
     if manage_infra or mongo_managed:
-        infra_deps.append("mongodb")
+        infra_deps.append("mongodb-cr")
     if manage_infra:
         infra_deps.append("redis")
         infra_deps.append("opensearch")
