@@ -869,6 +869,7 @@ class AqueductSettings(SharedAqueductSettings):
     MAKO_MODULE_DIR: str = Field(default="/tmp/mako_lms")
     MAKO_TEMPLATE_DIRS_BASE: list[Any] = Field(
         default_factory=lambda: [
+            Path("/openedx/themes/"),
             Path("/openedx/edx-platform/lms/templates"),
             Path("/openedx/edx-platform/common/templates"),
             Path("/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"),
@@ -877,6 +878,12 @@ class AqueductSettings(SharedAqueductSettings):
             Path("/openedx/edx-platform/openedx/core/lib/license/templates"),
             Path("/openedx/edx-platform/lms/djangoapps/teams/templates"),
             Path("/openedx/edx-platform/openedx/features/course_experience/templates"),
+            Path(
+                "/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"
+            ),
+            Path(
+                "/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"
+            ),
         ]
     )
     MARKETING_SITE_CHECKOUT_URL: Any = Field(default=None)  # TODO: refine type
