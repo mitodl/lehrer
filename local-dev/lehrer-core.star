@@ -35,8 +35,8 @@ load('ext://helm_resource', 'helm_resource', 'helm_repo')
 # ---------------------------------------------------------------------------
 
 def _lehrer_root():
-    # lehrer-core.star lives at local-dev/lehrer-core.star; walk up one level.
-    return config.main_dir + "/.."
+    # LEHRER_LOCAL_DEV_DIR is always set to lehrer/local-dev/; walk up one level.
+    return LEHRER_LOCAL_DEV_DIR + "/.."
 
 def _deploy_cfg():
     cfg = LEHRER_DEPLOY_CONFIG
@@ -226,13 +226,16 @@ _shared_src = _frontend_dir + "/shared"
 _local_dev = _local_dev_dir()
 
 # Enumerate site projects: subdirectories of frontend/ that aren't shared/ or src/.
-# Use `find` via local() to reliably get only directories.
-_site_projects = str(local(
-    "find " + _frontend_dir + " -maxdepth 1 -mindepth 1 -type d"
-    " -not -name shared -not -name src"
-    " -printf '%f\\n'",
-    quiet=True,
-)).strip().splitlines()
+# Extract basenames from full paths for BSD/macOS compatibility (no -printf).
+_site_projects = [
+    p.split("/")[-1]
+    for p in str(local(
+        "find " + _frontend_dir + " -maxdepth 1 -mindepth 1 -type d"
+        " -not -name shared -not -name src",
+        quiet=True,
+    )).strip().splitlines()
+    if p
+]
 
 _mfe_images = {}
 

@@ -23,6 +23,16 @@ spec:
         - secretRef:
             name: openedx-secrets
         env:
+        - name: OAUTH_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: openedx-secrets
+              key: NOTES_OAUTH_CLIENT_ID
+        - name: OAUTH_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: openedx-secrets
+              key: NOTES_OAUTH_CLIENT_SECRET
         - name: DB_HOST
           value: "mysql.openedx.svc.cluster.local"
         - name: DB_NAME

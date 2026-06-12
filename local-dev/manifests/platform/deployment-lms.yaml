@@ -16,8 +16,8 @@ spec:
     spec:
       containers:
       - name: lms
-          # Image tag is managed by Tilt via custom_build; lehrer-core.star
-          # sets the correct registry prefix based on LEHRER_REGISTRY_K8S.
+        # Image tag is managed by Tilt via custom_build; lehrer-core.star
+        # sets the correct registry prefix based on LEHRER_REGISTRY_K8S.
         image: k3d-lehrer-registry:5000/openedx-platform:dev
         command:
         - gunicorn

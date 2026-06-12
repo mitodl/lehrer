@@ -1,10 +1,10 @@
 ---
 # bitnami/mysql — single-node, no replication, no persistence (dev use only)
 auth:
-  rootPassword: "localdev"  # pragma: allowlist secret
+  rootPassword: "openedx-dev"  # pragma: allowlist secret
   database: "edxapp"
   username: "edxapp"
-  password: "edxapp"  # pragma: allowlist secret
+  password: "openedx-dev"  # pragma: allowlist secret
 
 primary:
   persistence:

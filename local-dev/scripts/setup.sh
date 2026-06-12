@@ -51,6 +51,7 @@ MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-"openedx-dev"}"  # pragma: allowlist
 MYSQL_PASSWORD="${MYSQL_PASSWORD:-"openedx-dev"}"            # pragma: allowlist secret
 DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY:-"insecure-local-dev-key-change-for-staging"}"  # pragma: allowlist secret
 MONGO_PASSWORD="${MONGO_PASSWORD:-"openedx-dev"}"            # pragma: allowlist secret
+NOTES_OAUTH_CLIENT_ID="${NOTES_OAUTH_CLIENT_ID:-"notes"}"  # pragma: allowlist secret
 NOTES_OAUTH_CLIENT_SECRET="${NOTES_OAUTH_CLIENT_SECRET:-"notes-dev-secret"}"  # pragma: allowlist secret
 
 echo "==> Creating openedx-secrets Secret..."
@@ -60,6 +61,7 @@ kubectl -n openedx create secret generic openedx-secrets \
     --from-literal=DB_PASSWORD="$MYSQL_PASSWORD" \
     --from-literal=DJANGO_SECRET_KEY="$DJANGO_SECRET_KEY" \
     --from-literal=MONGO_PASSWORD="$MONGO_PASSWORD" \
+    --from-literal=NOTES_OAUTH_CLIENT_ID="$NOTES_OAUTH_CLIENT_ID" \
     --from-literal=NOTES_OAUTH_CLIENT_SECRET="$NOTES_OAUTH_CLIENT_SECRET" \
     --dry-run=client -o yaml | kubectl apply -f -
 
