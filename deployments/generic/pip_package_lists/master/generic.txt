@@ -1,0 +1,7 @@
+# Generic Open edX deployment — no extra pip packages beyond edx-platform's own requirements.
+# The base requirements (requirements/edx/base.txt and requirements/edx/assets.txt)
+# are pulled automatically from edx-platform by the lehrer build pipeline.
+#
+# To add custom packages, list them here one per line (pip requirements format).
+# Then run `dagger call platform regenerate-aqueduct-settings` to update the
+# settings models in settings/lms/models/aqueduct.py and settings/cms/models/aqueduct.py.

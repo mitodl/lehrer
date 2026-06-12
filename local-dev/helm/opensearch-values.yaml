@@ -1,0 +1,25 @@
+---
+# opensearch/opensearch — single node, security disabled (dev use only)
+singleNode: true
+replicas: 1
+
+config:
+  opensearch.yml: |
+    plugins.security.disabled: true
+
+extraEnvs:
+- name: DISABLE_SECURITY_PLUGIN
+  value: "true"
+- name: discovery.type
+  value: single-node
+
+persistence:
+  enabled: false
+
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "1"

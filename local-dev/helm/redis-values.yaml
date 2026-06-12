@@ -1,0 +1,17 @@
+---
+# bitnami/redis — standalone, no auth, no persistence (dev use only)
+architecture: standalone
+
+auth:
+  enabled: false
+
+master:
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
