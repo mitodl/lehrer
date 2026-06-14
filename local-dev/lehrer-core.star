@@ -326,7 +326,8 @@ def setup(cfg):
                     "dagger --progress=plain call mfe watch-site" +
                     " --site-project " + site_dir +
                     shared_src_flag +
-                    " up --ports 8080:8080"
+                    # Host 8090 (matches k3d-config MFE ingress) -> container 8080.
+                    " up --ports 8090:8080"
                 ),
                 deps=[site_dir] + mfe_deps_base,
                 labels=["mfe"],

@@ -101,7 +101,7 @@ def _current_context() -> str:
 def _required_host_ports() -> list[int]:
     """Host ports the k3d loadbalancer must bind, parsed from k3d-config.yaml.
 
-    Lines look like ``- port: 8080:80`` — the host side is the first number.
+    Lines look like ``- port: 8000:80`` — the host side is the first number.
     """
     text = _paths.k3d_config().read_text()
     ports: list[int] = []

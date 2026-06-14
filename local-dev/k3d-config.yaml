@@ -23,7 +23,11 @@ ports:
   nodeFilters: ["loadbalancer"]
 - port: 8010:80
   nodeFilters: ["loadbalancer"]
-- port: 8080:80
+# MFE ingress. 8090 rather than the conventional 8080 to avoid clashing with
+# other local dev servers that commonly squat on 8080. `lehrer dev setup`
+# preflights this port; the MFE baseUrl in the frontend site.config.*.tsx files
+# must match it.
+- port: 8090:80
   nodeFilters: ["loadbalancer"]
 - port: 8001:80
   nodeFilters: ["loadbalancer"]
