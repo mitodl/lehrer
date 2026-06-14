@@ -14,7 +14,9 @@ from __future__ import annotations
 import glob
 import json
 import os
+import re
 import shutil
+import socket
 from pathlib import Path
 from typing import Literal
 
@@ -61,14 +63,18 @@ _SECRET_DEFAULTS: tuple[tuple[str, str], ...] = (
 )
 
 
-ClusterState = Literal["absent", "stopped", "running"]
+ClusterState = Literal["absent", "stopped", "partial", "running"]
 
 
 def _cluster_state() -> ClusterState:
-    """Return whether the lehrer-dev cluster is absent, stopped, or running.
+    """Classify the lehrer-dev cluster as absent, stopped, partial, or running.
 
     k3d clusters persist across reboots in a stopped state, so "exists" is not
-    the same as "running": a stopped cluster has zero servers running.
+    the same as "running". A failed ``k3d cluster start`` (e.g. a host-port
+    clash on the loadbalancer) can also leave the cluster *partially* up — the
+    server/agent containers running but the loadbalancer exited, which makes
+    the API unreachable. We inspect every node's running flag so callers can
+    tell a healthy cluster from a wedged one.
     """
     out = capture("k3d", "cluster", "list", "-o", "json", check=False)
     try:
@@ -76,13 +82,61 @@ def _cluster_state() -> ClusterState:
     except json.JSONDecodeError:
         return "absent"
     for cluster in clusters:
-        if cluster.get("name") == CLUSTER:
-            return "running" if cluster.get("serversRunning", 0) else "stopped"
+        if cluster.get("name") != CLUSTER:
+            continue
+        nodes = cluster.get("nodes") or []
+        running = sum(1 for n in nodes if n.get("State", {}).get("Running"))
+        if running == 0:
+            return "stopped"
+        if running == len(nodes):
+            return "running"
+        return "partial"
     return "absent"
 
 
 def _current_context() -> str:
     return capture("kubectl", "config", "current-context", check=False) or "(none)"
+
+
+def _required_host_ports() -> list[int]:
+    """Host ports the k3d loadbalancer must bind, parsed from k3d-config.yaml.
+
+    Lines look like ``- port: 8080:80`` — the host side is the first number.
+    """
+    text = _paths.k3d_config().read_text()
+    ports: list[int] = []
+    for match in re.finditer(r"port:\s*(\d+):\d+", text):
+        ports.append(int(match.group(1)))
+    return ports
+
+
+def _port_in_use(port: int) -> bool:
+    """Return ``True`` if ``0.0.0.0:port`` cannot be bound (k3d's binding)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.bind(("0.0.0.0", port))  # noqa: S104 - mirrors k3d's bind
+        except OSError:
+            return True
+    return False
+
+
+def _preflight_host_ports() -> None:
+    """Abort with an actionable error if any required host port is taken.
+
+    k3d's own failure for this is a wall of Docker networking text; catching it
+    here turns it into a one-liner that names the port to free.
+    """
+    busy = [port for port in _required_host_ports() if _port_in_use(port)]
+    if not busy:
+        return
+    ports = ", ".join(str(port) for port in busy)
+    raise SystemExit(
+        f"Host port(s) already in use: {ports}. The k3d loadbalancer needs "
+        "them for the LMS/CMS/MFE/notes ingress.\n"
+        f"Find the offender with:  ss -ltnp | grep -E ':({ports.replace(', ', '|')})'\n"
+        "Then free the port(s) and re-run `lehrer dev setup`, or remap them in "
+        "local-dev/k3d-config.yaml."
+    )
 
 
 @app.command(name="check")
@@ -120,9 +174,15 @@ def setup() -> None:
     if state == "running":
         print(f"==> Cluster {CLUSTER} already running — skipping creation.")
     elif state == "stopped":
+        _preflight_host_ports()
         print(f"==> Cluster {CLUSTER} exists but is stopped — starting it.")
         run("k3d", "cluster", "start", CLUSTER)
+    elif state == "partial":
+        _preflight_host_ports()
+        print(f"==> Cluster {CLUSTER} is partially up (a node exited) — restarting it.")
+        run("k3d", "cluster", "start", CLUSTER)
     else:
+        _preflight_host_ports()
         run("k3d", "cluster", "create", "--config", str(_paths.k3d_config()))
 
     run("kubectl", "config", "use-context", CONTEXT)
@@ -290,6 +350,13 @@ def status() -> None:
         return
     if state == "stopped":
         print("Run `lehrer dev setup` to start it.")
+        return
+    if state == "partial":
+        print(
+            "A node has exited (often a host-port clash on the loadbalancer); "
+            "the API is likely unreachable. Run `lehrer dev setup` to restart "
+            "it once the port is free."
+        )
         return
 
     print(f"kubectl context: {_current_context()}")
