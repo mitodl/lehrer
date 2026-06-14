@@ -13,6 +13,62 @@ This module provides:
 - **Reproducibility** - Consistent builds across environments
 - **Efficiency** - Leverages Dagger's caching and parallelization
 
+## The `lehrer` CLI
+
+`lehrer` is the single entrypoint for working in this repository. It is a
+[cyclopts](https://cyclopts.readthedocs.io/) CLI that is intended to grow to
+cover every routine task — today it manages the local k3d dev environment and
+drives the Dagger build pipelines.
+
+```bash
+uv sync            # install the CLI into the project venv
+uv run lehrer --help
+```
+
+Top-level command groups:
+
+| Command | Purpose |
+|---|---|
+| `lehrer dev`   | Manage the local k3d Open edX dev environment |
+| `lehrer build` | Run the Dagger build pipelines |
+
+### Local development
+
+The local dev environment runs on [k3d](https://k3d.io) + [Tilt](https://tilt.dev).
+The cluster lifecycle is:
+
+```bash
+lehrer dev check       # verify required tools (k3d, kubectl, tilt, helm, dagger, docker)
+lehrer dev setup       # create the k3d cluster + bootstrap secrets (run once)
+lehrer dev start       # tilt up — build & deploy the services
+lehrer dev stop        # tilt down — remove deployed resources, keep the cluster
+lehrer dev teardown    # delete the cluster and clean up all local state
+lehrer dev status      # show cluster / pod state
+```
+
+Use a deployment-specific config and MFE hot-reload:
+
+```bash
+lehrer dev start --deployment-config ./deployments/mit-ol --mfe-hot-reload
+```
+
+Secret values are read from the environment (`MYSQL_ROOT_PASSWORD`,
+`DJANGO_SECRET_KEY`, `MONGO_PASSWORD`, ...) and fall back to safe local-dev
+defaults.
+
+### Builds
+
+`lehrer build` wraps `dagger call` against the lehrer module. Trailing
+arguments are passed straight through to Dagger:
+
+```bash
+lehrer build functions                 # dagger functions
+lehrer build platform --deployment-name mitxonline --release-name master
+lehrer build mfe-legacy --mfe-name learning ... export --path ./dist
+lehrer build codejail --release-name master
+lehrer build call mfe watch-site ...   # raw `dagger call` escape hatch
+```
+
 ## Architecture
 
 The build pipeline follows these stages:

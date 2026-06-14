@@ -1,10 +1,18 @@
 # Standalone Tiltfile for lehrer local dev environment.
 #
-# Usage:
-#   cd local-dev && tilt up
-#   cd local-dev && tilt up -- --deployment-config ../deployments/mit-ol --mfe-hot-reload
+# This Tiltfile is normally driven through the `lehrer` CLI rather than invoked
+# directly:
 #
-# Prerequisites: run scripts/setup.sh first to create the k3d cluster and bootstrap secrets.
+#   lehrer dev setup     # create the k3d cluster + bootstrap secrets (once)
+#   lehrer dev start     # tilt up (this file)
+#   lehrer dev start --deployment-config ../deployments/mit-ol --mfe-hot-reload
+#   lehrer dev stop      # tilt down
+#
+# It can still be invoked directly for debugging:
+#   tilt up --file local-dev/Tiltfile -- --deployment-config ../deployments/mit-ol
+#
+# Prerequisites: run `lehrer dev setup` first to create the k3d cluster and
+# bootstrap secrets.
 
 load("./lehrer-core.star", "setup")
 

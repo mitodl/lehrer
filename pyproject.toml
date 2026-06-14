@@ -2,8 +2,11 @@
 name = "lehrer"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["dagger-io", "pydantic>=2.10", "pyyaml"]
+dependencies = ["cyclopts>=3", "dagger-io", "pydantic>=2.10", "pyyaml"]
 license = "BSD-3-Clause"
+
+[project.scripts]
+lehrer = "lehrer.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.2,<0.12.0"]
