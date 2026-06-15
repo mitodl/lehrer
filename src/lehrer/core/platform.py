@@ -79,12 +79,14 @@ class OpenedxPlatform:
             .with_env_variable("UV_PROJECT_ENVIRONMENT", "/openedx/venv")
             .with_env_variable("VIRTUAL_ENV", "/openedx/venv")
             .with_env_variable("PATH", "/openedx/venv/bin:/usr/local/bin:/usr/bin:/bin")
-            # Cap setuptools < 81 for EVERY uv install in the pipeline (base
+            # Cap setuptools < 82 for EVERY uv install in the pipeline (base
             # requirements, lxml/xmlsec rebuild, and the editable edx-platform
             # install in `collected`, which otherwise re-resolves to the latest).
             # pkg_resources — imported by edx-platform — was removed in
-            # setuptools 82, so an unconstrained resolve breaks the build.
-            .with_new_file("/openedx/uv-constraints.txt", "setuptools<81\n")
+            # setuptools 82, so an unconstrained resolve breaks the build. The
+            # bound is < 82 (not < 81) so a consumer that pins setuptools==81.x
+            # for PyFilesystem2 compatibility still resolves.
+            .with_new_file("/openedx/uv-constraints.txt", "setuptools<82\n")
             .with_env_variable("UV_CONSTRAINT", "/openedx/uv-constraints.txt")
             .with_exec(["apt", "update"])
             .with_exec(
@@ -331,14 +333,14 @@ class OpenedxPlatform:
             ]
         )
 
-        # Pin setuptools < 81 as the final pip step. uv-created venvs do not seed
+        # Pin setuptools < 82 as the final pip step. uv-created venvs do not seed
         # setuptools, and edx-platform imports ``pkg_resources`` (pyfilesystem's
         # ``fs`` and legacy ``pkg_resources.declare_namespace`` packages).
         # pkg_resources was removed in setuptools 82, and the base-requirements
         # resolution above pulls in the latest (>= 82) — so this must run last,
         # after that resolution, to guarantee a pkg_resources-bearing setuptools.
         container = container.with_exec(
-            ["uv", "pip", "install", "setuptools<81", "wheel", "pip"]
+            ["uv", "pip", "install", "setuptools<82", "wheel", "pip"]
         )
 
         # Install Node.js using nodeenv
