@@ -30,7 +30,7 @@ config.define_string(
 )
 config.define_string(
     "settings-namespace",
-    usage="Django settings namespace for assets/i18n modules (default: production)",
+    usage="Django settings namespace for assets/i18n modules (default: generic)",
 )
 config.define_bool(
     "mfe-hot-reload",
@@ -60,5 +60,5 @@ setup({
     "apply_platform_configmaps": True,
     "release_name":    cfg.get("release-name") or "master",
     "deploy_name":     cfg.get("deployment-name") or "generic",
-    "settings_ns":     cfg.get("settings-namespace") or "production",
+    "settings_ns":     cfg.get("settings-namespace") or "generic",
 })

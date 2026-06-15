@@ -14,7 +14,12 @@ release_name: "master"
 # Django settings sub-package namespace. Used for lms.envs.<namespace>.assets
 # and lms.envs.<namespace>.i18n during the build. The aqueduct.py module is
 # always placed at lms/envs/aqueduct.py regardless of namespace.
-settings_namespace: "production"
+#
+# Must NOT collide with an existing edx-platform settings module name. In
+# particular "production" is reserved — edx-platform ships lms/envs/production.py,
+# which shadows the lms/envs/production/ package the build creates and makes the
+# assets/i18n submodules unreachable.
+settings_namespace: "generic"
 
 # Set to true to also start a watch_site hot-reload dev server alongside the
 # compiled nginx MFE deployment.
