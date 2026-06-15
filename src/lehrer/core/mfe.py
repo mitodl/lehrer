@@ -53,7 +53,7 @@ class OpenedxMfe:
         mfe_name: str,
         mfe_repo: str = "",
         mfe_branch: str = "master",
-        node_version: str = "20.18.0",
+        node_version: str = "20",
         deployment_name: str = "default",
         slot_config: dagger.Directory | None = None,
         mfe_source: dagger.Directory | None = None,
@@ -75,7 +75,7 @@ class OpenedxMfe:
                 build uses it verbatim and skips cloning — pass this to build the
                 exact revision pinned by an upstream CI step rather than whatever
                 ``mfe_branch`` points at when the build runs.
-            node_version: Node.js version to use (default: 20.18.0)
+            node_version: Node.js version to use (default: 20)
             deployment_name: Deployment name used to select config files from
                 ``slot_config``.  Determines which
                 ``{deployment_name}/common-mfe-config.env.jsx`` is loaded.
@@ -270,7 +270,7 @@ class OpenedxMfe:
         release_name: str = "",
         config_file: str = "build_config.yaml",
         mfe_branch: str = "master",
-        node_version: str = "20.18.0",
+        node_version: str = "20",
         env_vars: list[str] | None = None,
         pre_build_commands: list[str] | None = None,
     ) -> dagger.Directory:
@@ -324,7 +324,7 @@ class OpenedxMfe:
             config_file: Name of the YAML config inside ``slot_config``
                 (default: ``build_config.yaml``).
             mfe_branch: Git branch (default: ``master``).
-            node_version: Node.js version (default: ``20.18.0``).
+            node_version: Node.js version (default: ``20``).
             env_vars: Build-time environment variables in ``KEY=VALUE`` form.
             pre_build_commands: Shell commands run after ``npm install``.
 
@@ -376,7 +376,7 @@ class OpenedxMfe:
         self,
         mfe_source: dagger.Directory,
         slot_config: dagger.Directory | None = None,
-        node_version: str = "20.18.0",
+        node_version: str = "20",
         deployment_name: str = "default",
         mfe_name: str = "learning",
         port: int = 8080,
@@ -390,7 +390,7 @@ class OpenedxMfe:
             slot_config: Directory containing slot configuration files.
                 **Required** — pass the directory from your operator slot config
                 pass the directory from your operator config, e.g. ``--slot-config /path/to/mfe_slot_config/legacy``.
-            node_version: Node.js version to use (default: 20.18.0)
+            node_version: Node.js version to use (default: 20)
             deployment_name: Deployment name for config file selection
                 (default: ``"default"``).
             mfe_name: MFE name (e.g., 'learning')
