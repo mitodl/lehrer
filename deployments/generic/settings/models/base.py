@@ -1223,7 +1223,7 @@ class SharedAqueductSettings(BaseSettings):
     INTEGRATED_CHANNELS_API_CHUNK_TRANSMISSION_LIMIT: dict[str, Any] = Field(
         default_factory=lambda: {}
     )
-    JWT_AUTH: dict[str, Any] = Field(
+    JWT_AUTH: dict[str, Any] | None = Field(
         default=None
     )  # OPAQUE: original dict value is not serialisable
     LANGUAGES: list[Any] = Field(
