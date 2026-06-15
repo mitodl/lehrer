@@ -54,7 +54,9 @@ data:
 
   # Development flags
   DEBUG: "false"
-  ALLOWED_HOSTS: "*"
+  # JSON-encoded: the aqueduct ALLOWED_HOSTS field is list[Any], and
+  # pydantic-settings parses list-typed env vars as JSON.
+  ALLOWED_HOSTS: '["*"]'
   HTTPS: "off"
 
   # Disable the OL settings YAML loader — all config arrives via env vars

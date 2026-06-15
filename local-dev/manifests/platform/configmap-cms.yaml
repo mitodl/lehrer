@@ -36,7 +36,9 @@ data:
   LOCAL_LOGLEVEL: "INFO"
 
   DEBUG: "false"
-  ALLOWED_HOSTS: "*"
+  # JSON-encoded: the aqueduct ALLOWED_HOSTS field is list[Any], and
+  # pydantic-settings parses list-typed env vars as JSON.
+  ALLOWED_HOSTS: '["*"]'
   HTTPS: "off"
 
   OL_SETTINGS_DIR: ""
