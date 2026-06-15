@@ -304,17 +304,24 @@ def setup(cfg):
             ref=mfe_ref,
             command=(
                 "set -e && " +
+                # Push ourselves to the host-side registry (same pattern as the
+                # platform/codejail/notes builds). Without this, Tilt pushes
+                # $EXPECTED_REF itself and mangles the repo name under
+                # default_registry, so the pod's pull ref never resolves.
+                push_rewrite +
                 "mkdir -p " + tmp_dir + " && " +
                 "dagger --progress=plain call mfe build-site" +
                 " --site-project " + site_dir +
                 shared_src_flag +
                 " export --path " + tmp_dir + "/dist && " +
                 "cp " + local_dev + "/nginx-mfe.conf " + tmp_dir + "/nginx-mfe.conf && " +
-                "docker build -t $EXPECTED_REF" +
+                "docker build -t $PUSH_REF" +
                 " -f " + local_dev + "/Dockerfile.mfe" +
-                " " + tmp_dir
+                " " + tmp_dir + " && " +
+                "docker push $PUSH_REF"
             ),
             deps=[site_dir] + mfe_deps_base,
+            skips_local_docker=True,
         )
 
     if mfe_hot_reload:
