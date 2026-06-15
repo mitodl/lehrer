@@ -79,6 +79,13 @@ class OpenedxPlatform:
             .with_env_variable("UV_PROJECT_ENVIRONMENT", "/openedx/venv")
             .with_env_variable("VIRTUAL_ENV", "/openedx/venv")
             .with_env_variable("PATH", "/openedx/venv/bin:/usr/local/bin:/usr/bin:/bin")
+            # Cap setuptools < 81 for EVERY uv install in the pipeline (base
+            # requirements, lxml/xmlsec rebuild, and the editable edx-platform
+            # install in `collected`, which otherwise re-resolves to the latest).
+            # pkg_resources — imported by edx-platform — was removed in
+            # setuptools 82, so an unconstrained resolve breaks the build.
+            .with_new_file("/openedx/uv-constraints.txt", "setuptools<81\n")
+            .with_env_variable("UV_CONSTRAINT", "/openedx/uv-constraints.txt")
             .with_exec(["apt", "update"])
             .with_exec(
                 ["apt", "install", "-y", "--no-install-recommends"] + apt_packages
@@ -298,6 +305,13 @@ class OpenedxPlatform:
         # Fix lxml/xmlsec compatibility issues by building from source.
         # --no-binary is a CLI flag that uv pip install supports; it is NOT
         # an in-requirements-file option, so uv handles it correctly here.
+        #
+        # lxml and xmlsec are passed as explicit install targets (not only as
+        # --no-binary arguments) so the from-source rebuild always reinstalls
+        # them after the uninstall above — regardless of whether the deployment
+        # overrides file happens to list them. A deployment that *does* pin them
+        # (e.g. lxml==5.3.0) still wins, because the -r requirement constrains
+        # the version of the unversioned positional package.
         container = container.with_exec(
             ["uv", "pip", "uninstall", "lxml", "xmlsec"]
         ).with_exec(
@@ -310,9 +324,21 @@ class OpenedxPlatform:
                 "lxml",
                 "--no-binary",
                 "xmlsec",
+                "lxml",
+                "xmlsec",
                 "-r",
                 f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt",
             ]
+        )
+
+        # Pin setuptools < 81 as the final pip step. uv-created venvs do not seed
+        # setuptools, and edx-platform imports ``pkg_resources`` (pyfilesystem's
+        # ``fs`` and legacy ``pkg_resources.declare_namespace`` packages).
+        # pkg_resources was removed in setuptools 82, and the base-requirements
+        # resolution above pulls in the latest (>= 82) — so this must run last,
+        # after that resolution, to guarantee a pkg_resources-bearing setuptools.
+        container = container.with_exec(
+            ["uv", "pip", "install", "setuptools<81", "wheel", "pip"]
         )
 
         # Install Node.js using nodeenv
@@ -1174,6 +1200,9 @@ class OpenedxPlatform:
         for pkg in packages_to_remove:
             container = container.with_exec(["uv", "pip", "uninstall", pkg])
 
+        # Reinstall lxml/xmlsec from source. They are passed as explicit install
+        # targets (not only --no-binary args) so they always come back after the
+        # uninstall, even when the deployment overrides file does not list them.
         container = container.with_exec(
             ["uv", "pip", "uninstall", "lxml", "xmlsec"]
         ).with_exec(
@@ -1185,6 +1214,8 @@ class OpenedxPlatform:
                 "--no-binary",
                 "lxml",
                 "--no-binary",
+                "xmlsec",
+                "lxml",
                 "xmlsec",
                 "-r",
                 f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt",
