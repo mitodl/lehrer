@@ -517,6 +517,7 @@ class AqueductSettings(SharedAqueductSettings):
             "openedx.core.djangoapps.credit.apps.CreditConfig",
             "common.djangoapps.xblock_django",
             "openedx.core.djangoapps.agreements",
+            "openedx.features.survey_report",
             "openedx.core.djangoapps.catalog",
             "openedx.core.djangoapps.programs.apps.ProgramsConfig",
             "oauth2_provider",

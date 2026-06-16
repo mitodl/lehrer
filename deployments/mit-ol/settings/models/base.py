@@ -1654,6 +1654,8 @@ class SharedAqueductSettings(BaseSettings):
     SITE_ID: int = Field(default=1)
     SITE_NAME: str = Field(default="localhost")
     SKIP_RATE_LIMIT_ON_ACCOUNT_AFTER_DAYS: int = Field(default=0)
+    SOCIAL_AUTH_EDX_OAUTH2_URL_ROOT: str | None = Field(default=None)
+    SOCIAL_AUTH_EDX_OAUTH2_PUBLIC_URL_ROOT: str | None = Field(default=None)
     SOCIAL_AUTH_SAML_SP_PRIVATE_KEY: str = Field(default="")
     SOCIAL_AUTH_SAML_SP_PRIVATE_KEY_DICT: dict[str, Any] = Field(
         default_factory=lambda: {}
