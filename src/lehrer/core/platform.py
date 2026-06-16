@@ -1110,6 +1110,7 @@ class OpenedxPlatform:
         platform_branch: str = "master",
         python_version: str | None = None,
         packages_to_remove: list[str] | None = None,
+        aqueduct_source: dagger.Directory | None = None,
     ) -> dagger.Directory:
         """Regenerate the AqueductSettings pydantic models for LMS and CMS.
 
@@ -1150,6 +1151,11 @@ class OpenedxPlatform:
             python_version: Python version. Defaults to 3.12 for master.
             packages_to_remove: Python packages to uninstall after base install
                 (default: empty list).
+            aqueduct_source: Optional local django-aqueduct checkout to install
+                editable instead of the PyPI-pinned version from the deployment
+                requirements.  Use this to regenerate with unreleased generator
+                fixes.  Installed before the deployment requirements so its
+                version satisfies the pinned ``django-aqueduct==`` constraint.
         """
         if packages_to_remove is None:
             packages_to_remove = []
@@ -1183,19 +1189,29 @@ class OpenedxPlatform:
                     " /root/pip_package_lists/edx_assets.txt",
                 ]
             )
-            .with_exec(
-                [
-                    "uv",
-                    "pip",
-                    "install",
-                    "-r",
-                    "/root/pip_package_lists/edx_base.txt",
-                    "-r",
-                    "/root/pip_package_lists/edx_assets.txt",
-                    "-r",
-                    f"/root/pip_package_lists/{release_name}/{deployment_name}.txt",
-                ]
-            )
+        )
+
+        # Install a local django-aqueduct checkout as an editable dev override.
+        # Done before the deployment requirements so its version satisfies the
+        # pinned ``django-aqueduct==`` constraint and uv skips the PyPI fetch —
+        # letting regeneration pick up unreleased generator fixes.
+        if aqueduct_source is not None:
+            container = container.with_mounted_directory(
+                "/root/django-aqueduct", aqueduct_source
+            ).with_exec(["uv", "pip", "install", "-e", "/root/django-aqueduct"])
+
+        container = container.with_exec(
+            [
+                "uv",
+                "pip",
+                "install",
+                "-r",
+                "/root/pip_package_lists/edx_base.txt",
+                "-r",
+                "/root/pip_package_lists/edx_assets.txt",
+                "-r",
+                f"/root/pip_package_lists/{release_name}/{deployment_name}.txt",
+            ]
         )
 
         # Remove any deployment-specific packages that conflict with the build
@@ -1270,7 +1286,9 @@ class OpenedxPlatform:
                 "from django_aqueduct.discovery.module import ModuleInspector",
                 "from django_aqueduct.codegen.generator import SettingsModelGenerator",
                 "def _add_imports(code):",
-                "    # 1. Add missing stdlib/third-party imports that the generator omits.",
+                "    # Add stdlib/third-party imports the generator references but omits.",
+                "    # (Optional-widening of None-default fields is handled by the",
+                "    # django-aqueduct generator itself as of 0.4.0.)",
                 "    extra = []",
                 "    if 'Path(' in code and 'from path import' not in code:",
                 "        extra.append('from path import Path')",
@@ -1281,14 +1299,6 @@ class OpenedxPlatform:
                 '        last_import = max((i for i, l in enumerate(lines) if re.match(r"^(from|import)\\s", l)), default=0)',
                 "        lines = lines[:last_import+1] + extra + lines[last_import+1:]",
                 "        code = '\\n'.join(lines) + '\\n'",
-                "    # 2. Fix OPAQUE fields: `T = Field(default=None)` → `T | None = Field(default=None)`.",
-                "    #    The generator marks certain values as OPAQUE (not serialisable) and emits",
-                "    #    default=None, but keeps the non-nullable type annotation.  Widen it so",
-                "    #    pydantic v2 doesn't raise a validation error when the field is absent.",
-                "    code = re.sub(",
-                "        r'^(    \\w+: (?:(?!None|Any)[^\\n=])+) = Field\\(default=None\\)',",
-                "        r'\\1 | None = Field(default=None)',",
-                "        code, flags=re.MULTILINE)",
                 "    return code",
                 "for shim, out in [",
                 "    ('lehrer_lms_shim', 'lms/envs/models/aqueduct.py'),",
@@ -1299,6 +1309,28 @@ class OpenedxPlatform:
                 "    code = _add_imports(SettingsModelGenerator(fields).render())",
                 "    open(out, 'w').write(code)",
                 "    print(f'  {len(fields)} fields written to {out}')",
+                "# ── Boot self-test ──────────────────────────────────────────",
+                "# Fail generation (not pod boot) if a model cannot instantiate or is",
+                "# missing INSTALLED_APPS.  Import each file as a real module so pydantic",
+                "# can resolve the `from __future__ import annotations` forward refs, then",
+                "# instantiate with a cleared environment (pure common.py default snapshot).",
+                "import importlib.util as _ilu",
+                "for _mod, out in [",
+                "    ('lehrer_genmodel_lms', 'lms/envs/models/aqueduct.py'),",
+                "    ('lehrer_genmodel_cms', 'cms/envs/models/aqueduct.py'),",
+                "]:",
+                "    _spec = _ilu.spec_from_file_location(_mod, out)",
+                "    _m = _ilu.module_from_spec(_spec)",
+                "    sys.modules[_mod] = _m",
+                "    _spec.loader.exec_module(_m)",
+                "    _saved = dict(os.environ); os.environ.clear()",
+                "    try:",
+                "        inst = _m.AqueductSettings()",
+                "    finally:",
+                "        os.environ.clear(); os.environ.update(_saved)",
+                "    apps = getattr(inst, 'INSTALLED_APPS', None)",
+                "    assert apps, f'{out}: INSTALLED_APPS empty/missing ({apps!r})'",
+                "    print(f'  self-test OK: {out} instantiates, {len(apps)} INSTALLED_APPS')",
             ]
         )
         container = container.with_exec(["python", "-c", generate_script])
