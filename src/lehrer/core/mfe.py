@@ -137,7 +137,7 @@ class OpenedxMfe:
                     "-c",
                     "apt-get update -q && "
                     "apt-get install -y --no-install-recommends "
-                    "git build-essential python3 python-is-python3 && "
+                    "ca-certificates git build-essential python3 python-is-python3 && "
                     "apt-get clean && "
                     "rm -rf /var/lib/apt/lists/*",
                 ]
@@ -419,7 +419,7 @@ class OpenedxMfe:
                     "-c",
                     "apt-get update -q && "
                     "apt-get install -y --no-install-recommends "
-                    "git build-essential python3 python-is-python3 && "
+                    "ca-certificates git build-essential python3 python-is-python3 && "
                     "apt-get clean && "
                     "rm -rf /var/lib/apt/lists/*",
                 ]
@@ -483,7 +483,7 @@ class OpenedxMfe:
                     "-c",
                     "apt-get update -q && "
                     "apt-get install -y --no-install-recommends "
-                    "git build-essential python3 python-is-python3 && "
+                    "ca-certificates git build-essential python3 python-is-python3 && "
                     "apt-get clean && "
                     "rm -rf /var/lib/apt/lists/*",
                 ]
