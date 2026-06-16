@@ -72,19 +72,44 @@ So there are (at least) three generator defects:
 3. **No boot validation** — the generated model was never asserted to import and
    `django.setup()` cleanly, which would have caught (1) and (2) immediately.
 
+## Scope note: django-aqueduct is ours
+
+`django-aqueduct` is a first-party MIT OL project, **fully under our control and
+in-scope for modification**. The fix is not limited to this repo's generator or
+the generated models — we can (and probably should) change `django-aqueduct`
+itself: the adapter's apply/replace semantics, how it treats settings it doesn't
+model, opaque-value handling, and the overall ergonomics of the snapshot →
+model → runtime flow. Prefer fixing the framework once over papering over its
+gaps in every generated deployment model.
+
 ## Recommended fix (pick one direction)
 
-**A. Fix the generator (preferred).** In `regenerate_aqueduct_settings`, for any
-common.py setting whose value can't be round-tripped, emit a restore validator
-that pulls the canonical value from `{lms,cms}.envs.common` at runtime (the
-`_derive_xblock_mixins` pattern), rather than dropping the field. Add a generation
-self-test that imports the generated model and runs `django.setup()`.
+**A. Fix `django-aqueduct` itself (preferred — addresses the root + ergonomics).**
+The core defect is that the adapter *replaces* Django settings and silently
+drops anything not modelled, so a generation miss (e.g. `INSTALLED_APPS`) is
+fatal and invisible. Better framework behaviour to consider:
 
-**B. Runtime restore validators (stopgap).** Hand-add `@model_validator`s to
-`deployments/generic/settings/models/base.py` that restore `INSTALLED_APPS`,
-`MIDDLEWARE`, `TEMPLATES`, `AUTHENTICATION_BACKENDS`, … from `common.py`. Slow
-to discover the full list (one ~19-min image rebuild per missing setting) and
-must be re-applied after every regeneration, so only a bridge to (A).
+- **Don't drop unmodelled settings** — overlay the model onto the existing
+  `from …common import *` values instead of replacing them, so a missing field
+  degrades to "uses common.py's value" rather than "empty".
+- **Make opaque/non-serialisable settings first-class** — a consistent
+  represent-and-restore mechanism (the `_derive_xblock_mixins` idea generalised),
+  rather than per-field special-casing that produced the `JWT_AUTH`/`INSTALLED_APPS`
+  inconsistencies.
+- **Generate a boot self-test** — emit/assert that a generated model imports and
+  `django.setup()`s cleanly, so gaps fail at generation time, not at pod boot.
+
+Then fix `regenerate_aqueduct_settings` in this repo to match, and regenerate.
+
+**B. Fix only this repo's generator.** If a framework change is deferred, make
+`regenerate_aqueduct_settings` emit restore validators (the `_derive_xblock_mixins`
+pattern) for every setting it can't round-trip, plus the boot self-test above.
+
+**C. Runtime restore validators (stopgap).** Hand-add `@model_validator`s to
+`deployments/generic/settings/models/base.py` restoring `INSTALLED_APPS`,
+`MIDDLEWARE`, `TEMPLATES`, `AUTHENTICATION_BACKENDS`, … from `common.py`. Slow to
+discover the full list (one ~19-min image rebuild per missing setting) and must
+be re-applied after every regeneration, so only a bridge to (A)/(B).
 
 Either way, finish by re-running the local-dev bring-up to a Ready LMS pod.
 
