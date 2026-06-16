@@ -1,0 +1,51 @@
+---
+# Runs Django migrations for the LMS and CMS against the shared edxapp MySQL
+# database before the platform deployments start serving. The edxapp database
+# and user are created by the MariaDB CR, but nothing creates the schema — so
+# without this Job /heartbeat returns 500 (no tables).
+#
+# Tilt re-runs the Job whenever the platform image changes; `migrate` is
+# idempotent, so re-runs are cheap once the schema is current.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: edxapp-migrate
+  namespace: openedx
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app: edxapp-migrate
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: migrate
+        # Image tag is managed by Tilt via custom_build (same ref as the
+        # platform deployments).
+        image: lehrer-registry:5000/openedx-platform:dev
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          # --skip-checks: `migrate`'s system checks import the ROOT_URLCONF
+          # (check_url_config), and some edx-platform url modules call
+          # get_user_model() at import time, which fails during the migrate
+          # command. Migrations themselves don't need the checks.
+          echo "==> LMS migrations"
+          python manage.py lms migrate --settings=aqueduct --skip-checks
+          echo "==> CMS migrations"
+          python manage.py cms migrate --settings=aqueduct --skip-checks
+          echo "==> Migrations complete"
+        envFrom:
+        - configMapRef:
+            name: lms-config
+        - secretRef:
+            name: openedx-secrets
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"

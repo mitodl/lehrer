@@ -348,6 +348,7 @@ def setup(cfg):
         k8s_yaml(local_dev + "/manifests/platform/configmap-lms.yaml")
         k8s_yaml(local_dev + "/manifests/platform/configmap-cms.yaml")
 
+    k8s_yaml(local_dev + "/manifests/platform/job-migrate.yaml")
     k8s_yaml(local_dev + "/manifests/platform/service-lms.yaml")
     k8s_yaml(local_dev + "/manifests/platform/service-cms.yaml")
     k8s_yaml(local_dev + "/manifests/platform/deployment-lms.yaml")
@@ -355,26 +356,36 @@ def setup(cfg):
     k8s_yaml(local_dev + "/manifests/platform/deployment-worker.yaml")
     k8s_yaml(local_dev + "/manifests/platform/deployment-cms-worker.yaml")
 
+    # Run DB migrations once the database is up, before the services start.
+    k8s_resource(
+        "edxapp-migrate",
+        resource_deps=infra_deps,
+        labels=["platform"],
+    )
+
+    # The platform services depend on a migrated schema, so they wait for the
+    # migration Job to complete (in addition to the infra services).
+    platform_deps = infra_deps + ["edxapp-migrate"]
     k8s_resource(
         "lms",
-        resource_deps=infra_deps,
+        resource_deps=platform_deps,
         port_forwards=["8000:8000"],
         labels=["platform"],
     )
     k8s_resource(
         "cms",
-        resource_deps=infra_deps,
+        resource_deps=platform_deps,
         port_forwards=["8010:8010"],
         labels=["platform"],
     )
     k8s_resource(
         "lms-worker",
-        resource_deps=infra_deps,
+        resource_deps=platform_deps,
         labels=["platform"],
     )
     k8s_resource(
         "cms-worker",
-        resource_deps=infra_deps,
+        resource_deps=platform_deps,
         labels=["platform"],
     )
 

@@ -183,6 +183,15 @@ class ProductionSettingsMixin(BaseSettings):
     MONGODB_REPLICASET: str = Field(default="")
     MONGODB_AUTH_SOURCE: str = Field(default="")
 
+    # MySQL connection scalars — consumed by _derive_databases to point the
+    # nested DATABASES dict at the configured server. Host/port/user/db come from
+    # the platform ConfigMap; DB_PASSWORD comes from the openedx-secrets Secret.
+    MYSQL_HOST: str = Field(default="")
+    MYSQL_PORT: int = Field(default=3306)
+    MYSQL_USER: str = Field(default="")
+    MYSQL_DB_NAME: str = Field(default="edxapp")
+    DB_PASSWORD: str = Field(default="")
+
     # ------------------------------------------------------------------
     # Source customisation
     # ------------------------------------------------------------------
@@ -330,6 +339,30 @@ class ProductionSettingsMixin(BaseSettings):
         if self.MONGODB_REPLICASET:
             config["replicaSet"] = self.MONGODB_REPLICASET
         self.DOC_STORE_CONFIG = config  # type: ignore[attr-defined]
+        return self
+
+    @model_validator(mode="after")
+    def _derive_databases(self) -> ProductionSettingsMixin:
+        """Point DATABASES at the configured MySQL server.
+
+        edx-platform's DATABASES is a nested dict (default / read_replica /
+        student_module_history) that can't arrive cleanly as a single env var.
+        The connection scalars come from the platform ConfigMap (host, port,
+        user, db name) and the openedx-secrets Secret (DB_PASSWORD); apply them
+        to every alias. The student_module_history alias keeps its own NAME
+        (edxapp_csmh); default and read_replica use MYSQL_DB_NAME.
+        """
+        if not self.MYSQL_HOST:
+            return self
+        for alias, db in self.DATABASES.items():
+            db["HOST"] = self.MYSQL_HOST
+            db["PORT"] = str(self.MYSQL_PORT)
+            if self.MYSQL_USER:
+                db["USER"] = self.MYSQL_USER
+            if self.DB_PASSWORD:
+                db["PASSWORD"] = self.DB_PASSWORD
+            if self.MYSQL_DB_NAME and alias in ("default", "read_replica"):
+                db["NAME"] = self.MYSQL_DB_NAME
         return self
 
     @model_validator(mode="after")
