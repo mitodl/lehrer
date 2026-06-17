@@ -455,7 +455,7 @@ class AqueductSettings(ProductionSettingsMixin):
     CHAT_COMPLETION_API_KEY: str = Field(default="")
     CLEAR_REQUEST_CACHE_ON_TASK_COMPLETION: bool = Field(default=True)
     CMS_BASE: Any = Field(default=None)  # TODO: refine type
-    CMS_ROOT: str = Field(default=Path("/openedx/edx-platform/cms"))
+    CMS_ROOT: Path = Field(default=Path("/openedx/edx-platform/cms"))
     CMS_ROOT_URL: Any = Field(default=None)  # TODO: refine type
     CMS_SEGMENT_KEY: Any = Field(default=None)  # TODO: refine type
     CODE_JAIL: dict[str, Any] = Field(
@@ -480,7 +480,7 @@ class AqueductSettings(ProductionSettingsMixin):
     )
     COMMENTS_SERVICE_KEY: str = Field(default="password")
     COMMENTS_SERVICE_URL: str = Field(default="http://localhost:18080")
-    COMMON_ROOT: str = Field(default=Path("/openedx/edx-platform/common"))
+    COMMON_ROOT: Path = Field(default=Path("/openedx/edx-platform/common"))
     COMPLETION_VIDEO_COMPLETE_PERCENTAGE: float = Field(default=0.95)
     COMPREHENSIVE_THEME_DIRS: list[Any] = Field(default_factory=lambda: [""])
     COMPREHENSIVE_THEME_LOCALE_PATHS: list[Any] = Field(default_factory=lambda: [])
@@ -554,7 +554,7 @@ class AqueductSettings(ProductionSettingsMixin):
             "content-disposition",
         )
     )  # TODO: refine type
-    COURSES_ROOT: str = Field(default=Path("/openedx/data"))
+    COURSES_ROOT: Path = Field(default=Path("/openedx/data"))
     COURSES_WITH_UNSAFE_CODE: list[Any] = Field(default_factory=lambda: [])
     COURSE_ABOUT_VISIBILITY_PERMISSION: str = Field(default="see_exists")
     COURSE_ACCESS_DURATION_MAX_WEEKS: int = Field(default=18)
@@ -645,7 +645,7 @@ class AqueductSettings(ProductionSettingsMixin):
             "edx_django_utils.db.read_replica.ReadReplicaRouter",
         ]
     )
-    DATA_DIR: str = Field(default=Path("/openedx/data"))
+    DATA_DIR: Path = Field(default=Path("/openedx/data"))
     DATA_UPLOAD_MAX_MEMORY_SIZE: Any = Field(default=None)  # TODO: refine type
     DATA_UPLOAD_MAX_NUMBER_FIELDS: Any = Field(default=None)  # TODO: refine type
     DEBUG: bool = Field(default=False)
@@ -793,7 +793,7 @@ class AqueductSettings(ProductionSettingsMixin):
         default_factory=lambda: [{"use_ssl": False, "host": "localhost", "port": 9200}]
     )
     EMAIL_CHANGE_RATE_LIMIT: str = Field(default="")
-    EMAIL_FILE_PATH: str = Field(default=Path("/openedx/data/emails/studio"))
+    EMAIL_FILE_PATH: Path = Field(default=Path("/openedx/data/emails/studio"))
     EMBARGO: bool = Field(default=False)
     EMBARGO_SITE_REDIRECT_URL: Any = Field(default=None)  # TODO: refine type
     ENABLE_AUTOADVANCE_VIDEOS: bool = Field(default=False)
@@ -874,7 +874,7 @@ class AqueductSettings(ProductionSettingsMixin):
     ENTERPRISE_SERVICE_WORKER_USERNAME: str = Field(default="enterprise_worker")
     ENTRANCE_EXAMS: bool = Field(default=False)
     ENTRANCE_EXAM_MIN_SCORE_PCT: int = Field(default=50)
-    ENV_ROOT: str = Field(default=Path("/openedx"))
+    ENV_ROOT: Path = Field(default=Path("/openedx"))
     EVENT_BUS_PRODUCER_CONFIG: dict[str, Any] = Field(
         default_factory=lambda: {
             "org.openedx.learning.course.passing.status.updated.v1": {
@@ -1130,7 +1130,7 @@ class AqueductSettings(ProductionSettingsMixin):
         )
     )
     GITHUB_PUSH: bool = Field(default=False)
-    GITHUB_REPO_ROOT: str = Field(default=Path("/openedx/data"))
+    GITHUB_REPO_ROOT: Path = Field(default=Path("/openedx/data"))
     GIT_EXPORT_DEFAULT_IDENT: dict[str, Any] = Field(
         default_factory=lambda: {
             "name": "STUDIO_EXPORT_TO_GIT",
@@ -1574,7 +1574,7 @@ class AqueductSettings(ProductionSettingsMixin):
     LMS_BASE: Any = Field(default=None)  # TODO: refine type
     LMS_ENROLLMENT_API_PATH: str = Field(default="/api/enrollment/v1/")
     LMS_INTERNAL_ROOT_URL: str = Field(default="http://localhost:18000")
-    LMS_ROOT: str = Field(default=Path("/openedx/edx-platform/lms"))
+    LMS_ROOT: Path = Field(default=Path("/openedx/edx-platform/lms"))
     LMS_ROOT_URL: str = Field(default="http://localhost:18000")
     LOCALE_PATHS: list[Any] = Field(
         default_factory=lambda: [Path("/openedx/edx-platform/conf/locale")]
@@ -1780,7 +1780,7 @@ class AqueductSettings(ProductionSettingsMixin):
     OPENEDX_AUTHZ_COURSE_OVERVIEW_MODEL: str = Field(
         default="course_overviews.CourseOverview"
     )
-    OPENEDX_ROOT: str = Field(default=Path("/openedx/edx-platform/openedx"))
+    OPENEDX_ROOT: Path = Field(default=Path("/openedx/edx-platform/openedx"))
     OPTIMIZELY_FULLSTACK_SDK_KEY: Any = Field(default=None)  # TODO: refine type
     OPTIMIZELY_PROJECT_ID: Any = Field(default=None)  # TODO: refine type
     OPTIONAL_APPS: list[Any] = Field(
@@ -2021,7 +2021,7 @@ class AqueductSettings(ProductionSettingsMixin):
     PROGRESS_HELP_URL: str = Field(
         default="https://docs.openedx.org/en/latest/educators/references/data/progress_page.html"
     )
-    PROJECT_ROOT: str = Field(default=Path("/openedx/edx-platform/cms"))
+    PROJECT_ROOT: Path = Field(default=Path("/openedx/edx-platform/cms"))
     RECALCULATE_GRADES_ROUTING_KEY: str = Field(default="edx.cms.core.default")
     REDIRECT_CACHE_KEY_PREFIX: str = Field(default="redirects")
     REDIRECT_CACHE_TIMEOUT: Any = Field(default=None)  # TODO: refine type
@@ -2043,7 +2043,7 @@ class AqueductSettings(ProductionSettingsMixin):
     )
     REGISTRATION_RATELIMIT: str = Field(default="60/7d")
     REGISTRATION_VALIDATION_RATELIMIT: str = Field(default="30/7d")
-    REPO_ROOT: str = Field(default=Path("/openedx/edx-platform"))
+    REPO_ROOT: Path = Field(default=Path("/openedx/edx-platform"))
     REQUIRE_BASE_URL: str = Field(default="./")
     REQUIRE_BUILD_PROFILE: str = Field(default="cms/js/build.js")
     REQUIRE_DEBUG: bool = Field(default=False)
@@ -2221,8 +2221,8 @@ class AqueductSettings(ProductionSettingsMixin):
         default="statici18n.utils.legacy_filename"
     )
     STATICI18N_OUTPUT_DIR: str = Field(default="js/i18n")
-    STATICI18N_ROOT: str = Field(default=Path("/openedx/edx-platform/cms/static"))
-    STATIC_ROOT: str = Field(default=Path("/openedx/staticfiles/studio"))
+    STATICI18N_ROOT: Path = Field(default=Path("/openedx/edx-platform/cms/static"))
+    STATIC_ROOT: Path = Field(default=Path("/openedx/staticfiles/studio"))
     STATIC_ROOT_BASE: Any = Field(default=None)  # TODO: refine type
     STATIC_URL: str = Field(default="/static/studio/")
     STATIC_URL_BASE: Any = Field(default=None)  # TODO: refine type
@@ -2528,7 +2528,7 @@ class AqueductSettings(ProductionSettingsMixin):
     )  # OPAQUE: original tuple value is not serialisable
     XBLOCK_RUNTIME_V2_EPHEMERAL_DATA_CACHE: str = Field(default="default")
     XBLOCK_SETTINGS: dict[str, Any] = Field(default_factory=lambda: {})
-    XMODULE_ROOT: str = Field(default=Path("/openedx/edx-platform/xmodule"))
+    XMODULE_ROOT: Path = Field(default=Path("/openedx/edx-platform/xmodule"))
     XQUEUE_INTERFACE: dict[str, Any] = Field(
         default_factory=lambda: {
             "url": "http://localhost:18040",
