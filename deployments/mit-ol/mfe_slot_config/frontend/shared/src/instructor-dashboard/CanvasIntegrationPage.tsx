@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom';
 import { getAuthenticatedHttpClient, getSiteConfig } from '@openedx/frontend-base';
 import { useState, useCallback } from 'react';
 import {
-  Button, Alert, Spinner, DataTable, Form,
+  Button, Alert, Spinner, DataTable, Form, ModalDialog, ActionRow,
 } from '@openedx/paragon';
 
 const getApiBaseUrl = () => getSiteConfig().lmsBaseUrl;
@@ -14,6 +14,7 @@ const CanvasIntegrationPage = () => {
   const [results, setResults] = useState<{ type: string; data: any } | null>(null);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [selectedAssignment, setSelectedAssignment] = useState('');
+  const [showOverloadConfirm, setShowOverloadConfirm] = useState(false);
 
   const baseUrl = `${getApiBaseUrl()}/courses/${courseId}/canvas/api`;
 
@@ -27,7 +28,13 @@ const CanvasIntegrationPage = () => {
       if (method === 'GET') {
         response = await client.get(`${baseUrl}/${endpoint}`);
       } else {
-        response = await client.post(`${baseUrl}/${endpoint}`, data);
+        // Send form-encoded so Django's request.POST is populated. The canvas
+        // integration view reads flags like unenroll_current via request.POST
+        // (form data), which is NOT filled from a JSON body — sending JSON here
+        // would silently drop unenroll_current and make "Overload" behave like
+        // "Merge". URLSearchParams sets Content-Type: x-www-form-urlencoded.
+        const body = data ? new URLSearchParams(data) : undefined;
+        response = await client.post(`${baseUrl}/${endpoint}`, body);
       }
       return response.data;
     } catch (err: any) {
@@ -54,6 +61,7 @@ const CanvasIntegrationPage = () => {
   };
 
   const handleOverloadEnrollments = async () => {
+    setShowOverloadConfirm(false);
     const data = await makeRequest('add_canvas_enrollments', 'POST', { unenroll_current: true });
     if (data) {
       setResults({ type: 'message', data });
@@ -80,7 +88,7 @@ const CanvasIntegrationPage = () => {
       setError('Please select an assignment first.');
       return;
     }
-    const data = await makeRequest(`list_canvas_grades?assignment_id=${selectedAssignment}`);
+    const data = await makeRequest('list_canvas_grades?assignment_id=' + encodeURIComponent(selectedAssignment));
     if (data) {
       setResults({ type: 'grades', data });
     }
@@ -128,7 +136,7 @@ const CanvasIntegrationPage = () => {
           <Button variant="outline-primary" onClick={handleMergeEnrollments} disabled={loading}>
             Merge Enrollment List Using Canvas
           </Button>
-          <Button variant="outline-primary" onClick={handleOverloadEnrollments} disabled={loading}>
+          <Button variant="outline-primary" onClick={() => setShowOverloadConfirm(true)} disabled={loading}>
             Overload Enrollment List Using Canvas
           </Button>
         </div>
@@ -183,6 +191,34 @@ const CanvasIntegrationPage = () => {
       )}
 
       {renderResults()}
+
+      <ModalDialog
+        title="Overload enrollment list?"
+        isOpen={showOverloadConfirm}
+        onClose={() => setShowOverloadConfirm(false)}
+        hasCloseButton
+        isBlocking
+        isOverflowVisible={false}
+      >
+        <ModalDialog.Header>
+          <ModalDialog.Title>Overload enrollment list?</ModalDialog.Title>
+        </ModalDialog.Header>
+        <ModalDialog.Body>
+          <p>
+            This replaces the course enrollment with the Canvas roster and{' '}
+            <strong>unenrolls any current non-staff students who are not in Canvas</strong>.
+            This cannot be undone. Continue?
+          </p>
+        </ModalDialog.Body>
+        <ModalDialog.Footer>
+          <ActionRow>
+            <ModalDialog.CloseButton variant="tertiary">Cancel</ModalDialog.CloseButton>
+            <Button variant="danger" onClick={handleOverloadEnrollments}>
+              Overload enrollments
+            </Button>
+          </ActionRow>
+        </ModalDialog.Footer>
+      </ModalDialog>
     </div>
   );
 };

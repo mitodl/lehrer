@@ -31,7 +31,7 @@ const RapidResponseReportsPage = () => {
       try {
         const client = getAuthenticatedHttpClient();
         const response = await client.get(`${baseUrl}/rapid_response_runs`);
-        const runs: ProblemRun[] = Array.isArray(response.data) ? response.data : response.data.problem_runs || [];
+        const runs: ProblemRun[] = Array.isArray(response.data) ? response.data : response.data?.problem_runs || [];
 
         // Group by date
         const grouped: GroupedRuns = {};
@@ -40,6 +40,7 @@ const RapidResponseReportsPage = () => {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
+            timeZone: 'UTC',
           });
           if (!grouped[date]) {
             grouped[date] = [];
@@ -67,6 +68,7 @@ const RapidResponseReportsPage = () => {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
+      timeZone: 'UTC',
     });
   };
 
@@ -96,9 +98,9 @@ const RapidResponseReportsPage = () => {
   return (
     <div className="rapid-response-reports-page p-4">
       <h3>Rapid Responses</h3>
-      {dates.map((date) => (
-        <ul key={date}>
-          <li>
+      <ul>
+        {dates.map((date) => (
+          <li key={date}>
             <strong>{date}</strong>
             <ul>
               {groupedRuns[date].map((run) => (
@@ -112,8 +114,8 @@ const RapidResponseReportsPage = () => {
               ))}
             </ul>
           </li>
-        </ul>
-      ))}
+        ))}
+      </ul>
     </div>
   );
 };
