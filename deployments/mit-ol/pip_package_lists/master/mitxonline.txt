@@ -1,7 +1,7 @@
 celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules
 granian==2.7.6
 django-redis==6.0.0
-ol-openedx-git-auto-export==0.8.1
+ol-openedx-git-auto-export==0.8.2
 edx-sysadmin==0.4.2
 edx-username-changer==0.5.0
 openedx-companion-auth==1.2.0
@@ -31,7 +31,7 @@ ol-openedx-events-handler
 ol-openedx-course-sync
 
 # Plugin to generate UAI customized courses
-ol-openedx-uai-content-customization
+ol-openedx-uai-content-customization==0.1.2
 
 # Open Telemetry support
 opentelemetry-api
