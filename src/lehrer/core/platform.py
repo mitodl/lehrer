@@ -642,7 +642,7 @@ class OpenedxPlatform:
                 custom_settings.file("lms/models/aqueduct.py"),
             )
             .with_file(
-                f"/openedx/edx-platform/lms/envs/{settings_namespace}/aqueduct.py",
+                "/openedx/edx-platform/lms/envs/aqueduct.py",
                 custom_settings.file("lms/aqueduct.py"),
             )
             .with_file(
@@ -657,7 +657,7 @@ class OpenedxPlatform:
                 custom_settings.file("cms/models/aqueduct.py"),
             )
             .with_file(
-                f"/openedx/edx-platform/cms/envs/{settings_namespace}/aqueduct.py",
+                "/openedx/edx-platform/cms/envs/aqueduct.py",
                 custom_settings.file("cms/aqueduct.py"),
             )
             # Runtime helper scripts (not needed for asset compilation)
