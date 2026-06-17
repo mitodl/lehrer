@@ -22,22 +22,13 @@ const siteConfig: SiteConfig = {
 	loginUrl: "http://local.openedx.io:8000/login",
 	logoutUrl: "http://local.openedx.io:8000/logout",
 	environment: EnvironmentTypes.DEVELOPMENT,
-	headerLogoImageUrl: "https://edx-cdn.org/v3/default/logo.svg",
-	commonAppConfig: {
-		mitolHeader: {
-			mitLearnBaseUrl: "https://learn.mit.edu",
-			marketingSiteBaseUrl: "http://local.openedx.io:8000",
-		},
-		mitolFooter: {
-			copyrightText: "© 2026 Massachusetts Institute of Technology",
-			aboutUrl: "https://learn.mit.edu/about",
-			termsOfServiceUrl: "http://local.openedx.io:8000/tos",
-			privacyPolicyUrl: "http://local.openedx.io:8000/privacy",
-			accessibilityUrl: "https://accessibility.mit.edu/",
-			supportUrl: "https://mitxonline.zendesk.com/hc/en-us",
-			honorCodeUrl: "http://local.openedx.io:8000/honor",
-		},
-	},
+	headerLogoImageUrl: "http://local.openedx.io:8000/static/mitxonline-theme/images/logo.svg",
+	// commonAppConfig (mitolHeader / mitolFooter) is loaded at runtime from the LMS
+	// frontend_site_config API rather than hardcoded here. The dev server proxies
+	// /api/frontend_site_config/v1 to lmsBaseUrl; the response is deep-merged over
+	// this static config. Requires ENABLE_MFE_CONFIG_API + FRONTEND_SITE_CONFIG set
+	// on the LMS.
+	runtimeConfigJsonUrl: "/api/frontend_site_config/v1/",
 	apps: [
 		shellApp,
 		headerApp,

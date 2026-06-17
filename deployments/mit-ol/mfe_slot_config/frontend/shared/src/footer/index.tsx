@@ -15,6 +15,8 @@ export interface MITOLFooterConfig {
 	supportUrl?: string;
 	accessibilityUrl?: string;
 	copyrightText?: string;
+	footerLogoUrl?: string;
+	footerLogoDestination?: string;
 }
 
 function useMITOLFooterConfig(): MITOLFooterConfig {
@@ -35,6 +37,22 @@ function CopyrightNotice() {
 			</div>
 		</div>
 	);
+}
+
+/**
+ * Footer logo (left side). Reads footerLogoUrl from the runtime config;
+ * falls back to the shell's default (headerLogoImageUrl) if not set.
+ */
+function FooterLogo() {
+	const { footerLogoUrl, footerLogoDestination } = useMITOLFooterConfig();
+	const { headerLogoImageUrl } = useSiteConfig();
+	const src = footerLogoUrl || headerLogoImageUrl;
+	if (!src) return null;
+	const img = <Image src={src} style={{ maxHeight: '2rem', height: '33px' }} />;
+	if (footerLogoDestination) {
+		return <Hyperlink destination={footerLogoDestination} className="p-0">{img}</Hyperlink>;
+	}
+	return img;
 }
 
 /** Recreation of the shell's PoweredBy widget (it is not exported from the root). */
@@ -62,7 +80,7 @@ function PoweredBy() {
 function MITOLDesktopFooterLayout() {
 	return (
 		<footer className="d-flex flex-column align-items-stretch">
-			<div className="py-3 px-3 d-flex gap-5 justify-content-between align-items-start">
+			<div className="py-3 px-3 d-flex flex-column flex-md-row gap-4 gap-md-5 justify-content-md-between align-items-center align-items-md-start">
 				<div className="flex-basis-0 d-flex align-items-center">
 					<Slot id="org.openedx.frontend.slot.footer.desktopLeftLinks.v1" />
 				</div>
@@ -72,7 +90,7 @@ function MITOLDesktopFooterLayout() {
 						<Slot id="org.openedx.frontend.slot.footer.desktopLegalNotices.v1" />
 					</div>
 				</div>
-				<div className="flex-basis-0 d-flex justify-content-end align-items-start">
+				<div className="flex-basis-0 d-flex justify-content-center justify-content-md-end align-items-start">
 					<PoweredBy />
 				</div>
 			</div>
@@ -137,6 +155,15 @@ export function createMITOLFooterApp(): App {
 			id: "mitol.footer.copyright",
 			op: WidgetOperationTypes.APPEND,
 			component: CopyrightNotice,
+		},
+		// Replace the shell's default logo (which uses headerLogoImageUrl) with
+		// our FooterLogo component that reads footerLogoUrl from the config.
+		{
+			slotId: "org.openedx.frontend.slot.footer.desktopLeftLinks.v1",
+			relatedId: "org.openedx.frontend.widget.footer.desktopLeftLinksLogo.v1",
+			id: "mitol.footer.logo",
+			op: WidgetOperationTypes.REPLACE,
+			component: FooterLogo,
 		},
 		// Single centered horizontal row of links (no column labels) matching
 		// the legacy learning MFE footer. Append directly to the center-links
