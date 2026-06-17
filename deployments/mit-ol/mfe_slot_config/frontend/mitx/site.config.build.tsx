@@ -3,6 +3,7 @@ import {
 	headerApp,
 	shellApp,
 	EnvironmentTypes,
+	type App,
 	type SiteConfig,
 } from "@openedx/frontend-base";
 
@@ -13,13 +14,23 @@ import { createStyleOverrideApp } from "@shared/styles/styleLoader";
 
 import "@openedx/frontend-base/shell/style";
 
+// App routes are relative paths (e.g. 'instructor-dashboard/:courseId'), but the
+// LMS constructs tab hrefs using the full /apps/instructor-dashboard/... URL and
+// the app converts those back to clientPath values it passes to React Router Link.
+// Wrapping routes in an 'apps' parent makes the router match /apps/* without a
+// basename, so Link's absolute paths are not double-prefixed.
+const wrapWithAppsPath = (app: App): App =>
+	app.routes
+		? { ...app, routes: [{ path: "apps", children: app.routes }] }
+		: app;
+
 // Covers both mitx and mitx-staging deployments via a single build.
 // Production defaults — all fields are overridden at runtime by /api/frontend_site_config/v1/,
 // which reads from the FRONTEND_SITE_CONFIG Django setting in the LMS configmap.
 const siteConfig: SiteConfig = {
 	siteId: "mitx",
 	siteName: "MITx Residential",
-	basename: "/apps/",
+	basename: "/",
 	baseUrl: "https://apps.mitx.mit.edu",
 	lmsBaseUrl: "https://lms.mitx.mit.edu",
 	loginUrl: "https://lms.mitx.mit.edu/login",
@@ -33,7 +44,7 @@ const siteConfig: SiteConfig = {
 		createStyleOverrideApp("@shared/styles/mitx.scss"),
 		createMITOLFooterApp(),
 		createMITxHeaderApp(),
-		instructorDashboardApp,
+		wrapWithAppsPath(instructorDashboardApp),
 		// TODO: add further module libraries as they are verified against the named release
 	],
 };

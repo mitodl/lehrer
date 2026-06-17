@@ -3,6 +3,7 @@ import {
 	headerApp,
 	shellApp,
 	EnvironmentTypes,
+	type App,
 	type SiteConfig,
 } from "@openedx/frontend-base";
 
@@ -13,10 +14,15 @@ import { createStyleOverrideApp } from "@shared/styles/styleLoader";
 
 import "@openedx/frontend-base/shell/style";
 
+const wrapWithAppsPath = (app: App): App =>
+	app.routes
+		? { ...app, routes: [{ path: "apps", children: app.routes }] }
+		: app;
+
 const siteConfig: SiteConfig = {
 	siteId: "mitx",
 	siteName: "MITx Residential (dev)",
-	basename: "/apps/",
+	basename: "/",
 	baseUrl: "http://apps.local.openedx.io:8080",
 	lmsBaseUrl: "http://local.openedx.io:8000",
 	loginUrl: "http://local.openedx.io:8000/login",
@@ -30,7 +36,7 @@ const siteConfig: SiteConfig = {
 		createStyleOverrideApp("@shared/styles/mitx.scss"),
 		createMITOLFooterApp(),
 		createMITxHeaderApp(),
-		instructorDashboardApp,
+		wrapWithAppsPath(instructorDashboardApp),
 	],
 };
 

@@ -3,6 +3,7 @@ import {
 	headerApp,
 	shellApp,
 	EnvironmentTypes,
+	type App,
 	type SiteConfig,
 } from "@openedx/frontend-base";
 
@@ -13,12 +14,17 @@ import { createStyleOverrideApp } from "@shared/styles/styleLoader";
 
 import "@openedx/frontend-base/shell/style";
 
+const wrapWithAppsPath = (app: App): App =>
+	app.routes
+		? { ...app, routes: [{ path: "apps", children: app.routes }] }
+		: app;
+
 // Production defaults — all fields are overridden at runtime by /api/frontend_site_config/v1/,
 // which reads from the FRONTEND_SITE_CONFIG Django setting in the LMS configmap.
 const siteConfig: SiteConfig = {
 	siteId: "mitol",
 	siteName: "MIT Learn",
-	basename: "/apps/",
+	basename: "/",
 	baseUrl: "https://apps.mitxonline.mit.edu",
 	lmsBaseUrl: "https://courses.learn.mit.edu",
 	loginUrl: "https://courses.learn.mit.edu/login",
@@ -38,7 +44,7 @@ const siteConfig: SiteConfig = {
 		createStyleOverrideApp("@shared/styles/mitxonline.scss"),
 		createMITOLFooterApp(),
 		createMITxOnlineHeaderApp(),
-		instructorDashboardApp,
+		wrapWithAppsPath(instructorDashboardApp),
 		// TODO: add further module libraries as they are migrated to frontend-base
 	],
 };
