@@ -9,11 +9,12 @@
 
 from __future__ import annotations
 
+import pathlib
+
 from typing import Any
 
 from pydantic import Field
 from .base import ProductionSettingsMixin
-from path import Path
 
 
 class AqueductSettings(ProductionSettingsMixin):
@@ -583,7 +584,9 @@ class AqueductSettings(ProductionSettingsMixin):
     )
     COMMENTS_SERVICE_KEY: str = Field(default="")
     COMMENTS_SERVICE_URL: str = Field(default="")
-    COMMON_ROOT: Path = Field(default=Path("/openedx/edx-platform/common"))
+    COMMON_ROOT: pathlib.Path = Field(
+        default=pathlib.Path("/openedx/edx-platform/common")
+    )
     COMMUNICATIONS_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
     COMPLETION_BY_VIEWING_DELAY_MS: int = Field(default=5000)
     COMPLETION_VIDEO_COMPLETE_PERCENTAGE: float = Field(default=0.95)
@@ -664,7 +667,7 @@ class AqueductSettings(ProductionSettingsMixin):
     COUNTRIES_OVERRIDE: dict[str, Any] | None = Field(default=None)
     COURSES_API_CACHE_TIMEOUT: int = Field(default=3600)
     COURSES_ARE_BROWSABLE: bool = Field(default=True)
-    COURSES_ROOT: Path = Field(default=Path("/openedx/data"))
+    COURSES_ROOT: pathlib.Path = Field(default=pathlib.Path("/openedx/data"))
     COURSES_WITH_UNSAFE_CODE: list[Any] = Field(default_factory=lambda: [])
     COURSE_ABOUT_VISIBILITY_PERMISSION: str = Field(default="see_exists")
     COURSE_ACCESS_DURATION_MAX_WEEKS: int = Field(default=18)
@@ -844,10 +847,12 @@ class AqueductSettings(ProductionSettingsMixin):
             "BACKEND": "django.template.backends.django.DjangoTemplates",
             "APP_DIRS": False,
             "DIRS": [
-                Path("/openedx/edx-platform/lms/templates"),
-                Path("/openedx/edx-platform/common/templates"),
-                Path("/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"),
-                Path("/openedx/edx-platform/common/static"),
+                pathlib.Path("/openedx/edx-platform/lms/templates"),
+                pathlib.Path("/openedx/edx-platform/common/templates"),
+                pathlib.Path(
+                    "/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"
+                ),
+                pathlib.Path("/openedx/edx-platform/common/static"),
             ],
             "OPTIONS": {
                 "loaders": [
@@ -880,14 +885,16 @@ class AqueductSettings(ProductionSettingsMixin):
     )
     DEFAULT_TEMPLATE_ENGINE_DIRS: list[Any] = Field(
         default_factory=lambda: [
-            Path("/openedx/edx-platform/lms/templates"),
-            Path("/openedx/edx-platform/common/templates"),
-            Path("/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"),
-            Path("/openedx/edx-platform/common/static"),
-            Path(
+            pathlib.Path("/openedx/edx-platform/lms/templates"),
+            pathlib.Path("/openedx/edx-platform/common/templates"),
+            pathlib.Path(
+                "/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"
+            ),
+            pathlib.Path("/openedx/edx-platform/common/static"),
+            pathlib.Path(
                 "/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"
             ),
-            Path(
+            pathlib.Path(
                 "/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"
             ),
         ]
@@ -979,7 +986,9 @@ class AqueductSettings(ProductionSettingsMixin):
         default_factory=lambda: [{"use_ssl": False, "host": "localhost", "port": 9200}]
     )
     EMAIL_CHANGE_RATE_LIMIT: str = Field(default="")
-    EMAIL_FILE_PATH: Path = Field(default=Path("/edx/var/edxapp/data/emails/lms"))
+    EMAIL_FILE_PATH: pathlib.Path = Field(
+        default=pathlib.Path("/edx/var/edxapp/data/emails/lms")
+    )
     EMAIL_OPTIN_MINIMUM_AGE: int = Field(default=13)
     EMBARGO: bool = Field(default=False)
     EMBARGO_SITE_REDIRECT_URL: Any = Field(default=None)  # TODO: refine type
@@ -1172,7 +1181,7 @@ class AqueductSettings(ProductionSettingsMixin):
     ENTITLEMENTS_EXPIRATION_ROUTING_KEY: str = Field(default="edx.lms.core.default")
     ENTITLEMENT_EXPIRED_ALERT_PERIOD: int = Field(default=90)
     ENTRANCE_EXAM_MIN_SCORE_PCT: int = Field(default=50)
-    ENV_ROOT: Path = Field(default=Path("/openedx"))
+    ENV_ROOT: pathlib.Path = Field(default=pathlib.Path("/openedx"))
     EVENT_BUS_PRODUCER_CONFIG: dict[str, Any] = Field(
         default_factory=lambda: {
             "org.openedx.learning.course.passing.status.updated.v1": {
@@ -1357,7 +1366,7 @@ class AqueductSettings(ProductionSettingsMixin):
     GENERAL_RECOMMENDATION: dict[str, Any] = Field(default_factory=lambda: {})
     GENERATE_PROFILE_SCORES: bool = Field(default=False)
     GEOIP_PATH: str = Field(
-        default=Path(
+        default=pathlib.Path(
             "/openedx/edx-platform/common/static/data/geoip/GeoLite2-Country.mmdb"
         )
     )
@@ -1401,7 +1410,7 @@ class AqueductSettings(ProductionSettingsMixin):
         }
     )
     HELP_TOKENS_INI_FILE: str = Field(
-        default=Path("/openedx/edx-platform/lms/envs/help_tokens.ini")
+        default=pathlib.Path("/openedx/edx-platform/lms/envs/help_tokens.ini")
     )
     HELP_TOKENS_LANGUAGE_CODE: str = Field(default="en")
     HELP_TOKENS_VERSION: str = Field(default="latest")
@@ -1863,7 +1872,7 @@ class AqueductSettings(ProductionSettingsMixin):
     LMS_ROOT_URL: Any = Field(default=None)  # TODO: refine type
     LMS_SEGMENT_KEY: Any = Field(default=None)  # TODO: refine type
     LOCALE_PATHS: list[Any] = Field(
-        default_factory=lambda: [Path("/openedx/edx-platform/conf/locale")]
+        default_factory=lambda: [pathlib.Path("/openedx/edx-platform/conf/locale")]
     )
     LOCAL_LOGLEVEL: str = Field(default="INFO")
     LOGGING_ENV: str = Field(default="sandbox")
@@ -1889,19 +1898,27 @@ class AqueductSettings(ProductionSettingsMixin):
     MAKO_MODULE_DIR: str = Field(default="/tmp/mako_lms")
     MAKO_TEMPLATE_DIRS_BASE: list[Any] = Field(
         default_factory=lambda: [
-            Path("/openedx/themes/"),
-            Path("/openedx/edx-platform/lms/templates"),
-            Path("/openedx/edx-platform/common/templates"),
-            Path("/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"),
-            Path("/openedx/edx-platform/openedx/core/djangoapps/cors_csrf/templates"),
-            Path("/openedx/edx-platform/openedx/core/djangoapps/dark_lang/templates"),
-            Path("/openedx/edx-platform/openedx/core/lib/license/templates"),
-            Path("/openedx/edx-platform/lms/djangoapps/teams/templates"),
-            Path("/openedx/edx-platform/openedx/features/course_experience/templates"),
-            Path(
+            pathlib.Path("/openedx/themes/"),
+            pathlib.Path("/openedx/edx-platform/lms/templates"),
+            pathlib.Path("/openedx/edx-platform/common/templates"),
+            pathlib.Path(
+                "/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"
+            ),
+            pathlib.Path(
+                "/openedx/edx-platform/openedx/core/djangoapps/cors_csrf/templates"
+            ),
+            pathlib.Path(
+                "/openedx/edx-platform/openedx/core/djangoapps/dark_lang/templates"
+            ),
+            pathlib.Path("/openedx/edx-platform/openedx/core/lib/license/templates"),
+            pathlib.Path("/openedx/edx-platform/lms/djangoapps/teams/templates"),
+            pathlib.Path(
+                "/openedx/edx-platform/openedx/features/course_experience/templates"
+            ),
+            pathlib.Path(
                 "/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"
             ),
-            Path(
+            pathlib.Path(
                 "/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"
             ),
         ]
@@ -2101,7 +2118,9 @@ class AqueductSettings(ProductionSettingsMixin):
         )
     )  # TODO: refine type
     MONGODB_LOG: dict[str, Any] = Field(default_factory=lambda: {})
-    NODE_MODULES_ROOT: Path = Field(default=Path("/openedx/edx-platform/node_modules"))
+    NODE_MODULES_ROOT: pathlib.Path = Field(
+        default=pathlib.Path("/openedx/edx-platform/node_modules")
+    )
     NOTES_DISABLED_TABS: list[Any] = Field(
         default_factory=lambda: ["course_structure", "tags"]
     )
@@ -2150,7 +2169,9 @@ class AqueductSettings(ProductionSettingsMixin):
     OPENEDX_AUTHZ_COURSE_OVERVIEW_MODEL: str = Field(
         default="course_overviews.CourseOverview"
     )
-    OPENEDX_ROOT: Path = Field(default=Path("/openedx/edx-platform/openedx"))
+    OPENEDX_ROOT: pathlib.Path = Field(
+        default=pathlib.Path("/openedx/edx-platform/openedx")
+    )
     OPEN_EDX_FILTERS_CONFIG: dict[str, Any] = Field(
         default_factory=lambda: {
             "org.openedx.learning.xblock.render.started.v1": {
@@ -2260,7 +2281,7 @@ class AqueductSettings(ProductionSettingsMixin):
     )
     PDF_RECEIPT_COBRAND_LOGO_HEIGHT_MM: int = Field(default=12)
     PDF_RECEIPT_COBRAND_LOGO_PATH: str = Field(
-        default=Path("/openedx/edx-platform/lms/static/images/logo.png")
+        default=pathlib.Path("/openedx/edx-platform/lms/static/images/logo.png")
     )
     PDF_RECEIPT_DISCLAIMER_TEXT: str = Field(
         default="ENTER YOUR RECEIPT DISCLAIMER TEXT HERE."
@@ -2268,7 +2289,9 @@ class AqueductSettings(ProductionSettingsMixin):
     PDF_RECEIPT_FOOTER_TEXT: str = Field(default="Enter your receipt footer text here.")
     PDF_RECEIPT_LOGO_HEIGHT_MM: int = Field(default=12)
     PDF_RECEIPT_LOGO_PATH: str = Field(
-        default=Path("/openedx/edx-platform/lms/static/images/openedx-logo-tag.png")
+        default=pathlib.Path(
+            "/openedx/edx-platform/lms/static/images/openedx-logo-tag.png"
+        )
     )
     PDF_RECEIPT_TAX_ID: str = Field(default="00-0000000")
     PDF_RECEIPT_TAX_ID_LABEL: str = Field(default="fake Tax ID")
@@ -2696,7 +2719,9 @@ class AqueductSettings(ProductionSettingsMixin):
     PROGRESS_HELP_URL: str = Field(
         default="https://docs.openedx.org/en/latest/educators/references/data/progress_page.html"
     )
-    PROJECT_ROOT: Path = Field(default=Path("/openedx/edx-platform/lms"))
+    PROJECT_ROOT: pathlib.Path = Field(
+        default=pathlib.Path("/openedx/edx-platform/lms")
+    )
     PROVISIONING_ENTERPRISE_CUSTOMER_ADMIN_ROLE: str = Field(
         default="provisioning_enterprise_customer_admin"
     )
@@ -2759,7 +2784,7 @@ class AqueductSettings(ProductionSettingsMixin):
     )
     REGISTRATION_RATELIMIT: str = Field(default="60/7d")
     REGISTRATION_VALIDATION_RATELIMIT: str = Field(default="30/7d")
-    REPO_ROOT: Path = Field(default=Path("/openedx/edx-platform"))
+    REPO_ROOT: pathlib.Path = Field(default=pathlib.Path("/openedx/edx-platform"))
     REQUIRE_BASE_URL: str = Field(default="./")
     REQUIRE_BUILD_PROFILE: str = Field(default="lms/js/build.js")
     REQUIRE_DEBUG: bool = Field(default=False)
@@ -3018,10 +3043,10 @@ class AqueductSettings(ProductionSettingsMixin):
     SSL_AUTH_EMAIL_DOMAIN: str = Field(default="MIT.EDU")
     STATICFILES_DIRS: list[Any] = Field(
         default_factory=lambda: [
-            Path("/openedx/edx-platform/common/static"),
-            Path("/openedx/edx-platform/lms/static"),
-            Path("/openedx/edx-platform/node_modules/@edx"),
-            Path("/openedx/edx-platform/xmodule/static"),
+            pathlib.Path("/openedx/edx-platform/common/static"),
+            pathlib.Path("/openedx/edx-platform/lms/static"),
+            pathlib.Path("/openedx/edx-platform/node_modules/@edx"),
+            pathlib.Path("/openedx/edx-platform/xmodule/static"),
         ]
     )
     STATICFILES_FINDERS: list[Any] = Field(
@@ -3051,14 +3076,18 @@ class AqueductSettings(ProductionSettingsMixin):
         default="statici18n.utils.legacy_filename"
     )
     STATICI18N_OUTPUT_DIR: str = Field(default="js/i18n")
-    STATICI18N_ROOT: Path = Field(default=Path("/openedx/edx-platform/lms/static"))
+    STATICI18N_ROOT: pathlib.Path = Field(
+        default=pathlib.Path("/openedx/edx-platform/lms/static")
+    )
     STATIC_GRAB: bool = Field(default=False)
-    STATIC_ROOT: Path = Field(default=Path("/openedx/staticfiles"))
+    STATIC_ROOT: pathlib.Path = Field(default=pathlib.Path("/openedx/staticfiles"))
     STATIC_ROOT_BASE: Any = Field(default=None)  # TODO: refine type
     STATIC_TEMPLATE_VIEW_DEFAULT_FILE_EXTENSION: str = Field(default="html")
     STATIC_URL: str = Field(default="/static/")
     STATIC_URL_BASE: Any = Field(default=None)  # TODO: refine type
-    STATUS_MESSAGE_PATH: Path = Field(default=Path("/openedx/status_message.json"))
+    STATUS_MESSAGE_PATH: pathlib.Path = Field(
+        default=pathlib.Path("/openedx/status_message.json")
+    )
     STORAGES: dict[str, Any] = Field(
         default_factory=lambda: {
             "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
@@ -3136,16 +3165,16 @@ class AqueductSettings(ProductionSettingsMixin):
                 "BACKEND": "django.template.backends.django.DjangoTemplates",
                 "APP_DIRS": False,
                 "DIRS": [
-                    Path("/openedx/edx-platform/lms/templates"),
-                    Path("/openedx/edx-platform/common/templates"),
-                    Path(
+                    pathlib.Path("/openedx/edx-platform/lms/templates"),
+                    pathlib.Path("/openedx/edx-platform/common/templates"),
+                    pathlib.Path(
                         "/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"
                     ),
-                    Path("/openedx/edx-platform/common/static"),
-                    Path(
+                    pathlib.Path("/openedx/edx-platform/common/static"),
+                    pathlib.Path(
                         "/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"
                     ),
-                    Path(
+                    pathlib.Path(
                         "/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"
                     ),
                 ],
@@ -3182,26 +3211,30 @@ class AqueductSettings(ProductionSettingsMixin):
                 "BACKEND": "common.djangoapps.edxmako.backend.Mako",
                 "APP_DIRS": False,
                 "DIRS": [
-                    Path("/openedx/edx-platform/lms/templates"),
-                    Path("/openedx/edx-platform/common/templates"),
-                    Path(
+                    pathlib.Path("/openedx/edx-platform/lms/templates"),
+                    pathlib.Path("/openedx/edx-platform/common/templates"),
+                    pathlib.Path(
                         "/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"
                     ),
-                    Path(
+                    pathlib.Path(
                         "/openedx/edx-platform/openedx/core/djangoapps/cors_csrf/templates"
                     ),
-                    Path(
+                    pathlib.Path(
                         "/openedx/edx-platform/openedx/core/djangoapps/dark_lang/templates"
                     ),
-                    Path("/openedx/edx-platform/openedx/core/lib/license/templates"),
-                    Path("/openedx/edx-platform/lms/djangoapps/teams/templates"),
-                    Path(
+                    pathlib.Path(
+                        "/openedx/edx-platform/openedx/core/lib/license/templates"
+                    ),
+                    pathlib.Path(
+                        "/openedx/edx-platform/lms/djangoapps/teams/templates"
+                    ),
+                    pathlib.Path(
                         "/openedx/edx-platform/openedx/features/course_experience/templates"
                     ),
-                    Path(
+                    pathlib.Path(
                         "/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"
                     ),
-                    Path(
+                    pathlib.Path(
                         "/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"
                     ),
                 ],
@@ -3361,11 +3394,13 @@ class AqueductSettings(ProductionSettingsMixin):
         default_factory=lambda: {
             "DEFAULT": {
                 "BUNDLE_DIR_NAME": "bundles/",
-                "STATS_FILE": Path("/openedx/staticfiles/webpack-stats.json"),
+                "STATS_FILE": pathlib.Path("/openedx/staticfiles/webpack-stats.json"),
             },
             "WORKERS": {
                 "BUNDLE_DIR_NAME": "bundles/",
-                "STATS_FILE": Path("/openedx/staticfiles/webpack-worker-stats.json"),
+                "STATS_FILE": pathlib.Path(
+                    "/openedx/staticfiles/webpack-worker-stats.json"
+                ),
             },
         }
     )
@@ -3397,7 +3432,9 @@ class AqueductSettings(ProductionSettingsMixin):
     XBLOCK_RUNTIME_V2_EPHEMERAL_DATA_CACHE: str = Field(default="default")
     XBLOCK_SETTINGS: dict[str, Any] = Field(default_factory=lambda: {})
     XDOMAIN_PROXY_CACHE_TIMEOUT: int = Field(default=900)
-    XMODULE_ROOT: Path = Field(default=Path("/openedx/edx-platform/xmodule"))
+    XMODULE_ROOT: pathlib.Path = Field(
+        default=pathlib.Path("/openedx/edx-platform/xmodule")
+    )
     XQUEUE_INTERFACE: dict[str, Any] = Field(
         default_factory=lambda: {
             "url": "http://localhost:18040",
