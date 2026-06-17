@@ -32,10 +32,9 @@ from pydantic import model_validator
 from django_aqueduct import configure_django_settings
 
 from .models.aqueduct import AqueductSettings
-from .models.base import ProductionSettingsMixin
 
 
-class CMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
+class CMSProductionSettings(AqueductSettings):
     """Typed CMS (Studio) production settings."""
 
     @model_validator(mode="after")

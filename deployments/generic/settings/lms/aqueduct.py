@@ -25,10 +25,9 @@ from pydantic import model_validator
 from django_aqueduct import configure_django_settings
 
 from .models.aqueduct import AqueductSettings
-from .models.base import ProductionSettingsMixin
 
 
-class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
+class LMSProductionSettings(AqueductSettings):
     """Typed LMS production settings — generic Open edX deployment."""
 
     @model_validator(mode="after")

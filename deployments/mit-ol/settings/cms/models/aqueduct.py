@@ -12,22 +12,17 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from .base import ProductionSettingsMixin
 from path import Path
 import datetime
 
 
-class AqueductSettings(BaseSettings):
+class AqueductSettings(ProductionSettingsMixin):
     """Typed Django settings model.
 
     Populate from environment variables, YAML, Vault, AWS SSM, or any
     combination by configuring ``model_config`` and the sources below.
     """
-
-    model_config = SettingsConfigDict(
-        env_prefix="",
-        extra="allow",
-    )
 
     # ===== lehrer_cms_shim =====
     ACCOUNT_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type

@@ -12,21 +12,16 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from .base import ProductionSettingsMixin
 from path import Path
 
 
-class AqueductSettings(BaseSettings):
+class AqueductSettings(ProductionSettingsMixin):
     """Typed Django settings model.
 
     Populate from environment variables, YAML, Vault, AWS SSM, or any
     combination by configuring ``model_config`` and the sources below.
     """
-
-    model_config = SettingsConfigDict(
-        env_prefix="",
-        extra="allow",
-    )
 
     # ===== lehrer_lms_shim =====
     ACCOUNT_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
@@ -889,8 +884,12 @@ class AqueductSettings(BaseSettings):
             Path("/openedx/edx-platform/common/templates"),
             Path("/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"),
             Path("/openedx/edx-platform/common/static"),
-            Path("/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"),
-            Path("/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"),
+            Path(
+                "/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"
+            ),
+            Path(
+                "/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"
+            ),
         ]
     )
     DEPRECATED_ADVANCED_COMPONENT_TYPES: list[Any] = Field(default_factory=lambda: [])
@@ -3143,8 +3142,12 @@ class AqueductSettings(BaseSettings):
                         "/openedx/edx-platform/common/djangoapps/pipeline_mako/templates"
                     ),
                     Path("/openedx/edx-platform/common/static"),
-                    Path("/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"),
-                    Path("/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"),
+                    Path(
+                        "/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"
+                    ),
+                    Path(
+                        "/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"
+                    ),
                 ],
                 "OPTIONS": {
                     "loaders": [
@@ -3195,8 +3198,12 @@ class AqueductSettings(BaseSettings):
                     Path(
                         "/openedx/edx-platform/openedx/features/course_experience/templates"
                     ),
-                    Path("/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"),
-                    Path("/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"),
+                    Path(
+                        "/openedx/venv/lib/python3.12/site-packages/ol_openedx_canvas_integration/templates"
+                    ),
+                    Path(
+                        "/openedx/venv/lib/python3.12/site-packages/ol_openedx_rapid_response_reports/templates"
+                    ),
                 ],
                 "OPTIONS": {
                     "context_processors": [
