@@ -19,6 +19,7 @@ import "@openedx/frontend-base/shell/style";
 const siteConfig: SiteConfig = {
 	siteId: "mitx",
 	siteName: "MITx Residential",
+	basename: "/apps/",
 	baseUrl: "https://apps.mitx.mit.edu",
 	lmsBaseUrl: "https://lms.mitx.mit.edu",
 	loginUrl: "https://lms.mitx.mit.edu/login",

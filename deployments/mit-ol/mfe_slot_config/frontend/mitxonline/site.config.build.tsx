@@ -18,6 +18,7 @@ import "@openedx/frontend-base/shell/style";
 const siteConfig: SiteConfig = {
 	siteId: "mitol",
 	siteName: "MIT Learn",
+	basename: "/apps/",
 	baseUrl: "https://apps.mitxonline.mit.edu",
 	lmsBaseUrl: "https://courses.learn.mit.edu",
 	loginUrl: "https://courses.learn.mit.edu/login",

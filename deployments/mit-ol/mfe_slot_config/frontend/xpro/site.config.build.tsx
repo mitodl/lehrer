@@ -19,6 +19,7 @@ import "@openedx/frontend-base/shell/style";
 const siteConfig: SiteConfig = {
 	siteId: "xpro",
 	siteName: "MIT xPRO",
+	basename: "/apps/",
 	baseUrl: "https://apps.xpro.mit.edu",
 	lmsBaseUrl: "https://courses.xpro.mit.edu",
 	loginUrl: "https://courses.xpro.mit.edu/login",
