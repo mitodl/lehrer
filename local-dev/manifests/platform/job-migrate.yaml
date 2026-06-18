@@ -43,23 +43,30 @@ spec:
           # (check_url_config), and some edx-platform url modules call
           # get_user_model() at import time, which fails during the migrate
           # command. Migrations themselves don't need the checks.
+          # integrated_channels ships mariadb_uuid_conversion migrations for
+          # blackboard, canvas, and integrated_channel that fire a raw
+          # ALTER TABLE ... MODIFY uuid uuid NOT NULL.  On a fresh MariaDB
+          # install these fail with "Table doesn't exist" because the table
+          # creation in earlier migrations is version-gated.  Fake all three
+          # on failure so the rest of the schema is applied on the retry.
+          fake_mariadb_uuid_migrations() {
+            app=$1
+            migrate "$app" migrate blackboard 0025 --fake 2>/dev/null || true
+            migrate "$app" migrate canvas 0041 --fake 2>/dev/null || true
+            migrate "$app" migrate integrated_channel 0037 --fake 2>/dev/null || true
+          }
+
           echo "==> LMS migrations"
           if ! migrate lms migrate; then
-            # integrated_channels bug: blackboard.0025_mariadb_uuid_conversion
-            # runs an unconditional ALTER TABLE to convert UUID columns to
-            # MariaDB's native uuid type, but on some MariaDB versions the table
-            # was created without the uuid column type (version-gated in 0001),
-            # so the table exists in Django's migration state but not on disk.
-            # Fake the migration and retry so the rest of the schema is applied.
-            echo "==> Migration failed; faking blackboard MariaDB UUID migration and retrying"
-            migrate lms migrate blackboard 0025 --fake || true
+            echo "==> Migration failed; faking MariaDB UUID migrations and retrying"
+            fake_mariadb_uuid_migrations lms
             migrate lms migrate
           fi
 
           echo "==> CMS migrations"
           if ! migrate cms migrate; then
-            echo "==> Migration failed; faking blackboard MariaDB UUID migration and retrying"
-            migrate cms migrate blackboard 0025 --fake || true
+            echo "==> Migration failed; faking MariaDB UUID migrations and retrying"
+            fake_mariadb_uuid_migrations cms
             migrate cms migrate
           fi
 
