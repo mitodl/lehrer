@@ -29,6 +29,11 @@ spec:
         - -c
         - |
           set -e
+          # Some data migrations (e.g. certificates/0003) write badge icon files
+          # to MEDIA_ROOT via Django's FileSystemStorage.  The directory must
+          # exist before migrations run; MEDIA_ROOT defaults to
+          # /openedx/data/media/ (set in ProductionSettingsMixin).
+          mkdir -p /openedx/data/media
           # --skip-checks: `migrate`'s system checks import the ROOT_URLCONF
           # (check_url_config), and some edx-platform url modules call
           # get_user_model() at import time, which fails during the migrate

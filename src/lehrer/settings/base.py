@@ -169,6 +169,12 @@ class ProductionSettingsMixin(BaseSettings):
     # Declared here so validators can reference them by name.
     # ------------------------------------------------------------------
 
+    # edx-platform's legacy MEDIA_ROOT default is /edx/var/edxapp/media/ which
+    # does not exist in the lehrer container.  Override it here so that any
+    # deployment that does not set MEDIA_ROOT explicitly (e.g. via env var for
+    # S3 storage) falls back to a path that is actually writable.
+    MEDIA_ROOT: str = Field(default="/openedx/data/media/")
+
     LOG_DIR: str = Field(default="/openedx/data/var/log/edx")
     LOGGING_ENV: str = Field(default="sandbox")
     LOCAL_LOGLEVEL: str = Field(default="INFO")
