@@ -208,17 +208,14 @@ class LMSProductionSettings(AqueductSettings):
 # the real common.py value instead of vanishing to Django's empty default.
 configure_django_settings(LMSProductionSettings, base="lms.envs.common")
 
-# Importing lms.envs.common inside configure_django_settings can trigger
-# django.conf.settings access via edx-platform app imports, which causes
-# Django to build a stale Settings from this partially-initialized module
-# (scope.update hasn't run yet) and cache it as _wrapped.  Reset the
-# sentinel so the next settings access re-reads from the now-complete
-# module globals.
-try:
-    from django.conf import settings as _s  # noqa: PLC0415
-    from django.utils.functional import empty as _lazy_empty  # noqa: PLC0415
+# DIAGNOSTIC — remove after root-cause confirmed.
+import sys as _sys  # noqa: PLC0415, E402
 
-    if _s._wrapped is not _lazy_empty:  # noqa: SLF001
-        _s._wrapped = _lazy_empty  # noqa: SLF001
-except Exception:  # noqa: BLE001
-    pass
+_aqueduct_mod = _sys.modules.get(__name__)
+if _aqueduct_mod is not None:
+    _has_survey = "SURVEY_REPORT_ENABLE" in _aqueduct_mod.__dict__
+    _n_upper = sum(1 for k in _aqueduct_mod.__dict__ if k.isupper())
+    _sys.stderr.write(
+        f"[lehrer] aqueduct diag: SURVEY_REPORT_ENABLE={_has_survey} "
+        f"uppercase_keys={_n_upper}\n"
+    )
