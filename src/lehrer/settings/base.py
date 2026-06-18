@@ -315,30 +315,79 @@ class ProductionSettingsMixin(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_doc_store_config(self) -> ProductionSettingsMixin:
-        """Build DOC_STORE_CONFIG from MONGODB_* env vars.
+    def _derive_mongo_settings(self) -> ProductionSettingsMixin:
+        """Build DOC_STORE_CONFIG, CONTENTSTORE, and MODULESTORE from MONGODB_* env vars.
 
-        edx-platform's modulestore uses DOC_STORE_CONFIG as a nested dict, so it
-        can't arrive cleanly as a single env var. The individual scalars come from
-        the platform ConfigMap (host, port, user, db, replicaSet, authsource) and
-        the openedx-secrets Secret (MONGO_PASSWORD).
+        edx-platform's modulestore stack uses nested dicts that can't arrive
+        cleanly as single env vars. The scalars come from the platform ConfigMap
+        (host, port, user, db, replicaSet, authsource) and openedx-secrets
+        (MONGO_PASSWORD). Structure mirrors the production secrets_builder.
         """
         if not self.MONGODB_HOST:
             return self
-        config: dict = {
+
+        mongo: dict = {
             "host": self.MONGODB_HOST,
             "port": self.MONGODB_PORT,
             "db": self.MONGODB_DB,
         }
         if self.MONGODB_USER:
-            config["user"] = self.MONGODB_USER
+            mongo["user"] = self.MONGODB_USER
         if self.MONGO_PASSWORD:
-            config["password"] = self.MONGO_PASSWORD
+            mongo["password"] = self.MONGO_PASSWORD
         if self.MONGODB_AUTH_SOURCE:
-            config["authsource"] = self.MONGODB_AUTH_SOURCE
+            mongo["authsource"] = self.MONGODB_AUTH_SOURCE
         if self.MONGODB_REPLICASET:
-            config["replicaSet"] = self.MONGODB_REPLICASET
-        self.DOC_STORE_CONFIG = config  # type: ignore[attr-defined]
+            mongo["replicaSet"] = self.MONGODB_REPLICASET
+
+        import copy  # noqa: PLC0415
+
+        doc_store: dict = {
+            "collection": "modulestore",
+            "connectTimeoutMS": 2000,
+            "socketTimeoutMS": 3000,
+            **copy.deepcopy(mongo),
+        }
+
+        self.DOC_STORE_CONFIG = copy.deepcopy(doc_store)  # type: ignore[attr-defined]
+
+        self.CONTENTSTORE = {  # type: ignore[attr-defined]
+            "ENGINE": "xmodule.contentstore.mongo.MongoContentStore",
+            "ADDITIONAL_OPTIONS": {},
+            "DOC_STORE_CONFIG": copy.deepcopy(doc_store),
+            "OPTIONS": copy.deepcopy(mongo),
+        }
+
+        self.MODULESTORE = {  # type: ignore[attr-defined]
+            "default": {
+                "ENGINE": "xmodule.modulestore.mixed.MixedModuleStore",
+                "OPTIONS": {
+                    "mappings": {},
+                    "stores": [
+                        {
+                            "NAME": "split",
+                            "ENGINE": "xmodule.modulestore.split_mongo.split_draft.DraftVersioningModuleStore",
+                            "DOC_STORE_CONFIG": copy.deepcopy(doc_store),
+                            "OPTIONS": {
+                                "default_class": "xmodule.hidden_block.HiddenBlock",
+                                "fs_root": "/openedx/data/var/edxapp/data",
+                                "render_template": "common.djangoapps.edxmako.shortcuts.render_to_string",
+                            },
+                        },
+                        {
+                            "NAME": "draft",
+                            "ENGINE": "xmodule.modulestore.mongo.DraftMongoModuleStore",
+                            "DOC_STORE_CONFIG": copy.deepcopy(doc_store),
+                            "OPTIONS": {
+                                "default_class": "xmodule.hidden_block.HiddenBlock",
+                                "fs_root": "/openedx/data/var/edxapp/data",
+                                "render_template": "common.djangoapps.edxmako.shortcuts.render_to_string",
+                            },
+                        },
+                    ],
+                },
+            }
+        }
         return self
 
     @model_validator(mode="after")

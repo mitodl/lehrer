@@ -52,8 +52,9 @@ data:
   LOGGING_ENV: "sandbox"
   LOCAL_LOGLEVEL: "INFO"
 
-  # Development flags
-  DEBUG: "false"
+  # Development flags — DEBUG=true enables admin URLs (lms/urls.py gates them
+  # on DEBUG or FEATURES['ENABLE_DJANGO_ADMIN_SITE']) and gives full tracebacks.
+  DEBUG: "true"
   # JSON-encoded: the aqueduct ALLOWED_HOSTS field is list[Any], and
   # pydantic-settings parses list-typed env vars as JSON.
   ALLOWED_HOSTS: '["*"]'
