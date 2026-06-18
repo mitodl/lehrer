@@ -1208,7 +1208,7 @@ class AqueductSettings(ProductionSettingsMixin):
     FRONTEND_LOGOUT_URL: str = Field(default="/logout/")
     FRONTEND_REGISTER_URL: str = Field(default="http://localhost:18000/register")
     GENERATE_PROFILE_SCORES: bool = Field(default=False)
-    GEOIP_PATH: str = Field(
+    GEOIP_PATH: pathlib.Path = Field(
         default=pathlib.Path(
             "/openedx/edx-platform/common/static/data/geoip/GeoLite2-Country.mmdb"
         )
@@ -1251,7 +1251,7 @@ class AqueductSettings(ProductionSettingsMixin):
             "course_author": "https://docs.openedx.org/en/latest/educators",
         }
     )
-    HELP_TOKENS_INI_FILE: str = Field(
+    HELP_TOKENS_INI_FILE: pathlib.Path = Field(
         default=pathlib.Path("/openedx/edx-platform/cms/envs/help_tokens.ini")
     )
     HELP_TOKENS_LANGUAGE_CODE: str = Field(default="en")

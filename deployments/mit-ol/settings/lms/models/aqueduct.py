@@ -1365,7 +1365,7 @@ class AqueductSettings(ProductionSettingsMixin):
     FRONTEND_SITE_CONFIG: dict[str, Any] = Field(default_factory=lambda: {})
     GENERAL_RECOMMENDATION: dict[str, Any] = Field(default_factory=lambda: {})
     GENERATE_PROFILE_SCORES: bool = Field(default=False)
-    GEOIP_PATH: str = Field(
+    GEOIP_PATH: pathlib.Path = Field(
         default=pathlib.Path(
             "/openedx/edx-platform/common/static/data/geoip/GeoLite2-Country.mmdb"
         )
@@ -1409,7 +1409,7 @@ class AqueductSettings(ProductionSettingsMixin):
             "course_author": "https://docs.openedx.org/en/latest/educators",
         }
     )
-    HELP_TOKENS_INI_FILE: str = Field(
+    HELP_TOKENS_INI_FILE: pathlib.Path = Field(
         default=pathlib.Path("/openedx/edx-platform/lms/envs/help_tokens.ini")
     )
     HELP_TOKENS_LANGUAGE_CODE: str = Field(default="en")
@@ -2280,7 +2280,7 @@ class AqueductSettings(ProductionSettingsMixin):
         default="Enter your receipt billing address here."
     )
     PDF_RECEIPT_COBRAND_LOGO_HEIGHT_MM: int = Field(default=12)
-    PDF_RECEIPT_COBRAND_LOGO_PATH: str = Field(
+    PDF_RECEIPT_COBRAND_LOGO_PATH: pathlib.Path = Field(
         default=pathlib.Path("/openedx/edx-platform/lms/static/images/logo.png")
     )
     PDF_RECEIPT_DISCLAIMER_TEXT: str = Field(
@@ -2288,7 +2288,7 @@ class AqueductSettings(ProductionSettingsMixin):
     )
     PDF_RECEIPT_FOOTER_TEXT: str = Field(default="Enter your receipt footer text here.")
     PDF_RECEIPT_LOGO_HEIGHT_MM: int = Field(default=12)
-    PDF_RECEIPT_LOGO_PATH: str = Field(
+    PDF_RECEIPT_LOGO_PATH: pathlib.Path = Field(
         default=pathlib.Path(
             "/openedx/edx-platform/lms/static/images/openedx-logo-tag.png"
         )
