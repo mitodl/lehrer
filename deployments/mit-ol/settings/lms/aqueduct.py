@@ -207,15 +207,3 @@ class LMSProductionSettings(AqueductSettings):
 # not serialise (rendered as None — e.g. opaque tuples/dicts), falls back to
 # the real common.py value instead of vanishing to Django's empty default.
 configure_django_settings(LMSProductionSettings, base="lms.envs.common")
-
-# DIAGNOSTIC — remove after root-cause confirmed.
-import sys as _sys  # noqa: PLC0415, E402
-
-_aqueduct_mod = _sys.modules.get(__name__)
-if _aqueduct_mod is not None:
-    _has_survey = "SURVEY_REPORT_ENABLE" in _aqueduct_mod.__dict__
-    _n_upper = sum(1 for k in _aqueduct_mod.__dict__ if k.isupper())
-    _sys.stderr.write(
-        f"[lehrer] aqueduct diag: SURVEY_REPORT_ENABLE={_has_survey} "
-        f"uppercase_keys={_n_upper}\n"
-    )

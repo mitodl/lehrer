@@ -34,18 +34,3 @@ class CMSProductionSettings(AqueductSettings):
 # not serialise (rendered as None — e.g. opaque tuples/dicts), falls back to
 # the real common.py value instead of vanishing to Django's empty default.
 configure_django_settings(CMSProductionSettings, base="cms.envs.common")
-
-# Importing cms.envs.common inside configure_django_settings can trigger
-# django.conf.settings access via edx-platform app imports, which causes
-# Django to build a stale Settings from this partially-initialized module
-# (scope.update hasn't run yet) and cache it as _wrapped.  Reset the
-# sentinel so the next settings access re-reads from the now-complete
-# module globals.
-try:
-    from django.conf import settings as _s  # noqa: PLC0415
-    from django.utils.functional import empty as _lazy_empty  # noqa: PLC0415
-
-    if _s._wrapped is not _lazy_empty:  # noqa: SLF001
-        _s._wrapped = _lazy_empty  # noqa: SLF001
-except Exception:  # noqa: BLE001
-    pass

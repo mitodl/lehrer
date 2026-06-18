@@ -2265,6 +2265,12 @@ class AqueductSettings(ProductionSettingsMixin):
         default=None
     )  # DERIVED: computed from other settings — add a @model_validator to reproduce
     SUPPORT_SITE_LINK: str = Field(default="")
+    SURVEY_REPORT_CHECK_THRESHOLD: int = Field(default=6)
+    SURVEY_REPORT_ENABLE: bool = Field(default=True)
+    SURVEY_REPORT_ENDPOINT: str = Field(
+        default="https://hooks.zapier.com/hooks/catch/11595998/3ouwv7m/"
+    )
+    SURVEY_REPORT_EXTRA_DATA: dict[str, Any] = Field(default_factory=lambda: {})
     SWIFT_AUTH_URL: Any = Field(default=None)  # TODO: refine type
     SWIFT_AUTH_VERSION: Any = Field(default=None)  # TODO: refine type
     SWIFT_KEY: Any = Field(default=None)  # TODO: refine type
