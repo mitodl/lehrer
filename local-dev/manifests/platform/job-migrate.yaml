@@ -34,14 +34,35 @@ spec:
           # exist before migrations run; MEDIA_ROOT defaults to
           # /openedx/data/media/ (set in ProductionSettingsMixin).
           mkdir -p /openedx/data/media
+
+          migrate() {
+            python manage.py "$@" --settings=aqueduct --skip-checks
+          }
+
           # --skip-checks: `migrate`'s system checks import the ROOT_URLCONF
           # (check_url_config), and some edx-platform url modules call
           # get_user_model() at import time, which fails during the migrate
           # command. Migrations themselves don't need the checks.
           echo "==> LMS migrations"
-          python manage.py lms migrate --settings=aqueduct --skip-checks
+          if ! migrate lms migrate; then
+            # integrated_channels bug: blackboard.0025_mariadb_uuid_conversion
+            # runs an unconditional ALTER TABLE to convert UUID columns to
+            # MariaDB's native uuid type, but on some MariaDB versions the table
+            # was created without the uuid column type (version-gated in 0001),
+            # so the table exists in Django's migration state but not on disk.
+            # Fake the migration and retry so the rest of the schema is applied.
+            echo "==> Migration failed; faking blackboard MariaDB UUID migration and retrying"
+            migrate lms migrate blackboard 0025 --fake || true
+            migrate lms migrate
+          fi
+
           echo "==> CMS migrations"
-          python manage.py cms migrate --settings=aqueduct --skip-checks
+          if ! migrate cms migrate; then
+            echo "==> Migration failed; faking blackboard MariaDB UUID migration and retrying"
+            migrate cms migrate blackboard 0025 --fake || true
+            migrate cms migrate
+          fi
+
           echo "==> Migrations complete"
         envFrom:
         - configMapRef:
