@@ -312,9 +312,19 @@ class AqueductSettings(ProductionSettingsMixin):
     BROKER_HEARTBEAT_CHECKRATE: int = Field(default=2)
     BROKER_USE_SSL: bool = Field(default=False)
     BUGS_EMAIL: str = Field(default="bugs@example.com")
+    BULK_COURSE_EMAIL_LAST_LOGIN_ELIGIBILITY_PERIOD: Any = Field(
+        default=None
+    )  # TODO: refine type
     BULK_EMAIL_DEFAULT_FROM_EMAIL: str = Field(default="no-reply@example.com")
+    BULK_EMAIL_DEFAULT_RETRY_DELAY: int = Field(default=30)
     BULK_EMAIL_EMAILS_PER_TASK: int = Field(default=500)
+    BULK_EMAIL_INFINITE_RETRY_CAP: int = Field(default=1000)
+    BULK_EMAIL_JOB_SIZE_THRESHOLD: int = Field(default=100)
     BULK_EMAIL_LOG_SENT_EMAILS: bool = Field(default=False)
+    BULK_EMAIL_MAX_RETRIES: int = Field(default=5)
+    BULK_EMAIL_RETRY_DELAY_BETWEEN_SENDS: float = Field(default=0.02)
+    BULK_EMAIL_ROUTING_KEY: str = Field(default="edx.lms.core.high")
+    BULK_EMAIL_ROUTING_KEY_SMALL_JOBS: str = Field(default="edx.lms.core.default")
     CACHES: dict[str, Any] = Field(
         default_factory=lambda: {
             "course_structure_cache": {
