@@ -32,10 +32,9 @@ from pydantic import Field, model_validator
 from django_aqueduct import configure_django_settings
 
 from .models.aqueduct import AqueductSettings
-from .models.base import ProductionSettingsMixin
 
 
-class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
+class LMSProductionSettings(AqueductSettings):
     """Typed LMS production settings."""
 
     # YAML key from 82-lms-interpolated-config; Django setting is LMS_SEGMENT_KEY.
@@ -203,4 +202,8 @@ class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
         return self
 
 
-configure_django_settings(LMSProductionSettings)
+# base="lms.envs.common" overlays the model onto edx-platform's upstream
+# defaults: any setting the model does not carry, or that the generator could
+# not serialise (rendered as None — e.g. opaque tuples/dicts), falls back to
+# the real common.py value instead of vanishing to Django's empty default.
+configure_django_settings(LMSProductionSettings, base="lms.envs.common")

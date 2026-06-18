@@ -25,7 +25,7 @@ dagger call mfe build-site \
 dagger call mfe watch-site \
   --site-project ./deployments/mit-ol/mfe_slot_config/frontend/mitxonline \
   --shared-src   ./deployments/mit-ol/mfe_slot_config/frontend/shared \
-  up --ports 8080:8080
+  up --ports 8090:8080
 ```
 
 ## Local development (outside Dagger)

@@ -23,7 +23,7 @@ const siteConfig: SiteConfig = {
 	siteId: "xpro",
 	siteName: "MIT xPRO (dev)",
 	basename: "/",
-	baseUrl: "http://apps.local.openedx.io:8080",
+	baseUrl: "http://apps.local.openedx.io:8090",
 	lmsBaseUrl: "http://local.openedx.io:8000",
 	loginUrl: "http://local.openedx.io:8000/login",
 	logoutUrl: "http://local.openedx.io:8000/logout",

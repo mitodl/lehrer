@@ -1,0 +1,26 @@
+---
+# Operator-overridable defaults for the lehrer local dev environment.
+# Override any of these values before running `tilt up`.
+#
+# All values here can also be overridden via CLI args:
+#   tilt up -- --deployment-config ../deployments/mit-ol
+#
+# Deployment name must match the filename in pip_package_lists/<release_name>/<deployment_name>.txt
+deployment_name: "generic"
+
+# Release name (edx-platform branch): "master", "teak", etc.
+release_name: "master"
+
+# Django settings sub-package namespace. Used for lms.envs.<namespace>.assets
+# and lms.envs.<namespace>.i18n during the build. The aqueduct.py module is
+# always placed at lms/envs/aqueduct.py regardless of namespace.
+#
+# Must NOT collide with an existing edx-platform settings module name. In
+# particular "production" is reserved — edx-platform ships lms/envs/production.py,
+# which shadows the lms/envs/production/ package the build creates and makes the
+# assets/i18n submodules unreachable.
+settings_namespace: "generic"
+
+# Set to true to also start a watch_site hot-reload dev server alongside the
+# compiled nginx MFE deployment.
+mfe_hot_reload: false
