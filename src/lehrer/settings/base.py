@@ -192,6 +192,12 @@ class ProductionSettingsMixin(BaseSettings):
     MYSQL_DB_NAME: str = Field(default="edxapp")
     DB_PASSWORD: str = Field(default="")
 
+    # Service URL scalars — consumed by _derive_service_root_urls to populate
+    # LMS_ROOT_URL / CMS_ROOT_URL when the generated model leaves them as None.
+    # openassessment's LoadStatic crashes at import time if LMS_ROOT_URL is None.
+    LMS_BASE_URL: str = Field(default="")
+    CMS_BASE_URL: str = Field(default="")
+
     # ------------------------------------------------------------------
     # Source customisation
     # ------------------------------------------------------------------
@@ -412,6 +418,22 @@ class ProductionSettingsMixin(BaseSettings):
                 db["PASSWORD"] = self.DB_PASSWORD
             if self.MYSQL_DB_NAME and alias in ("default", "read_replica"):
                 db["NAME"] = self.MYSQL_DB_NAME
+        return self
+
+    @model_validator(mode="after")
+    def _derive_service_root_urls(self) -> ProductionSettingsMixin:
+        """Populate LMS_ROOT_URL / CMS_ROOT_URL from the *_BASE_URL scalars.
+
+        The generated models leave these as Any = None because the generator
+        couldn't serialise their values.  openassessment's LoadStatic reads
+        settings.LMS_ROOT_URL at import time and crashes with AttributeError
+        if it's None.  Derive from the LMS_BASE_URL / CMS_BASE_URL env vars
+        that the platform ConfigMap already supplies.
+        """
+        if getattr(self, "LMS_ROOT_URL", None) is None and self.LMS_BASE_URL:
+            self.LMS_ROOT_URL = self.LMS_BASE_URL  # type: ignore[attr-defined]
+        if getattr(self, "CMS_ROOT_URL", None) is None and self.CMS_BASE_URL:
+            self.CMS_ROOT_URL = self.CMS_BASE_URL  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")

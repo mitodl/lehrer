@@ -372,16 +372,17 @@ def setup(cfg):
     # The platform services depend on a migrated schema, so they wait for the
     # migration Job to complete (in addition to the infra services).
     platform_deps = infra_deps + ["edxapp-migrate"]
+    # LMS and CMS are exposed on host ports 8000/8010 via the k3d load
+    # balancer → Traefik ingress.  Port-forwards are omitted here to avoid
+    # conflicting with that binding ("address already in use").
     k8s_resource(
         "lms",
         resource_deps=platform_deps,
-        port_forwards=["8000:8000"],
         labels=["platform"],
     )
     k8s_resource(
         "cms",
         resource_deps=platform_deps,
-        port_forwards=["8010:8010"],
         labels=["platform"],
     )
     k8s_resource(
