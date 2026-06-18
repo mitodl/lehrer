@@ -169,12 +169,6 @@ class ProductionSettingsMixin(BaseSettings):
     # Declared here so validators can reference them by name.
     # ------------------------------------------------------------------
 
-    # edx-platform's legacy MEDIA_ROOT default is /edx/var/edxapp/media/ which
-    # does not exist in the lehrer container.  Override it here so that any
-    # deployment that does not set MEDIA_ROOT explicitly (e.g. via env var for
-    # S3 storage) falls back to a path that is actually writable.
-    MEDIA_ROOT: str = Field(default="/openedx/data/media/")
-
     LOG_DIR: str = Field(default="/openedx/data/var/log/edx")
     LOGGING_ENV: str = Field(default="sandbox")
     LOCAL_LOGLEVEL: str = Field(default="INFO")
@@ -369,6 +363,26 @@ class ProductionSettingsMixin(BaseSettings):
                 db["PASSWORD"] = self.DB_PASSWORD
             if self.MYSQL_DB_NAME and alias in ("default", "read_replica"):
                 db["NAME"] = self.MYSQL_DB_NAME
+        return self
+
+    @model_validator(mode="after")
+    def _fix_media_root(self) -> ProductionSettingsMixin:
+        """Redirect the legacy /edx/ MEDIA_ROOT to a path that exists in the container.
+
+        edx-platform common settings default MEDIA_ROOT to /edx/var/edxapp/media/,
+        a path that does not exist (and cannot be created) in the lehrer container.
+        Redirect it to /openedx/data/media/ unless an explicit override was supplied
+        (e.g. via MEDIA_ROOT env var pointing to S3 or a PVC mount path).
+
+        A field-level declaration in this mixin would not work: because
+        AqueductSettings is a *subclass* of ProductionSettingsMixin (not a sibling),
+        AqueductSettings.MEDIA_ROOT wins in the MRO. A model_validator runs after
+        instantiation regardless of class hierarchy, so it reliably overrides the
+        generated default without touching the generated file.
+        """
+        media_root = getattr(self, "MEDIA_ROOT", None)
+        if media_root is None or str(media_root).startswith("/edx/"):
+            self.MEDIA_ROOT = "/openedx/data/media/"  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")
