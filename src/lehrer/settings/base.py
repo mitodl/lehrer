@@ -394,37 +394,6 @@ class ProductionSettingsMixin(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_logging(self) -> ProductionSettingsMixin:
-        """Build LOGGING from log-dir / environment / loglevel.
-
-        All three inputs are flat scalars arriving as env vars; they are
-        declared as explicit fields so pydantic populates them before this
-        validator runs.
-
-        The import is deferred and guarded: importing openedx.core.lib during
-        model instantiation can trigger a circular import when this model is
-        itself being instantiated as part of the Django settings module load
-        (django.conf.settings → lms.envs.aqueduct → configure_django_settings
-        → LMSProductionSettings() → this validator → openedx import →
-        settings access → AttributeError on the half-loaded module).  If the
-        import fails for any reason we skip the override and let the aqueduct
-        base overlay supply the LOGGING value from lms.envs.common.
-        """
-        try:
-            from openedx.core.lib.logsettings import get_docker_logger_config  # noqa: PLC0415
-        except Exception:  # noqa: BLE001
-            return self
-
-        service_variant = getattr(self, "SERVICE_VARIANT", None) or "lms"
-        self.LOGGING = get_docker_logger_config(  # type: ignore[attr-defined]
-            self.LOG_DIR,
-            logging_env=self.LOGGING_ENV,
-            debug=(self.LOCAL_LOGLEVEL == "DEBUG"),
-            service_variant=service_variant,
-        )
-        return self
-
-    @model_validator(mode="after")
     def _convert_path_strings_to_path_objects(self) -> ProductionSettingsMixin:
         """Convert path-related settings to PathString objects.
 
