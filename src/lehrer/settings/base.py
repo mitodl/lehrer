@@ -394,28 +394,26 @@ class ProductionSettingsMixin(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_xblock_mixins(self) -> ProductionSettingsMixin:
-        """Restore XBLOCK_MIXINS when it couldn't be serialised by aqueduct.
-
-        The tuple-of-classes value is not JSON-serialisable, so aqueduct sets
-        the Pydantic default to None.  Import the canonical value from
-        openedx.core.lib.xblock_utils at runtime when no override is present.
-        """
-        if getattr(self, "XBLOCK_MIXINS", None) is None:
-            from lms.envs.common import XBLOCK_MIXINS  # noqa: PLC0415
-
-            self.XBLOCK_MIXINS = XBLOCK_MIXINS  # type: ignore[attr-defined]
-        return self
-
-    @model_validator(mode="after")
     def _derive_logging(self) -> ProductionSettingsMixin:
         """Build LOGGING from log-dir / environment / loglevel.
 
         All three inputs are flat scalars arriving as env vars; they are
         declared as explicit fields so pydantic populates them before this
         validator runs.
+
+        The import is deferred and guarded: importing openedx.core.lib during
+        model instantiation can trigger a circular import when this model is
+        itself being instantiated as part of the Django settings module load
+        (django.conf.settings → lms.envs.aqueduct → configure_django_settings
+        → LMSProductionSettings() → this validator → openedx import →
+        settings access → AttributeError on the half-loaded module).  If the
+        import fails for any reason we skip the override and let the aqueduct
+        base overlay supply the LOGGING value from lms.envs.common.
         """
-        from openedx.core.lib.logsettings import get_docker_logger_config  # noqa: PLC0415
+        try:
+            from openedx.core.lib.logsettings import get_docker_logger_config  # noqa: PLC0415
+        except Exception:  # noqa: BLE001
+            return self
 
         service_variant = getattr(self, "SERVICE_VARIANT", None) or "lms"
         self.LOGGING = get_docker_logger_config(  # type: ignore[attr-defined]
