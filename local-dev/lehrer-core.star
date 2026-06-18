@@ -50,6 +50,11 @@ def setup(cfg):
     local_dev = cfg["local_dev_dir"]
     apply_configmaps = cfg["apply_platform_configmaps"]
 
+    # Lehrer core source — injected directly into the container by inject_aqueduct_settings
+    # (dag.current_module().source().file("src/lehrer/settings/base.py")).
+    # Must be in deps so Tilt triggers a rebuild when base.py changes.
+    lehrer_core_src = local_dev + "/../src/lehrer/settings"
+
     # Absolute path to the deployment config directory.
     # Relative paths are treated as relative to local_dev (where tilt up is run from).
     if deploy_config.startswith("/"):
@@ -217,6 +222,7 @@ def setup(cfg):
             dep_cfg + "/pip_package_lists",
             dep_cfg + "/pip_package_overrides",
             dep_cfg + "/settings",
+            lehrer_core_src,
         ],
         skips_local_docker=True,
     )
