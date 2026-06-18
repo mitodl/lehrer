@@ -88,13 +88,6 @@ class OpenedxPlatform:
             # for PyFilesystem2 compatibility still resolves.
             .with_new_file("/openedx/uv-constraints.txt", "setuptools<82\n")
             .with_env_variable("UV_CONSTRAINT", "/openedx/uv-constraints.txt")
-            # django-autocomplete-light==4.0.1 was never published to PyPI;
-            # some edx-platform master commits pin it.  Override to >=4.0.3
-            # so the resolver picks the nearest available release.
-            .with_new_file(
-                "/openedx/uv-overrides.txt", "django-autocomplete-light>=4.0.3\n"
-            )
-            .with_env_variable("UV_OVERRIDE", "/openedx/uv-overrides.txt")
             .with_exec(["apt", "update"])
             .with_exec(
                 ["apt", "install", "-y", "--no-install-recommends"] + apt_packages
