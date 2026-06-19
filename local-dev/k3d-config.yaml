@@ -1,0 +1,36 @@
+---
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+
+metadata:
+  name: lehrer-dev
+
+# Local container registry — accessible as k3d-lehrer-registry:5000 from within
+# the cluster (K3d auto-configures the CoreDNS alias), and as localhost:5100 from
+# the host. All custom_build commands push to localhost:5100; all K8s manifests
+# reference k3d-lehrer-registry:5000.
+registries:
+  create:
+    name: lehrer-registry
+    host: "0.0.0.0"
+    hostPort: "5100"
+
+# Bind Traefik ingress ports to localhost for browser access.
+# Tilt also configures kubectl port-forward on specific ports for each service,
+# which is more reliable for local dev than hostname-based Traefik routing.
+ports:
+- port: 8000:80
+  nodeFilters: ["loadbalancer"]
+- port: 8010:80
+  nodeFilters: ["loadbalancer"]
+# MFE ingress. 8090 rather than the conventional 8080 to avoid clashing with
+# other local dev servers that commonly squat on 8080. `lehrer dev setup`
+# preflights this port; the MFE baseUrl in the frontend site.config.*.tsx files
+# must match it.
+- port: 8090:80
+  nodeFilters: ["loadbalancer"]
+- port: 8001:80
+  nodeFilters: ["loadbalancer"]
+
+servers: 1
+agents: 1

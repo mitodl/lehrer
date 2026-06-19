@@ -3,6 +3,7 @@ import {
 	headerApp,
 	shellApp,
 	EnvironmentTypes,
+	type App,
 	type SiteConfig,
 } from "@openedx/frontend-base";
 
@@ -14,10 +15,16 @@ import { createInstructorDashboardCustomApp } from "@shared/instructor-dashboard
 import "@openedx/frontend-base/shell/style";
 import "@shared/styles/mitxonline.scss";
 
+const wrapWithAppsPath = (app: App): App =>
+	app.routes
+		? { ...app, routes: [{ path: "apps", children: app.routes }] }
+		: app;
+
 const siteConfig: SiteConfig = {
 	siteId: "mitol",
 	siteName: "MIT Learn (dev)",
-	baseUrl: "http://apps.local.openedx.io:8080",
+	basename: "/",
+	baseUrl: "http://apps.local.openedx.io:8090",
 	lmsBaseUrl: "http://local.openedx.io:8000",
 	loginUrl: "http://local.openedx.io:8000/login",
 	logoutUrl: "http://local.openedx.io:8000/logout",
@@ -35,13 +42,13 @@ const siteConfig: SiteConfig = {
 		footerApp,
 		createMITOLFooterApp(),
 		createMITxOnlineHeaderApp(),
-		{
+		wrapWithAppsPath({
 			...instructorDashboardApp,
 			config: {
 				...instructorDashboardApp.config,
 				SUPPORT_URL: "https://support.learn.mit.edu/",
 			},
-		},
+		}),
 		createInstructorDashboardCustomApp(),
 	],
 };

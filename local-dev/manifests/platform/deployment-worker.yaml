@@ -1,0 +1,59 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lms-worker
+  namespace: openedx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lms-worker
+  template:
+    metadata:
+      labels:
+        app: lms-worker
+    spec:
+      containers:
+      - name: worker
+        image: lehrer-registry:5000/openedx-platform:dev
+        command:
+        - celery
+        - "--app=lms.celery"
+        - worker
+        - "--loglevel=info"
+        - "--hostname=edx.lms.%%h"
+        - "--concurrency=4"
+        env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: "lms.envs.aqueduct"
+        envFrom:
+        - configMapRef:
+            name: lms-config
+        - secretRef:
+            name: openedx-secrets
+        livenessProbe:
+          exec:
+            command:
+            - celery
+            - "--app=lms.celery"
+            - inspect
+            - ping
+            - "--timeout=5"
+          initialDelaySeconds: 60
+          periodSeconds: 60
+          timeoutSeconds: 10
+          failureThreshold: 5
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+        volumeMounts:
+        - name: edx-data
+          mountPath: /openedx/data
+      volumes:
+      - name: edx-data
+        emptyDir: {}

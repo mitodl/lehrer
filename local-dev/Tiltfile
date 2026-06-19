@@ -1,0 +1,64 @@
+# Standalone Tiltfile for lehrer local dev environment.
+#
+# This Tiltfile is normally driven through the `lehrer` CLI rather than invoked
+# directly:
+#
+#   lehrer dev setup     # create the k3d cluster + bootstrap secrets (once)
+#   lehrer dev start     # tilt up (this file)
+#   lehrer dev start --deployment-config ../deployments/mit-ol --mfe-hot-reload
+#   lehrer dev stop      # tilt down
+#
+# It can still be invoked directly for debugging:
+#   tilt up --file local-dev/Tiltfile -- --deployment-config ../deployments/mit-ol
+#
+# Prerequisites: run `lehrer dev setup` first to create the k3d cluster and
+# bootstrap secrets.
+
+load("./lehrer-core.star", "setup")
+
+config.define_string(
+    "deployment-config",
+    usage="Path to deployment config directory (default: ../deployments/generic)",
+)
+config.define_string(
+    "release-name",
+    usage="Open edX release name matching pip_package_lists subdirectory (default: master)",
+)
+config.define_string(
+    "deployment-name",
+    usage="Deployment name matching pip_package_lists filename (default: generic)",
+)
+config.define_string(
+    "settings-namespace",
+    usage="Django settings namespace for assets/i18n modules (default: generic)",
+)
+config.define_bool(
+    "mfe-hot-reload",
+    usage="Also start watch_site hot-reload dev servers for MFEs (default: false)",
+)
+
+cfg = config.parse()
+
+setup({
+    "deploy_config":   cfg.get("deployment-config") or config.main_dir + "/../deployments/generic",
+    "registry":        "localhost:5100",
+    "registry_k8s":    "lehrer-registry:5000",
+    "redis_host":      "redis-master.openedx.svc.cluster.local",
+    "opensearch_host": "opensearch-cluster-master.openedx.svc.cluster.local",
+    "namespace":       "openedx",
+    "manage_infra":    True,
+    "mysql_managed":   True,
+    "mongo_managed":   True,
+    "ingress":         "traefik",
+    "mfe_hot_reload":  cfg.get("mfe-hot-reload", False),
+    "notes_repo":      "https://github.com/openedx/edx-notes-api",
+    "helm_override_dir": "",
+    "local_dev_dir":   config.main_dir,
+    "lms_base_url":    "http://localhost:8000",
+    "cms_base_url":    "http://localhost:8010",
+    "notes_public_url": "http://localhost:8001",
+    "apply_platform_configmaps": True,
+    "release_name":    cfg.get("release-name") or "master",
+    "deploy_name":     cfg.get("deployment-name") or "generic",
+    "settings_ns":     cfg.get("settings-namespace") or "generic",
+})

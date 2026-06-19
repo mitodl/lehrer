@@ -1,0 +1,83 @@
+{
+  "$defs": {
+    "MfeBuildConfig": {
+      "additionalProperties": false,
+      "description": "Per-MFE build customizations, keyed by MFE application name.",
+      "properties": {
+        "extra_slot_files": {
+          "description": "Files injected from the slot config into the MFE root before building. A plain string copies a file as-is, or use 'source:dest' to rename on copy; a mapping selects the source by release name.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/SlotFileByRelease"
+              }
+            ]
+          },
+          "title": "Extra Slot Files",
+          "type": "array"
+        },
+        "extra_npm_bundles": {
+          "description": "Pre-built npm bundles to pack and copy as static assets. Each entry has the form 'npm_package_spec|target_directory'.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra Npm Bundles",
+          "type": "array"
+        }
+      },
+      "title": "MfeBuildConfig",
+      "type": "object"
+    },
+    "SlotFileByRelease": {
+      "additionalProperties": false,
+      "description": "A slot file whose source filename is selected by Open edX release name.",
+      "properties": {
+        "dest": {
+          "description": "Destination filename, relative to the MFE build root.",
+          "title": "Dest",
+          "type": "string"
+        },
+        "by_release": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Map of release name to source filename in the slot config. The 'default' key is the fallback used when no release matches.",
+          "minProperties": 1,
+          "title": "By Release",
+          "type": "object"
+        }
+      },
+      "required": [
+        "dest",
+        "by_release"
+      ],
+      "title": "SlotFileByRelease",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Top-level schema for an operator's legacy MFE ``build_config.yaml``.",
+  "properties": {
+    "styles": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Per-deployment stylesheet override copied into the MFE root, keyed by deployment name; the value is a filename in the slot config.",
+      "title": "Styles",
+      "type": "object"
+    },
+    "mfes": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MfeBuildConfig"
+      },
+      "description": "Per-MFE customizations keyed by MFE application name.",
+      "title": "Mfes",
+      "type": "object"
+    }
+  },
+  "title": "BuildConfig",
+  "type": "object"
+}

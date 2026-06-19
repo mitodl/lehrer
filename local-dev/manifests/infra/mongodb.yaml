@@ -1,0 +1,87 @@
+---
+# Password secret for MongoDB users.
+# MongoDB Community Operator expects a secret per user with key "password".
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-edxapp-secret
+  namespace: openedx
+stringData:
+  password: "openedx-dev"  # pragma: allowlist secret
+---
+# MongoDBCommunity instance managed by the mongodb community-operator.
+# Single-member replica set (the only mode supported by the operator).
+# The operator creates Service "mongodb-svc" in the openedx namespace.
+# edx-platform connects via mongodb-svc.openedx.svc.cluster.local with
+# replicaSet=mongodb (set in the platform's DOC_STORE_CONFIG).
+apiVersion: mongodbcommunity.mongodb.com/v1
+kind: MongoDBCommunity
+metadata:
+  name: mongodb
+  namespace: openedx
+spec:
+  members: 1
+  type: ReplicaSet
+  version: "7.0.14"
+
+  security:
+    authentication:
+      modes: ["SCRAM"]
+
+  users:
+  - name: edxapp
+    db: admin
+    passwordSecretRef:
+      name: mongodb-edxapp-secret
+    scramCredentialsSecretName: mongodb-edxapp-scram  # pragma: allowlist secret
+    roles:
+    - name: dbOwner
+      db: edxapp
+    - name: readWrite
+      db: edxapp
+    - name: dbOwner
+      db: cs_comments_service
+    - name: readWrite
+      db: cs_comments_service
+
+  additionalMongodConfig:
+    storage.wiredTiger.engineConfig.cacheSizeGB: 0.25
+
+  statefulSet:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: mongod
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+          - name: mongodb-agent
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                cpu: 200m
+                memory: 256Mi
+      volumeClaimTemplates:
+      - metadata:
+          name: data-volume
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+      - metadata:
+          name: logs-volume
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 512Mi

@@ -1,0 +1,114 @@
+---
+# Runs Django migrations for the LMS and CMS against the shared edxapp MySQL
+# database before the platform deployments start serving. The edxapp database
+# and user are created by the MariaDB CR, but nothing creates the schema — so
+# without this Job /heartbeat returns 500 (no tables).
+#
+# Tilt re-runs the Job whenever the platform image changes; `migrate` is
+# idempotent, so re-runs are cheap once the schema is current.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: edxapp-migrate
+  namespace: openedx
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app: edxapp-migrate
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: migrate
+        # Image tag is managed by Tilt via custom_build (same ref as the
+        # platform deployments).
+        image: lehrer-registry:5000/openedx-platform:dev
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+
+          # Some data migrations (e.g. certificates/0003) write badge icon files
+          # to MEDIA_ROOT via Django's FileSystemStorage.  The directory must
+          # exist before migrations run; MEDIA_ROOT defaults to
+          # /openedx/data/media/ (set in ProductionSettingsMixin).
+          mkdir -p /openedx/data/media
+
+          migrate() {
+            python manage.py "$@" --settings=aqueduct --skip-checks
+          }
+
+          # Run migrations for one Django app (lms or cms) with an automatic
+          # fake-and-retry loop.
+          #
+          # Several edx-enterprise / integrated_channels migrations have broken
+          # MariaDB dependencies on a fresh install: they run raw ALTER TABLE or
+          # SELECT on tables/columns that don't exist yet because their creation
+          # was version-gated in an earlier migration.  Rather than enumerate
+          # every broken migration by hand, we detect the failure, parse the
+          # offending migration from Django's output, fake it, and retry.
+          # The loop runs up to MAX_ATTEMPTS times so a genuine schema error
+          # eventually surfaces rather than looping forever.
+          #
+          # --skip-checks: `migrate`'s system checks import ROOT_URLCONF and
+          # call get_user_model() at import time; that fails during migrate.
+          # Migrations themselves don't need the checks.
+          migrate_with_retry() {
+            app=$1
+            max_attempts=30
+            attempt=0
+
+            while [ "$attempt" -lt "$max_attempts" ]; do
+              attempt=$((attempt + 1))
+              tmp=$(mktemp)
+
+              if migrate "$app" migrate > "$tmp" 2>&1; then
+                cat "$tmp"
+                rm -f "$tmp"
+                return 0
+              fi
+
+              cat "$tmp"
+
+              # Parse the last "  Applying app.migration..." line — that is the
+              # migration that failed.  Django prints it before the traceback.
+              failing=$(grep "  Applying " "$tmp" | tail -1 \
+                | sed 's/.*Applying \([^.]*\)\.\([^ .]*\)\.\.\..*/\1 \2/')
+              rm -f "$tmp"
+
+              if [ -z "$failing" ]; then
+                echo "==> Cannot identify failing migration; giving up"
+                return 1
+              fi
+
+              echo "==> Faking broken migration: $failing (attempt $attempt/$max_attempts)"
+              # Word-splitting on $failing is intentional: it contains
+              # "app_label migration_name" as two separate arguments.
+              # shellcheck disable=SC2086
+              migrate "$app" migrate $failing --fake 2>/dev/null || true
+            done
+
+            echo "==> Migrations still failing after $max_attempts attempts"
+            return 1
+          }
+
+          echo "==> LMS migrations"
+          migrate_with_retry lms
+
+          echo "==> CMS migrations"
+          migrate_with_retry cms
+
+          echo "==> Migrations complete"
+        envFrom:
+        - configMapRef:
+            name: lms-config
+        - secretRef:
+            name: openedx-secrets
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"

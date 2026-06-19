@@ -1,0 +1,16 @@
+---
+# mongodb/community-operator — minimal operator config for local dev.
+operator:
+  # Watch all namespaces so the CR in openedx namespace is managed.
+  watchNamespace: "*"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# Deploy MongoDB database resources into the openedx namespace.
+database:
+  namespace: openedx

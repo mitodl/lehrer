@@ -5,6 +5,7 @@ ci:
   skip:
   - packer_fmt
   - hadolint-docker
+  - build-config-schema
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v6.0.0
@@ -12,6 +13,7 @@ repos:
   - id: trailing-whitespace
   - id: end-of-file-fixer
   - id: check-yaml
+    args: [--allow-multiple-documents]
     exclude: |
       (?x)(
         src/ol_infrastructure/infrastructure/aws/eks/files/|
@@ -30,13 +32,13 @@ repos:
   - id: yamlfmt
     args:
     - --mapping
-    - '2'
+    - "2"
     - --sequence
-    - '2'
+    - "2"
     - --offset
-    - '0'
+    - "0"
     - --width
-    - '80'
+    - "80"
     - --preserve-quotes
     exclude: |
       (?x)(
@@ -61,7 +63,7 @@ repos:
   - id: detect-secrets
     args:
     - --exclude-lines
-    - '(^encryptedkey:|^secure:|^secretsprovider:)'
+    - "(^encryptedkey:|^secure:|^secretsprovider:)"
     - --exclude-files
     - src/bridge/secrets/
     - --exclude-files
@@ -75,8 +77,8 @@ repos:
     - --exclude-files
     - deployments/mit-ol/settings/models/base\.py
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  # Ruff version.
-  rev: 'v0.14.14'
+    # Ruff version.
+  rev: "v0.14.14"
   hooks:
   - id: ruff-format
   - id: ruff-check
@@ -123,6 +125,13 @@ repos:
     entry: 'deployments|mitol|mitxonline|mitodl|github\.mit\.edu|verificient|proctortrack'
     files: ^src/lehrer/(core|infra)/
     exclude: ^src/lehrer/(core|infra)/__init__\.py$
+  - id: build-config-schema
+    name: regenerate build_config JSON schema from the Pydantic models
+    language: system
+    entry: "bash -c 'uv run python -c \"import json; from lehrer.core.mfe_config import\
+      \ json_schema; print(json.dumps(json_schema(), indent=2))\" > build_config.schema.json'"
+    files: ^(src/lehrer/core/mfe_config\.py|build_config\.schema\.json)$
+    pass_filenames: false
 - repo: https://github.com/hadolint/hadolint
   rev: v2.14.0
   hooks:

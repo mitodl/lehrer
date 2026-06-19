@@ -79,6 +79,15 @@ class OpenedxPlatform:
             .with_env_variable("UV_PROJECT_ENVIRONMENT", "/openedx/venv")
             .with_env_variable("VIRTUAL_ENV", "/openedx/venv")
             .with_env_variable("PATH", "/openedx/venv/bin:/usr/local/bin:/usr/bin:/bin")
+            # Cap setuptools < 82 for EVERY uv install in the pipeline (base
+            # requirements, lxml/xmlsec rebuild, and the editable edx-platform
+            # install in `collected`, which otherwise re-resolves to the latest).
+            # pkg_resources — imported by edx-platform — was removed in
+            # setuptools 82, so an unconstrained resolve breaks the build. The
+            # bound is < 82 (not < 81) so a consumer that pins setuptools==81.x
+            # for PyFilesystem2 compatibility still resolves.
+            .with_new_file("/openedx/uv-constraints.txt", "setuptools<82\n")
+            .with_env_variable("UV_CONSTRAINT", "/openedx/uv-constraints.txt")
             .with_exec(["apt", "update"])
             .with_exec(
                 ["apt", "install", "-y", "--no-install-recommends"] + apt_packages
@@ -298,6 +307,13 @@ class OpenedxPlatform:
         # Fix lxml/xmlsec compatibility issues by building from source.
         # --no-binary is a CLI flag that uv pip install supports; it is NOT
         # an in-requirements-file option, so uv handles it correctly here.
+        #
+        # lxml and xmlsec are passed as explicit install targets (not only as
+        # --no-binary arguments) so the from-source rebuild always reinstalls
+        # them after the uninstall above — regardless of whether the deployment
+        # overrides file happens to list them. A deployment that *does* pin them
+        # (e.g. lxml==5.3.0) still wins, because the -r requirement constrains
+        # the version of the unversioned positional package.
         container = container.with_exec(
             ["uv", "pip", "uninstall", "lxml", "xmlsec"]
         ).with_exec(
@@ -310,9 +326,21 @@ class OpenedxPlatform:
                 "lxml",
                 "--no-binary",
                 "xmlsec",
+                "lxml",
+                "xmlsec",
                 "-r",
                 f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt",
             ]
+        )
+
+        # Pin setuptools < 82 as the final pip step. uv-created venvs do not seed
+        # setuptools, and edx-platform imports ``pkg_resources`` (pyfilesystem's
+        # ``fs`` and legacy ``pkg_resources.declare_namespace`` packages).
+        # pkg_resources was removed in setuptools 82, and the base-requirements
+        # resolution above pulls in the latest (>= 82) — so this must run last,
+        # after that resolution, to guarantee a pkg_resources-bearing setuptools.
+        container = container.with_exec(
+            ["uv", "pip", "install", "setuptools<82", "wheel", "pip"]
         )
 
         # Install Node.js using nodeenv
@@ -407,19 +435,24 @@ class OpenedxPlatform:
     ) -> dagger.Container:
         """Assemble all artifacts and configure the container
 
+        Injects only the files required for static asset compilation
+        (``assets.py``, ``i18n.py``, ``lms.env.yml``, ``cms.env.yml``).
+        The aqueduct runtime settings are injected separately by
+        :meth:`inject_aqueduct_settings`, which is called *after*
+        ``build_static_assets`` so that aqueduct edits do not invalidate
+        the npm/collectstatic cache layer.
+
         The ``custom_settings`` directory must follow this layout::
 
             custom_settings/
             ├── lms.env.yml
             ├── cms.env.yml
-            ├── models/
-            │   └── base.py          ← shared ProductionSettingsMixin
             ├── lms/
-            │   ├── assets.py
-            │   ├── i18n.py
-            │   ├── aqueduct.py
+            │   ├── assets.py        ← used here (needed by collectstatic)
+            │   ├── i18n.py          ← used here (needed by compilemessages)
+            │   ├── aqueduct.py      ← used by inject_aqueduct_settings()
             │   └── models/
-            │       └── aqueduct.py
+            │       └── aqueduct.py  ← used by inject_aqueduct_settings()
             ├── cms/
             │   ├── assets.py
             │   ├── i18n.py
@@ -429,6 +462,9 @@ class OpenedxPlatform:
             ├── set_waffle_flags.py
             ├── process_scheduled_emails.py
             └── saml_pull.py
+
+        ``ProductionSettingsMixin`` (``models/base.py``) is supplied by lehrer
+        core via :meth:`inject_aqueduct_settings` — operators do not provide it.
 
         Args:
             container: Container with installed dependencies
@@ -501,117 +537,40 @@ class OpenedxPlatform:
             )
         )
 
-        # Copy custom settings
+        # Inject per-file using with_file rather than a bulk directory mount.
+        # A mounted-directory cache key covers the ENTIRE custom_settings tree,
+        # so any edit (even to aqueduct.py) would bust the cache for assets.py
+        # and every downstream step, including the heavy npm/collectstatic build.
+        # Per-file injection gives each file an independent cache key.
+        #
+        # Only the files needed for `collectstatic` / `compilemessages` are
+        # injected here.  The aqueduct runtime settings are injected later (after
+        # build_static_assets) via inject_aqueduct_settings() so that iterating
+        # on aqueduct.py never invalidates the static-asset cache.
         container = (
-            container.with_mounted_directory("/tmp/custom_settings", custom_settings)
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/lms.env.yml",
-                    "/openedx/config/lms.env.yml",
-                ]
+            container.with_file(
+                "/openedx/config/lms.env.yml",
+                custom_settings.file("lms.env.yml"),
             )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/cms.env.yml",
-                    "/openedx/config/cms.env.yml",
-                ]
+            .with_file(
+                "/openedx/config/cms.env.yml",
+                custom_settings.file("cms.env.yml"),
             )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/lms/assets.py",
-                    f"/openedx/edx-platform/lms/envs/{settings_namespace}/assets.py",
-                ]
+            .with_file(
+                f"/openedx/edx-platform/lms/envs/{settings_namespace}/assets.py",
+                custom_settings.file("lms/assets.py"),
             )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/lms/i18n.py",
-                    f"/openedx/edx-platform/lms/envs/{settings_namespace}/i18n.py",
-                ]
+            .with_file(
+                f"/openedx/edx-platform/lms/envs/{settings_namespace}/i18n.py",
+                custom_settings.file("lms/i18n.py"),
             )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/cms/assets.py",
-                    f"/openedx/edx-platform/cms/envs/{settings_namespace}/assets.py",
-                ]
+            .with_file(
+                f"/openedx/edx-platform/cms/envs/{settings_namespace}/assets.py",
+                custom_settings.file("cms/assets.py"),
             )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/cms/i18n.py",
-                    f"/openedx/edx-platform/cms/envs/{settings_namespace}/i18n.py",
-                ]
-            )
-            # django-aqueduct settings:
-            # models/base.py    → ProductionSettingsMixin + SharedAqueductSettings, copied into both envs
-            # models/aqueduct.py → generated AqueductSettings pydantic model per service
-            # aqueduct.py       → settings module (DJANGO_SETTINGS_MODULE target)
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/models/base.py",
-                    "/openedx/edx-platform/lms/envs/models/base.py",
-                ]
-            )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/lms/models/aqueduct.py",
-                    "/openedx/edx-platform/lms/envs/models/aqueduct.py",
-                ]
-            )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/lms/aqueduct.py",
-                    "/openedx/edx-platform/lms/envs/aqueduct.py",
-                ]
-            )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/models/base.py",
-                    "/openedx/edx-platform/cms/envs/models/base.py",
-                ]
-            )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/cms/models/aqueduct.py",
-                    "/openedx/edx-platform/cms/envs/models/aqueduct.py",
-                ]
-            )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/cms/aqueduct.py",
-                    "/openedx/edx-platform/cms/envs/aqueduct.py",
-                ]
-            )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/set_waffle_flags.py",
-                    "/openedx/edx-platform/set_waffle_flags.py",
-                ]
-            )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/process_scheduled_emails.py",
-                    "/openedx/edx-platform/process_scheduled_emails.py",
-                ]
-            )
-            .with_exec(
-                [
-                    "cp",
-                    "/tmp/custom_settings/saml_pull.py",
-                    "/openedx/edx-platform/saml_pull.py",
-                ]
+            .with_file(
+                f"/openedx/edx-platform/cms/envs/{settings_namespace}/i18n.py",
+                custom_settings.file("cms/i18n.py"),
             )
         )
 
@@ -625,6 +584,96 @@ class OpenedxPlatform:
         )
 
         return container
+
+    @function
+    def inject_aqueduct_settings(
+        self,
+        container: dagger.Container,
+        custom_settings: dagger.Directory,
+        settings_namespace: str = "production",
+    ) -> dagger.Container:
+        """Inject django-aqueduct runtime settings into the container.
+
+        This is deliberately separate from ``collected()`` so that iterating on
+        ``aqueduct.py`` or ``models/aqueduct.py`` during local development does
+        NOT invalidate the ``build_static_assets`` cache layer.  The static-asset
+        build only needs ``assets.py`` and ``i18n.py``; those are injected by
+        ``collected()``.  Everything aqueduct-specific goes here.
+
+        Call order in ``build_platform``::
+
+            collected()              ← assets.py + i18n.py
+            fetch_translations()
+            build_static_assets()   ← cached; unaffected by aqueduct changes
+            inject_aqueduct_settings()   ← this function
+            docker_image()
+
+        Args:
+            container: Container produced by ``build_static_assets()``.
+            custom_settings: Operator settings directory (same one passed to
+                ``collected()``).
+            settings_namespace: Django settings sub-package name — must match
+                the value passed to ``collected()``.  Default: ``"production"``.
+
+        Returns:
+            Container with aqueduct runtime settings and helper scripts wired in.
+        """
+        # models/base.py comes from lehrer core, not from the operator's
+        # custom_settings, so it is injected via dag.current_module().source().
+        # Using .file() gives a cache key based on that single file's content,
+        # not the entire lehrer source tree.
+        lehrer_base = dag.current_module().source().file("src/lehrer/settings/base.py")
+        return (
+            container
+            # django-aqueduct settings:
+            # models/base.py    → ProductionSettingsMixin from lehrer core
+            # models/__init__.py → makes models/ a package for relative imports
+            # models/aqueduct.py → generated AqueductSettings(ProductionSettingsMixin)
+            # aqueduct.py       → DJANGO_SETTINGS_MODULE entry point
+            .with_file(
+                "/openedx/edx-platform/lms/envs/models/base.py",
+                lehrer_base,
+            )
+            .with_new_file(
+                "/openedx/edx-platform/lms/envs/models/__init__.py", contents=""
+            )
+            .with_file(
+                "/openedx/edx-platform/lms/envs/models/aqueduct.py",
+                custom_settings.file("lms/models/aqueduct.py"),
+            )
+            .with_file(
+                "/openedx/edx-platform/lms/envs/aqueduct.py",
+                custom_settings.file("lms/aqueduct.py"),
+            )
+            .with_file(
+                "/openedx/edx-platform/cms/envs/models/base.py",
+                lehrer_base,
+            )
+            .with_new_file(
+                "/openedx/edx-platform/cms/envs/models/__init__.py", contents=""
+            )
+            .with_file(
+                "/openedx/edx-platform/cms/envs/models/aqueduct.py",
+                custom_settings.file("cms/models/aqueduct.py"),
+            )
+            .with_file(
+                "/openedx/edx-platform/cms/envs/aqueduct.py",
+                custom_settings.file("cms/aqueduct.py"),
+            )
+            # Runtime helper scripts (not needed for asset compilation)
+            .with_file(
+                "/openedx/edx-platform/set_waffle_flags.py",
+                custom_settings.file("set_waffle_flags.py"),
+            )
+            .with_file(
+                "/openedx/edx-platform/process_scheduled_emails.py",
+                custom_settings.file("process_scheduled_emails.py"),
+            )
+            .with_file(
+                "/openedx/edx-platform/saml_pull.py",
+                custom_settings.file("saml_pull.py"),
+            )
+        )
 
     @function
     def fetch_translations(
@@ -1012,6 +1061,10 @@ class OpenedxPlatform:
         tutor_bin = self.tutor_utils()
         dockerize_bin = self.dockerize()
 
+        # Phase 1: inject only the files needed for asset compilation
+        # (assets.py, i18n.py, env.yml).  Aqueduct settings are injected
+        # AFTER build_static_assets so that editing aqueduct.py during
+        # local development does not invalidate the npm/collectstatic cache.
         container = self.collected(
             container,
             deployment_name=deployment_name,
@@ -1030,6 +1083,13 @@ class OpenedxPlatform:
         container = self.build_static_assets(
             container,
             deployment_name=deployment_name,
+            settings_namespace=settings_namespace,
+        )
+        # Phase 2: inject aqueduct runtime settings (changes frequently during
+        # dev; isolated here so the heavy build_static_assets layer stays cached)
+        container = self.inject_aqueduct_settings(
+            container,
+            custom_settings=custom_settings,
             settings_namespace=settings_namespace,
         )
         container = self.docker_image(
@@ -1082,6 +1142,7 @@ class OpenedxPlatform:
         platform_branch: str = "master",
         python_version: str | None = None,
         packages_to_remove: list[str] | None = None,
+        aqueduct_source: dagger.Directory | None = None,
     ) -> dagger.Directory:
         """Regenerate the AqueductSettings pydantic models for LMS and CMS.
 
@@ -1097,8 +1158,11 @@ class OpenedxPlatform:
         captured automatically.
 
         Returns a directory containing:
-          lms/models/aqueduct.py
-          cms/models/aqueduct.py
+          lms/models/aqueduct.py  — AqueductSettings(ProductionSettingsMixin)
+          cms/models/aqueduct.py  — AqueductSettings(ProductionSettingsMixin)
+
+        The generated class already inherits ``ProductionSettingsMixin`` so
+        regeneration cannot accidentally lose the mixin.
 
         Usage::
 
@@ -1109,8 +1173,8 @@ class OpenedxPlatform:
               export --path ./generated
 
             # Then update the committed models:
-            cp generated/lms/models/aqueduct.py settings/lms/models/aqueduct.py
-            cp generated/cms/models/aqueduct.py settings/cms/models/aqueduct.py
+            cp generated/lms/models/aqueduct.py <deploy>/settings/lms/models/aqueduct.py
+            cp generated/cms/models/aqueduct.py <deploy>/settings/cms/models/aqueduct.py
 
         Args:
             deployment_name: Deployment name.
@@ -1122,6 +1186,11 @@ class OpenedxPlatform:
             python_version: Python version. Defaults to 3.12 for master.
             packages_to_remove: Python packages to uninstall after base install
                 (default: empty list).
+            aqueduct_source: Optional local django-aqueduct checkout to install
+                editable instead of the PyPI-pinned version from the deployment
+                requirements.  Use this to regenerate with unreleased generator
+                fixes.  Installed before the deployment requirements so its
+                version satisfies the pinned ``django-aqueduct==`` constraint.
         """
         if packages_to_remove is None:
             packages_to_remove = []
@@ -1155,25 +1224,38 @@ class OpenedxPlatform:
                     " /root/pip_package_lists/edx_assets.txt",
                 ]
             )
-            .with_exec(
-                [
-                    "uv",
-                    "pip",
-                    "install",
-                    "-r",
-                    "/root/pip_package_lists/edx_base.txt",
-                    "-r",
-                    "/root/pip_package_lists/edx_assets.txt",
-                    "-r",
-                    f"/root/pip_package_lists/{release_name}/{deployment_name}.txt",
-                ]
-            )
+        )
+
+        # Install a local django-aqueduct checkout as an editable dev override.
+        # Done before the deployment requirements so its version satisfies the
+        # pinned ``django-aqueduct==`` constraint and uv skips the PyPI fetch —
+        # letting regeneration pick up unreleased generator fixes.
+        if aqueduct_source is not None:
+            container = container.with_mounted_directory(
+                "/root/django-aqueduct", aqueduct_source
+            ).with_exec(["uv", "pip", "install", "-e", "/root/django-aqueduct"])
+
+        container = container.with_exec(
+            [
+                "uv",
+                "pip",
+                "install",
+                "-r",
+                "/root/pip_package_lists/edx_base.txt",
+                "-r",
+                "/root/pip_package_lists/edx_assets.txt",
+                "-r",
+                f"/root/pip_package_lists/{release_name}/{deployment_name}.txt",
+            ]
         )
 
         # Remove any deployment-specific packages that conflict with the build
         for pkg in packages_to_remove:
             container = container.with_exec(["uv", "pip", "uninstall", pkg])
 
+        # Reinstall lxml/xmlsec from source. They are passed as explicit install
+        # targets (not only --no-binary args) so they always come back after the
+        # uninstall, even when the deployment overrides file does not list them.
         container = container.with_exec(
             ["uv", "pip", "uninstall", "lxml", "xmlsec"]
         ).with_exec(
@@ -1185,6 +1267,8 @@ class OpenedxPlatform:
                 "--no-binary",
                 "lxml",
                 "--no-binary",
+                "xmlsec",
+                "lxml",
                 "xmlsec",
                 "-r",
                 f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt",
@@ -1222,6 +1306,18 @@ class OpenedxPlatform:
             container.with_new_file("./lehrer_lms_shim.py", contents=lms_shim)
             .with_new_file("./lehrer_cms_shim.py", contents=cms_shim)
             .with_exec(["mkdir", "-p", "./lms/envs/models", "./cms/envs/models"])
+            # Inject ProductionSettingsMixin so generated files can import it
+            # and the self-test can instantiate AqueductSettings(ProductionSettingsMixin).
+            .with_file(
+                "./lms/envs/models/base.py",
+                dag.current_module().source().file("src/lehrer/settings/base.py"),
+            )
+            .with_file(
+                "./cms/envs/models/base.py",
+                dag.current_module().source().file("src/lehrer/settings/base.py"),
+            )
+            .with_new_file("./lms/envs/models/__init__.py", contents="")
+            .with_new_file("./cms/envs/models/__init__.py", contents="")
         )
 
         # ── Generate the models ───────────────────────────────────────────────
@@ -1231,15 +1327,20 @@ class OpenedxPlatform:
         # so every UPPERCASE name (including plugin settings) is discovered.
         generate_script = "\n".join(
             [
-                "import sys, os, re",
+                "import sys, os, re, importlib",
                 "os.chdir('/openedx/edx-platform')",
                 "sys.path.insert(0, '/openedx/edx-platform')",
                 "from django_aqueduct.discovery.module import ModuleInspector",
                 "from django_aqueduct.codegen.generator import SettingsModelGenerator",
                 "def _add_imports(code):",
-                "    # 1. Add missing stdlib/third-party imports that the generator omits.",
+                "    # Add stdlib/third-party imports the generator references but omits.",
+                "    # (Optional-widening of None-default fields is handled by the",
+                "    # django-aqueduct generator itself as of 0.4.0.)",
+                "    # Note: pathlib is now always emitted by django-aqueduct >= 0.5.0;",
+                "    # 'from path import Path' is only needed for bare Path() calls that",
+                "    # are NOT preceded by 'pathlib.' (i.e. legacy path.py usage).",
                 "    extra = []",
-                "    if 'Path(' in code and 'from path import' not in code:",
+                "    if re.search(r'(?<!pathlib\\.)(?<!\\.)Path\\(', code) and 'from path import' not in code:",
                 "        extra.append('from path import Path')",
                 "    if 'datetime.' in code and 'import datetime' not in code:",
                 "        extra.append('import datetime')",
@@ -1248,15 +1349,51 @@ class OpenedxPlatform:
                 '        last_import = max((i for i, l in enumerate(lines) if re.match(r"^(from|import)\\s", l)), default=0)',
                 "        lines = lines[:last_import+1] + extra + lines[last_import+1:]",
                 "        code = '\\n'.join(lines) + '\\n'",
-                "    # 2. Fix OPAQUE fields: `T = Field(default=None)` → `T | None = Field(default=None)`.",
-                "    #    The generator marks certain values as OPAQUE (not serialisable) and emits",
-                "    #    default=None, but keeps the non-nullable type annotation.  Widen it so",
-                "    #    pydantic v2 doesn't raise a validation error when the field is absent.",
-                "    code = re.sub(",
-                "        r'^(    \\w+: (?:(?!None|Any)[^\\n=])+) = Field\\(default=None\\)',",
-                "        r'\\1 | None = Field(default=None)',",
-                "        code, flags=re.MULTILINE)",
                 "    return code",
+                "def _rewrite_base_class(code):",
+                "    # Replace the generator's BaseSettings inheritance with ProductionSettingsMixin.",
+                "    # ProductionSettingsMixin already inherits BaseSettings and owns model_config,",
+                "    # so the generated class no longer needs to redeclare them.",
+                "    #",
+                "    # 1. Drop the BaseSettings / SettingsConfigDict pydantic-settings import.",
+                "    code = re.sub(",
+                "        r'from pydantic_settings import BaseSettings, SettingsConfigDict\\n',",
+                "        '',",
+                "        code,",
+                "    )",
+                "    # 2. Remove the generated model_config (inherited from the mixin).",
+                "    code = re.sub(",
+                r"        r'\\n    model_config = SettingsConfigDict\\([^)]+\\)\\n',",
+                "        '\\n',",
+                "        code,",
+                "    )",
+                "    # 3. Swap the base class.",
+                "    code = code.replace(",
+                "        'class AqueductSettings(BaseSettings):',",
+                "        'class AqueductSettings(ProductionSettingsMixin):',",
+                "    )",
+                "    # 4. Add the mixin import after the last pydantic import line.",
+                "    lines = code.splitlines()",
+                "    last_pydantic = max(",
+                "        (i for i, l in enumerate(lines) if re.match(r'^from pydantic', l)),",
+                "        default=0,",
+                "    )",
+                "    lines.insert(last_pydantic + 1, 'from .base import ProductionSettingsMixin')",
+                "    return '\\n'.join(lines) + '\\n'",
+                "def _fix_str_path_annotations(code):",
+                "    # Fix fields where the annotation is 'str' but the default is",
+                "    # pathlib.Path(...).  This arises when edx-platform settings define",
+                "    # a path as str(PROJECT_ROOT / ...) at generation time but supply a",
+                "    # PosixPath at runtime via the aqueduct overlay source.  Pydantic",
+                "    # does not coerce PosixPath → str, so the model would fail to",
+                "    # instantiate.  django-aqueduct >= 0.5.0 detects PathLike defaults",
+                "    # and emits pathlib.Path annotations correctly; this step is a",
+                "    # belt-and-braces guard for any field the generator still misses.",
+                "    return re.sub(",
+                "        r'(\\b\\w+): str = (Field\\(\\s*\\n\\s*default=pathlib\\.Path\\b)',",
+                "        r'\\1: pathlib.Path = \\2',",
+                "        code,",
+                "    )",
                 "for shim, out in [",
                 "    ('lehrer_lms_shim', 'lms/envs/models/aqueduct.py'),",
                 "    ('lehrer_cms_shim', 'cms/envs/models/aqueduct.py'),",
@@ -1264,8 +1401,26 @@ class OpenedxPlatform:
                 "    print(f'Generating {out} from {shim} ...')",
                 "    fields = ModuleInspector(shim).discover()",
                 "    code = _add_imports(SettingsModelGenerator(fields).render())",
+                "    code = _rewrite_base_class(code)",
+                "    code = _fix_str_path_annotations(code)",
                 "    open(out, 'w').write(code)",
                 "    print(f'  {len(fields)} fields written to {out}')",
+                "# ── Boot self-test ──────────────────────────────────────────",
+                "# Fail generation (not pod boot) if a model cannot instantiate or is",
+                "# missing INSTALLED_APPS.  Load via proper package import so relative",
+                "# imports (from .base import ProductionSettingsMixin) resolve correctly.",
+                "for pkg in ['lms.envs.models.aqueduct', 'cms.envs.models.aqueduct']:",
+                "    # Force fresh import — remove any stale cached module.",
+                "    sys.modules.pop(pkg, None)",
+                "    _saved = dict(os.environ); os.environ.clear()",
+                "    try:",
+                "        _m = importlib.import_module(pkg)",
+                "        inst = _m.AqueductSettings()",
+                "    finally:",
+                "        os.environ.clear(); os.environ.update(_saved)",
+                "    apps = getattr(inst, 'INSTALLED_APPS', None)",
+                "    assert apps, f'{pkg}: INSTALLED_APPS empty/missing ({apps!r})'",
+                "    print(f'  self-test OK: {pkg} instantiates, {len(apps)} INSTALLED_APPS')",
             ]
         )
         container = container.with_exec(["python", "-c", generate_script])

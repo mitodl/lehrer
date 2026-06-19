@@ -2,8 +2,11 @@
 name = "lehrer"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["dagger-io"]
+dependencies = ["cyclopts>=3", "dagger-io", "pydantic>=2.10", "pyyaml"]
 license = "BSD-3-Clause"
+
+[project.scripts]
+lehrer = "lehrer.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.2,<0.12.0"]
@@ -31,3 +34,4 @@ exclude = [
 #                              — setup() must be called before Django imports;
 #                                E402 (module-level import not at top) is intentional.
 "deployments/mit-ol/settings/**" = ["E402", "F401", "F403", "F405"]
+"deployments/generic/settings/**" = ["E402", "F401", "F403", "F405"]

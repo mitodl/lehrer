@@ -1,7 +1,7 @@
 celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules
-granian==2.7.5
+granian==2.7.6
 django-redis==6.0.0
-ol-openedx-git-auto-export==0.8.1
+ol-openedx-git-auto-export==0.8.2
 edx-sysadmin==0.4.2
 edx-username-changer==0.5.0
 git+https://github.com/mitodl/ubcpi.git@master#egg=ubcpi-xblock
@@ -15,7 +15,7 @@ ol-openedx-sentry
 ol-social-auth
 openedx-scorm-xblock
 pydantic-settings[yaml]==2.14.1
-django-aqueduct==0.3.0
+django-aqueduct==0.5.0
 ol-openedx-chat
 ol-openedx-chat-xblock
 
