@@ -2,16 +2,34 @@ import { useParams } from 'react-router-dom';
 import { getAuthenticatedHttpClient, getSiteConfig } from '@openedx/frontend-base';
 import { useState, useCallback } from 'react';
 import {
+  QueryClient, QueryClientProvider, useQueryClient,
+} from '@tanstack/react-query';
+import {
   Button, Alert, Spinner, DataTable, Form, ModalDialog, ActionRow,
 } from '@openedx/paragon';
+import CanvasPendingTasks, { canvasTasksQueryKey } from './CanvasPendingTasks';
 
 const getApiBaseUrl = () => getSiteConfig().lmsBaseUrl;
 
-const CanvasIntegrationPage = () => {
+// Local QueryClient so the Canvas page can poll task status via react-query
+// regardless of whether the host dashboard provides a client in context.
+const canvasQueryClient = new QueryClient();
+
+// Canvas API rows can contain nested objects/arrays (e.g. date objects like
+// { status, date }). React can't render a raw object as a table cell, so coerce
+// any non-primitive value to a readable string.
+const formatCellValue = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
+const CanvasIntegrationContent = () => {
   const { courseId } = useParams<{ courseId: string }>();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<{ type: string; data: any } | null>(null);
+  const [results, setResults] = useState<{ type: string; title: string; data: any } | null>(null);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [selectedAssignment, setSelectedAssignment] = useState('');
   const [showOverloadConfirm, setShowOverloadConfirm] = useState(false);
@@ -35,6 +53,9 @@ const CanvasIntegrationPage = () => {
         // "Merge". URLSearchParams sets Content-Type: x-www-form-urlencoded.
         const body = data ? new URLSearchParams(data) : undefined;
         response = await client.post(`${baseUrl}/${endpoint}`, body);
+        // POSTs here submit an async instructor task (enrollment sync / grade
+        // push); refresh the pending-tasks list so the new task shows up.
+        queryClient.invalidateQueries({ queryKey: canvasTasksQueryKey(courseId ?? '') });
       }
       return response.data;
     } catch (err: any) {
@@ -44,19 +65,19 @@ const CanvasIntegrationPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [baseUrl]);
+  }, [baseUrl, courseId, queryClient]);
 
   const handleListEnrollments = async () => {
     const data = await makeRequest('list_canvas_enrollments');
     if (data) {
-      setResults({ type: 'enrollments', data });
+      setResults({ type: 'enrollments', title: 'Enrollments on Canvas', data });
     }
   };
 
   const handleMergeEnrollments = async () => {
     const data = await makeRequest('add_canvas_enrollments', 'POST', { unenroll_current: false });
     if (data) {
-      setResults({ type: 'message', data });
+      setResults({ type: 'message', title: 'Status', data });
     }
   };
 
@@ -64,22 +85,23 @@ const CanvasIntegrationPage = () => {
     setShowOverloadConfirm(false);
     const data = await makeRequest('add_canvas_enrollments', 'POST', { unenroll_current: true });
     if (data) {
-      setResults({ type: 'message', data });
+      setResults({ type: 'message', title: 'Status', data });
     }
   };
 
   const handlePushGrades = async () => {
     const data = await makeRequest('push_edx_grades', 'POST');
     if (data) {
-      setResults({ type: 'message', data });
+      setResults({ type: 'message', title: 'Grade Update Results', data });
     }
   };
 
   const handleLoadAssignments = async () => {
     const data = await makeRequest('list_canvas_assignments');
     if (data) {
+      // Loading assignments only populates the dropdown (matches legacy — it does
+      // not render a results panel). makeRequest already cleared prior results.
       setAssignments(Array.isArray(data) ? data : data.assignments || []);
-      setResults({ type: 'assignments', data });
     }
   };
 
@@ -90,7 +112,7 @@ const CanvasIntegrationPage = () => {
     }
     const data = await makeRequest('list_canvas_grades?assignment_id=' + encodeURIComponent(selectedAssignment));
     if (data) {
-      setResults({ type: 'grades', data });
+      setResults({ type: 'grades', title: 'Grades on Canvas', data });
     }
   };
 
@@ -103,6 +125,7 @@ const CanvasIntegrationPage = () => {
     const columns = Object.keys(items[0]).map(col => ({
       Header: col,
       accessor: col,
+      Cell: ({ value }: { value: unknown }) => formatCellValue(value),
     }));
     return (
       <DataTable
@@ -117,12 +140,30 @@ const CanvasIntegrationPage = () => {
 
   const renderResults = () => {
     if (!results) return null;
-    const { type, data } = results;
-    if (type === 'message') {
-      const message = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-      return <Alert variant="success"><pre style={{ margin: 0 }}>{message}</pre></Alert>;
+    const { type, title, data } = results;
+    // Enrollments render as a table (matches legacy asTable=true).
+    if (type === 'enrollments') {
+      return (
+        <div>
+          <h4 className="h5 mb-2">{title}</h4>
+          {renderTable(Array.isArray(data) ? data : data.results || data.enrollments || [data])}
+        </div>
+      );
     }
-    return renderTable(Array.isArray(data) ? data : data.results || data.enrollments || [data]);
+    // Everything else (Canvas grades, sync status, grade-update results) renders
+    // as pretty-printed JSON, matching the legacy instructor dashboard template.
+    const json = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+    return (
+      <div>
+        <h4 className="h5 mb-2">{title}</h4>
+        <pre
+          className="bg-light border rounded p-3"
+          style={{ maxHeight: '32rem', overflow: 'auto' }}
+        >
+          {json}
+        </pre>
+      </div>
+    );
   };
 
   return (
@@ -156,14 +197,14 @@ const CanvasIntegrationPage = () => {
         </div>
 
         {assignments.length > 0 && (
-          <div className="d-flex align-items-center gap-2 mb-3">
+          <div className="d-flex align-items-end gap-2 mb-3 flex-wrap">
             <Form.Group className="mb-0">
-              <Form.Label className="mr-2">Assignment:</Form.Label>
+              <Form.Label className="mb-1">Assignment:</Form.Label>
               <Form.Control
                 as="select"
                 value={selectedAssignment}
                 onChange={(e) => setSelectedAssignment(e.target.value)}
-                style={{ width: 'auto', display: 'inline-block' }}
+                style={{ minWidth: '16rem' }}
               >
                 <option value="">-- Select --</option>
                 {assignments.map((a) => (
@@ -191,6 +232,8 @@ const CanvasIntegrationPage = () => {
       )}
 
       {renderResults()}
+
+      <CanvasPendingTasks courseId={courseId ?? ''} />
 
       <ModalDialog
         title="Overload enrollment list?"
@@ -222,5 +265,11 @@ const CanvasIntegrationPage = () => {
     </div>
   );
 };
+
+const CanvasIntegrationPage = () => (
+  <QueryClientProvider client={canvasQueryClient}>
+    <CanvasIntegrationContent />
+  </QueryClientProvider>
+);
 
 export default CanvasIntegrationPage;

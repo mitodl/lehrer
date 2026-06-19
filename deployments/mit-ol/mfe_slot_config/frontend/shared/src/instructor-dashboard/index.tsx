@@ -29,29 +29,27 @@ export const PlaceholderSlot = (_props: Record<string, unknown>) => null;
 // ---------------------------------------------------------------------------
 // MIT OL instructor dashboard customizations
 //
-// Adds two extra tabs to the instructor dashboard:
+// Adds two extra pages to the instructor dashboard:
 //   - Canvas        → Canvas LMS enrollment / grade sync (ol_openedx_canvas_integration)
 //   - Rapid Responses → rapid response run report downloads (ol_openedx_rapid_response_reports)
 //
-// Each tab needs a nav entry (tabs slot) and its page content (routes slot).
+// Only the page content (routes slot) is registered here for each. The nav tabs
+// are added by the LMS via the InstructorDashboardTabsRequested filter so they
+// surface exactly where the backend plugins apply:
+//   - Canvas        → only for Canvas-linked courses (canvas_id set)
+//   - Rapid Responses → only on deployments where the plugin is installed
+// This mirrors the legacy server-side gating and avoids showing tabs whose
+// backend APIs aren't present.
 // ---------------------------------------------------------------------------
 
 export function createInstructorDashboardCustomApp(): App {
 	const slots: SlotOperation[] = [
-		// Canvas Integration tab + page.
-		{
-			slotId: SLOT.tabs,
-			id: "org.openedx.frontend.widget.instructorDashboard.tab.canvas_integration",
-			op: WidgetOperationTypes.APPEND,
-			element: (
-				<PlaceholderSlot
-					tabId="canvas_integration"
-					title="Canvas"
-					url="canvas_integration"
-					sortOrder={20}
-				/>
-			),
-		},
+		// Canvas Integration page (route only). The nav tab is NOT registered here:
+		// the LMS adds the "Canvas" tab via the InstructorDashboardTabsRequested
+		// filter (ol_openedx_canvas_integration) only for courses linked to Canvas
+		// (canvas_id set), matching the legacy gating. Registering the route
+		// unconditionally is harmless — the page is only reachable when that tab
+		// is present, and its tabId matches the url the backend filter emits.
 		{
 			slotId: SLOT.routes,
 			id: "org.openedx.frontend.widget.instructorDashboard.route.canvas_integration",
@@ -60,20 +58,11 @@ export function createInstructorDashboardCustomApp(): App {
 				<PlaceholderSlot tabId="canvas_integration" content={<CanvasIntegrationPage />} />
 			),
 		},
-		// Rapid Response Reports tab + page.
-		{
-			slotId: SLOT.tabs,
-			id: "org.openedx.frontend.widget.instructorDashboard.tab.rapid_response",
-			op: WidgetOperationTypes.APPEND,
-			element: (
-				<PlaceholderSlot
-					tabId="rapid_response"
-					title="Rapid Responses"
-					url="rapid_response"
-					sortOrder={21}
-				/>
-			),
-		},
+		// Rapid Response Reports page (route only). Like Canvas, the nav tab is
+		// added by the LMS via the InstructorDashboardTabsRequested filter
+		// (ol_openedx_rapid_response_reports) — so the tab only appears on
+		// deployments where that plugin is installed, rather than on every
+		// deployment that ships this MFE config.
 		{
 			slotId: SLOT.routes,
 			id: "org.openedx.frontend.widget.instructorDashboard.route.rapid_response",
