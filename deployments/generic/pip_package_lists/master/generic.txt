@@ -11,4 +11,4 @@
 # (lms.envs.aqueduct imports django_aqueduct; the settings models import
 # pydantic_settings.YamlConfigSettingsSource, which needs the [yaml] extra).
 django-aqueduct==0.5.0
-pydantic-settings[yaml]==2.14.1
+pydantic-settings[yaml]==2.14.2
