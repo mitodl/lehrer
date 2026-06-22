@@ -80,29 +80,31 @@ function PoweredBy() {
 
 /**
  * Custom desktop footer layout replacing the shell's DesktopFooterLayout so we
- * can match the legacy learning MFE: logo left, a tight stack of the centered
- * link row + copyright/trademark in the middle, and the "Powered by Open edX"
- * logo at the TOP right. The shell layout used `justify-content-between` (a
- * paragon-layer `!important` utility we cannot override from our site layer),
- * which forced a large gap between the links and copyright and pushed the
- * "Powered by" logo to the bottom.
+ * match the legacy learning MFE at every width: a 3-part row of logo (left),
+ * centered links, and the "Powered by Open edX" logo (right), with the
+ * copyright/trademark notice on a full-width centered row below. The row is
+ * intentionally NOT collapsed to a vertical stack on mobile so the placement
+ * mirrors legacy (the links themselves still stack — see MITOLFooterLinks).
+ * The shell layout used `justify-content-between` (a paragon-layer `!important`
+ * utility we cannot override from our site layer), which forced a large gap
+ * between the links and copyright and pushed the "Powered by" logo to the bottom.
  */
 function MITOLDesktopFooterLayout() {
 	return (
 		<footer className="d-flex flex-column align-items-stretch">
-			<div className="py-3 px-3 d-flex flex-column flex-md-row gap-4 gap-md-5 justify-content-md-between align-items-center align-items-md-start">
+			<div className="pt-3 px-3 d-flex flex-row gap-3 gap-md-5 justify-content-between align-items-start">
 				<div className="flex-basis-0 d-flex align-items-center">
 					<Slot id="org.openedx.frontend.slot.footer.desktopLeftLinks.v1" />
 				</div>
 				<div className="flex-grow-1 flex-basis-0 d-flex justify-content-center">
-					<div className="d-flex flex-column align-items-center gap-2">
-						<Slot id="org.openedx.frontend.slot.footer.desktopCenterLinks.v1" />
-						<Slot id="org.openedx.frontend.slot.footer.desktopLegalNotices.v1" />
-					</div>
+					<Slot id="org.openedx.frontend.slot.footer.desktopCenterLinks.v1" />
 				</div>
-				<div className="flex-basis-0 d-flex justify-content-center justify-content-md-end align-items-start">
+				<div className="flex-basis-0 d-flex justify-content-end align-items-start">
 					<PoweredBy />
 				</div>
+			</div>
+			<div className="pb-3 px-3 pt-2 d-flex justify-content-center">
+				<Slot id="org.openedx.frontend.slot.footer.desktopLegalNotices.v1" />
 			</div>
 		</footer>
 	);
@@ -125,7 +127,7 @@ function MITOLFooterLinks() {
 	].filter((link): link is { url: string; label: string } => Boolean(link.url));
 	if (links.length === 0) return null;
 	return (
-		<ul className="d-flex flex-column flex-md-row flex-wrap list-unstyled gap-3 gap-md-4 menu-links align-items-center justify-content-center mb-0">
+		<ul className="d-flex flex-column flex-md-row flex-wrap list-unstyled gap-2 gap-md-4 menu-links align-items-center justify-content-center mb-0">
 			{links.map((link) => (
 				<li key={link.label} className="mx-2">
 					<Hyperlink destination={link.url}>{link.label}</Hyperlink>
