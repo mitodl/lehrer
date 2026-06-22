@@ -45,10 +45,16 @@ function CopyrightNotice() {
  */
 function FooterLogo() {
 	const { footerLogoUrl, footerLogoDestination } = useMITOLFooterConfig();
-	const { headerLogoImageUrl } = useSiteConfig();
+	const { headerLogoImageUrl, siteName } = useSiteConfig();
 	const src = footerLogoUrl || headerLogoImageUrl;
 	if (!src) return null;
-	const img = <Image src={src} style={{ maxHeight: '2rem', height: '33px' }} />;
+	const img = (
+		<Image
+			src={src}
+			alt={siteName ? `${siteName} logo` : "Logo"}
+			style={{ maxHeight: '2rem', height: '33px' }}
+		/>
+	);
 	if (footerLogoDestination) {
 		return <Hyperlink destination={footerLogoDestination} className="p-0">{img}</Hyperlink>;
 	}
@@ -112,13 +118,13 @@ function MITOLFooterLinks() {
 		{ url: termsOfServiceUrl, label: "Terms of Service" },
 		{ url: accessibilityUrl, label: "Accessibility" },
 		{ url: supportUrl, label: "Help" },
-	].filter((link) => Boolean(link.url));
+	].filter((link): link is { url: string; label: string } => Boolean(link.url));
 	if (links.length === 0) return null;
 	return (
 		<ul className="d-flex flex-column flex-md-row flex-wrap list-unstyled gap-3 gap-md-4 menu-links align-items-center justify-content-center mb-0">
 			{links.map((link) => (
 				<li key={link.label} className="mx-2">
-					<Hyperlink destination={link.url as string}>{link.label}</Hyperlink>
+					<Hyperlink destination={link.url}>{link.label}</Hyperlink>
 				</li>
 			))}
 		</ul>

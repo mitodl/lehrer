@@ -132,7 +132,6 @@ const MITxOnlineAuthenticatedMenu: FC<{ className?: string }> = ({
 const AlwaysDesktopLayout: FC = () => (
 	<Container
 		fluid
-		size="xl"
 		className="align-items-center justify-content-between d-flex"
 	>
 		<div className="d-flex flex-grow-1 align-items-center">
