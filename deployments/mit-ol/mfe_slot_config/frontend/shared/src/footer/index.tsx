@@ -52,7 +52,11 @@ function FooterLogo() {
 		<Image
 			src={src}
 			alt={siteName ? `${siteName} logo` : "Logo"}
-			style={{ maxHeight: '2rem' }}
+			// Use a definite height (not max-height): the MIT footer logo SVG ships
+			// with only a viewBox and no width/height, so a max-height-only image has
+			// no intrinsic size to lay out and collapses. Width derives from the
+			// viewBox aspect ratio.
+			style={{ height: '2rem', width: 'auto' }}
 		/>
 	);
 	if (footerLogoDestination) {
