@@ -52,7 +52,7 @@ function FooterLogo() {
 		<Image
 			src={src}
 			alt={siteName ? `${siteName} logo` : "Logo"}
-			style={{ maxHeight: '2rem', height: '33px' }}
+			style={{ maxHeight: '2rem' }}
 		/>
 	);
 	if (footerLogoDestination) {
