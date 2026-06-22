@@ -29,7 +29,6 @@ const siteConfig: SiteConfig = {
 	loginUrl: "http://local.openedx.io:8000/login",
 	logoutUrl: "http://local.openedx.io:8000/logout",
 	environment: EnvironmentTypes.DEVELOPMENT,
-	headerLogoImageUrl: "http://local.openedx.io:8000/static/mitxonline-theme/images/logo.svg",
 	// commonAppConfig (mitolHeader / mitolFooter) is loaded at runtime from the LMS
 	// frontend_site_config API rather than hardcoded here. The dev server proxies
 	// /api/frontend_site_config/v1 to lmsBaseUrl; the response is deep-merged over
@@ -42,13 +41,7 @@ const siteConfig: SiteConfig = {
 		footerApp,
 		createMITOLFooterApp(),
 		createMITxOnlineHeaderApp(),
-		wrapWithAppsPath({
-			...instructorDashboardApp,
-			config: {
-				...instructorDashboardApp.config,
-				SUPPORT_URL: "https://support.learn.mit.edu/",
-			},
-		}),
+		wrapWithAppsPath(instructorDashboardApp),
 		createInstructorDashboardCustomApp(),
 	],
 };

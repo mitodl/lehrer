@@ -12,7 +12,7 @@ frontend/
 │   └── src/
 │       ├── footer/      ← createMITOLFooterApp()
 │       ├── header/      ← createMITxOnlineHeaderApp(), createMITxHeaderApp(), createXProHeaderApp()
-│       ├── styles/      ← createStyleOverrideApp(), mitxonline.scss, mitx.scss
+│       ├── styles/      ← mitxonline.scss, mitx.scss (imported directly by each site config)
 │       ├── utils/       ← courseContext helpers
 │       └── ai-drawer/   ← AIDrawerManagerSidebar, SidebarAIDrawerCoordinator stubs
 ├── mitxonline/          ← MIT OpenLearning (master branch, latest frontend-base)
@@ -64,8 +64,7 @@ required — Dagger mounts the directory at `/app/site/shared` inside each Site 
 Currently contains:
 - `footer/index.tsx` — `createMITOLFooterApp()`: runtime-config-driven footer links
 - `header/index.tsx` — `createMITxOnlineHeaderApp()`, `createMITxHeaderApp()`, `createXProHeaderApp()`
-- `styles/styleLoader.tsx` — `createStyleOverrideApp()`: injects per-deployment SCSS into shell head slot
-- `styles/mitxonline.scss` — mitxonline theme overrides (ported from legacy)
+- `styles/mitxonline.scss` — mitxonline theme overrides (imported directly in each `site.config.*.tsx`)
 - `styles/mitx.scss` — mitx theme overrides (scaffold)
 - `utils/courseContext.ts` — URL/course-context detection helpers
 - `ai-drawer/AIDrawerManagerSidebar.tsx` — fully typed AI drawer sidebar wrapper
@@ -79,6 +78,58 @@ Currently contains:
 | mitxonline | `@openedx/frontend-app-instructor-dashboard` | `^1.0.0-alpha` |
 | mitx | `@openedx/frontend-app-instructor-dashboard` | `^1.0.0-alpha` |
 | xpro | `@openedx/frontend-app-instructor-dashboard` | `^1.0.0-alpha` |
+
+## Deployment prerequisites
+
+These Site Projects are **not self-contained** — the instructor-dashboard
+integration depends on backend behaviour and runtime configuration that must be
+in place in each target LMS environment. Verify all of the following before (or
+alongside) deploying a build:
+
+### 1. Backend plugins must provide the MFE filters + APIs
+
+The Canvas and Rapid Responses tabs and their data come entirely from the LMS:
+
+| Capability | Provided by |
+|---|---|
+| "Canvas" / "Rapid Responses" tabs | `InstructorDashboardTabsRequested` filter steps in `ol_openedx_canvas_integration` / `ol_openedx_rapid_response_reports` |
+| Canvas task status (`list_canvas_tasks`), rapid-response runs (`rapid_response_runs`) | endpoints in those same plugins |
+| Tab href routing | the filters emit `/apps/instructor-dashboard/<course>/<tab>` to match the `wrapWithAppsPath` routing |
+
+These live in **mitodl/open-edx-plugins** and are pinned in
+`deployments/mit-ol/pip_package_lists/*/{mitx,mitx-staging,mitxonline}.txt`:
+`ol-openedx-canvas-integration==0.8.0` and `ol-openedx-rapid-response-reports==0.5.0`
+are the first releases that carry this work. With older versions the tabs simply do
+not appear and the data endpoints 404. (Canvas/Rapid Responses are installed only
+on `mitx*` and `mitxonline`, not `xpro`.)
+
+### 2. Runtime site config must be enabled and populated
+
+Each Site Project sources `commonAppConfig` (header/footer URLs) at runtime via
+`runtimeConfigJsonUrl: /api/frontend_site_config/v1/` rather than hardcoding it, so
+the LMS must run with `ENABLE_MFE_CONFIG_API = True` and a populated
+`FRONTEND_SITE_CONFIG`.
+
+For the deployed (k8s) environments this is **already provisioned in
+[ol-infrastructure]** — `src/ol_infrastructure/applications/edxapp/k8s_configmaps.py`
+sets `ENABLE_MFE_CONFIG_API: True` and builds `FRONTEND_SITE_CONFIG` per deployment.
+New deployments must include the equivalent block there.
+
+The exact keys consumed by the MFE are in `shared/src/footer/index.tsx`
+(`MITOLFooterConfig`) and `shared/src/header/index.tsx` (`MITOLHeaderConfig`).
+Two of them are **not** set in ol-infrastructure today and rely on the components'
+built-in fallbacks (acceptable, but set them there if you want explicit control):
+
+- `commonAppConfig.mitolHeader.mitLearnBaseUrl` / `marketingSiteBaseUrl` →
+  fall back to `https://learn.mit.edu` / `lmsBaseUrl`.
+- `commonAppConfig.mitolFooter.footerLogoUrl` / `footerLogoDestination` →
+  footer logo falls back to `headerLogoImageUrl` and renders without a link.
+
+If `ENABLE_MFE_CONFIG_API` is off or `FRONTEND_SITE_CONFIG` is empty (e.g. a fresh
+local LMS without the configmap), the header/footer render with empty links and
+the default logo.
+
+[ol-infrastructure]: https://github.com/mitodl/ol-infrastructure
 
 ## Relationship to legacy JSX files
 

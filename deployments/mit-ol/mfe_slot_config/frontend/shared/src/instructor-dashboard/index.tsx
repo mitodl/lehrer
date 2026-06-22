@@ -24,7 +24,7 @@ const SLOT = {
 // ---------------------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export const PlaceholderSlot = (_props: Record<string, unknown>) => null;
+const PlaceholderSlot = (_props: Record<string, unknown>) => null;
 
 // ---------------------------------------------------------------------------
 // MIT OL instructor dashboard customizations

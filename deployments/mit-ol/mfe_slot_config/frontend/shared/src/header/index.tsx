@@ -477,6 +477,3 @@ export function createXProHeaderApp(): App {
 
 	return { appId: "mitol.header.xpro", slots };
 }
-
-// Re-export for consumers that only need the shared toggle component.
-export { UserMenuToggle };
