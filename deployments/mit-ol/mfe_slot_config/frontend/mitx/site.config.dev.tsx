@@ -3,22 +3,15 @@ import {
 	headerApp,
 	shellApp,
 	EnvironmentTypes,
-	type App,
 	type SiteConfig,
 } from "@openedx/frontend-base";
 
-import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxHeaderApp } from "@shared/header";
 import { createMITOLInstructorDashboardApp } from "@shared/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
 import "@shared/styles/mitx.scss";
-
-const wrapWithAppsPath = (app: App): App =>
-	app.routes
-		? { ...app, routes: [{ path: "apps", children: app.routes }] }
-		: app;
 
 const siteConfig: SiteConfig = {
 	siteId: "mitx",
@@ -36,7 +29,6 @@ const siteConfig: SiteConfig = {
 		footerApp,
 		createMITOLFooterApp(),
 		createMITxHeaderApp(),
-		wrapWithAppsPath(instructorDashboardApp),
 		createMITOLInstructorDashboardApp(),
 	],
 };

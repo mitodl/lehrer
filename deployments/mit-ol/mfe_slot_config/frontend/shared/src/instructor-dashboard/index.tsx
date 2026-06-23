@@ -1,5 +1,8 @@
+import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { WidgetOperationTypes } from "@openedx/frontend-base";
 import type { App, SlotOperation } from "@openedx/frontend-base";
+
+import { wrapWithAppsPath } from "../utils/apps";
 
 import CanvasIntegrationPage from "./CanvasIntegrationPage";
 import RapidResponseReportsPage from "./RapidResponseReportsPage";
@@ -22,7 +25,12 @@ const ROUTES_SLOT_ID = "org.openedx.frontend.slot.instructorDashboard.routes.v1"
 const PlaceholderSlot = (_props: Record<string, unknown>) => null;
 
 // ---------------------------------------------------------------------------
-// MIT OL instructor dashboard customizations
+// MIT OL instructor dashboard app
+//
+// Returns the upstream instructorDashboardApp extended in place (a single app):
+// its routes are nested under /apps (wrapWithAppsPath) and our two route widgets
+// are appended to its routes slot. Site configs register this one app instead of
+// the upstream app plus a separate customization app.
 //
 // Adds two extra pages to the instructor dashboard:
 //   - Canvas        → Canvas LMS enrollment / grade sync (ol_openedx_canvas_integration)
@@ -38,7 +46,7 @@ const PlaceholderSlot = (_props: Record<string, unknown>) => null;
 // ---------------------------------------------------------------------------
 
 export function createMITOLInstructorDashboardApp(): App {
-	const slots: SlotOperation[] = [
+	const mitolSlots: SlotOperation[] = [
 		// Canvas Integration page (route only). The nav tab is NOT registered here:
 		// the LMS adds the "Canvas" tab via the InstructorDashboardTabsRequested
 		// filter (ol_openedx_canvas_integration) only for courses linked to Canvas
@@ -68,5 +76,12 @@ export function createMITOLInstructorDashboardApp(): App {
 		},
 	];
 
-	return { appId: "mitol.instructorDashboard.customizations", slots };
+	// Nest the upstream routes under /apps, then append our route widgets to the
+	// app's routes slot. Slot operations apply globally to their target slot, so
+	// merging them here is equivalent to a separate customization app.
+	const wrapped = wrapWithAppsPath(instructorDashboardApp);
+	return {
+		...wrapped,
+		slots: [...(wrapped.slots ?? []), ...mitolSlots],
+	};
 }
