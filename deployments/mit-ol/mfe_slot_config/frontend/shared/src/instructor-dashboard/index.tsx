@@ -42,7 +42,7 @@ const PlaceholderSlot = (_props: Record<string, unknown>) => null;
 // backend APIs aren't present.
 // ---------------------------------------------------------------------------
 
-export function createInstructorDashboardCustomApp(): App {
+export function createMITOLInstructorDashboardApp(): App {
 	const slots: SlotOperation[] = [
 		// Canvas Integration page (route only). The nav tab is NOT registered here:
 		// the LMS adds the "Canvas" tab via the InstructorDashboardTabsRequested

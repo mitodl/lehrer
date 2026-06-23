@@ -10,7 +10,7 @@ import {
 import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxOnlineHeaderApp } from "@shared/header";
-import { createInstructorDashboardCustomApp } from "@shared/instructor-dashboard";
+import { createMITOLInstructorDashboardApp } from "@shared/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
 import "@shared/styles/mitxonline.scss";
@@ -45,7 +45,7 @@ const siteConfig: SiteConfig = {
 		createMITOLFooterApp(),
 		createMITxOnlineHeaderApp(),
 		wrapWithAppsPath(instructorDashboardApp),
-		createInstructorDashboardCustomApp(),
+		createMITOLInstructorDashboardApp(),
 		// TODO: add further module libraries as they are migrated to frontend-base
 	],
 };
