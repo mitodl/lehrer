@@ -4,14 +4,9 @@ import type { App, SlotOperation } from "@openedx/frontend-base";
 import CanvasIntegrationPage from "./CanvasIntegrationPage";
 import RapidResponseReportsPage from "./RapidResponseReportsPage";
 
-// ---------------------------------------------------------------------------
-// Instructor Dashboard slot IDs (from @openedx/frontend-app-instructor-dashboard)
-// ---------------------------------------------------------------------------
-
-const SLOT = {
-	tabs: "org.openedx.frontend.slot.instructorDashboard.tabs.v1",
-	routes: "org.openedx.frontend.slot.instructorDashboard.routes.v1",
-} as const;
+// Instructor Dashboard routes slot (from @openedx/frontend-app-instructor-dashboard).
+// Only the routes slot is used here — the nav tabs come from the backend filter.
+const ROUTES_SLOT_ID = "org.openedx.frontend.slot.instructorDashboard.routes.v1";
 
 // ---------------------------------------------------------------------------
 // PlaceholderSlot
@@ -51,7 +46,7 @@ export function createMITOLInstructorDashboardApp(): App {
 		// unconditionally is harmless — the page is only reachable when that tab
 		// is present, and its tabId matches the url the backend filter emits.
 		{
-			slotId: SLOT.routes,
+			slotId: ROUTES_SLOT_ID,
 			id: "org.openedx.frontend.widget.instructorDashboard.route.canvas_integration",
 			op: WidgetOperationTypes.APPEND,
 			element: (
@@ -64,7 +59,7 @@ export function createMITOLInstructorDashboardApp(): App {
 		// deployments where that plugin is installed, rather than on every
 		// deployment that ships this MFE config.
 		{
-			slotId: SLOT.routes,
+			slotId: ROUTES_SLOT_ID,
 			id: "org.openedx.frontend.widget.instructorDashboard.route.rapid_response",
 			op: WidgetOperationTypes.APPEND,
 			element: (
