@@ -25,7 +25,7 @@ const LEARNING_APPS = [
 	"ora-grading",
 	"communications",
 ];
-const DASHBOARD_APPS = ["gradebook", "learner-dashboard"];
+const DASHBOARD_APPS = ["gradebook", "learner-dashboard", "admin-console"];
 const DEFAULT_SUPPORT_URL = "https://support.learn.mit.edu/";
 
 const CURRENT_MFE_APP_ID = configData.APP_ID;

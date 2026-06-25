@@ -82,23 +82,39 @@ dagger call notes build \
 
 ---
 
-## 5. MFE (legacy) — learning MFE with smoot-design bundle
+## 5. MFE (legacy) — learning MFE
+
+Extra slot files, npm bundles, and per-deployment styles are declared in
+`mfe_slot_config/legacy/build_config.yaml` and resolved automatically by
+`build-legacy-configured`.
 
 ```bash
-dagger call mfe build-legacy \
+dagger call mfe build-legacy-configured \
   --mfe-name learning \
   --mfe-repo https://github.com/openedx/frontend-app-learning \
   --mfe-branch master \
   --deployment-name mitxonline \
-  --slot-config ./deployments/mit-ol/mfe_slot_config/legacy \
-  --enable-ai-drawer true \
-  --styles-file mitxonline-styles.scss \
-  --extra-npm-bundles '["@mitodl/smoot-design@^6.12.0|public/static/smoot-design"]'
+  --release-name master \
+  --slot-config ./deployments/mit-ol/mfe_slot_config/legacy
 ```
 
 ---
 
-## 6. OEP-65 Site Project builds (frontend-base)
+## 6. MFE (legacy) — admin-console
+
+```bash
+dagger call mfe build-legacy-configured \
+  --mfe-name admin-console \
+  --mfe-repo https://github.com/openedx/frontend-app-admin-console \
+  --mfe-branch master \
+  --deployment-name mitxonline \
+  --release-name master \
+  --slot-config ./deployments/mit-ol/mfe_slot_config/legacy
+```
+
+---
+
+## 7. OEP-65 Site Project builds (frontend-base)
 
 Each deployment has its own Site Project under
 `deployments/mit-ol/mfe_slot_config/frontend/<deployment>/`.
@@ -144,7 +160,7 @@ dagger call mfe build-site \
 
 ---
 
-## Regenerating aqueduct settings models
+## 8. Regenerating aqueduct settings models
 
 After adding or removing pip packages, regenerate the AqueductSettings pydantic
 models and commit the result:
@@ -164,7 +180,7 @@ cp generated/cms/models/aqueduct.py deployments/mit-ol/settings/cms/models/aqued
 
 ---
 
-## Publishing images
+## 9. Publishing images
 
 Pipe any `build-platform` or `codejail build` result into `publish-platform`:
 

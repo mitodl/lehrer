@@ -145,7 +145,7 @@ if (edxMfeAppName === "authoring") {
 
 // Dynamic header menu slot overrides
 const learningApps = ["learning", "discussions", "ora-grading", "communications"];
-const dashboardApps = ["gradebook", "learner-dashboard"];
+const dashboardApps = ["gradebook", "learner-dashboard", "admin-console"];
 
 if (learningApps.includes(edxMfeAppName)) {
   config.pluginSlots.learning_user_menu_slot = {
