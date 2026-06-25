@@ -18,6 +18,8 @@ styles:
 
 # Per-MFE customizations keyed by MFE application name.
 mfes:
+  admin-console: {}
+
   learning:
     extra_slot_files:
     - AIDrawerManagerSidebar.jsx
