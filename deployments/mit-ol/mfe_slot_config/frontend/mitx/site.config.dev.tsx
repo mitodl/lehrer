@@ -10,9 +10,9 @@ import {
 import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxHeaderApp } from "@shared/header";
-import { createStyleOverrideApp } from "@shared/styles/styleLoader";
 
 import "@openedx/frontend-base/shell/style";
+import "@shared/styles/mitx.scss";
 
 const wrapWithAppsPath = (app: App): App =>
 	app.routes
@@ -33,7 +33,6 @@ const siteConfig: SiteConfig = {
 		shellApp,
 		headerApp,
 		footerApp,
-		createStyleOverrideApp("@shared/styles/mitx.scss"),
 		createMITOLFooterApp(),
 		createMITxHeaderApp(),
 		wrapWithAppsPath(instructorDashboardApp),
