@@ -179,7 +179,7 @@ const learningApps = [
   "ora-grading",
   "communications",
 ];
-const dashboardApps = ["gradebook", "learner-dashboard"];
+const dashboardApps = ["gradebook", "learner-dashboard", "admin-console"];
 
 if (learningApps.includes(edxMfeAppName)) {
   config.pluginSlots.learning_user_menu_slot = {
