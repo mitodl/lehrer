@@ -8,5 +8,12 @@
       "/pip_package_lists/.*?/.*.txt/",
       "/pip_package_overrides/.*?/.*.txt/"
     ]
-  }
+  },
+  "packageRules": [
+    {
+      "matchPackageNames": ["react-router", "react-router-dom", "@remix-run/router"],
+      "groupName": "react-router",
+      "description": "Bump react-router, react-router-dom, and @remix-run/router together. Updating only one leaves the others pinned to an older exact version in the lockfile, which npm cannot dedupe against the bumped package - producing two separate copies of react-router with two distinct DataRouterContext instances, and a hard crash on every page (see mitodl/lehrer#75)."
+    }
+  ]
 }
