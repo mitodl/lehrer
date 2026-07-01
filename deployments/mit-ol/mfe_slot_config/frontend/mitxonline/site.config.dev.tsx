@@ -3,21 +3,15 @@ import {
 	headerApp,
 	shellApp,
 	EnvironmentTypes,
-	type App,
 	type SiteConfig,
 } from "@openedx/frontend-base";
 
-import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxOnlineHeaderApp } from "@shared/header";
-import { createStyleOverrideApp } from "@shared/styles/styleLoader";
+import { createMITOLInstructorDashboardApp } from "@shared/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
-
-const wrapWithAppsPath = (app: App): App =>
-	app.routes
-		? { ...app, routes: [{ path: "apps", children: app.routes }] }
-		: app;
+import "@shared/styles/mitxonline.scss";
 
 const siteConfig: SiteConfig = {
 	siteId: "mitol",
@@ -28,15 +22,19 @@ const siteConfig: SiteConfig = {
 	loginUrl: "http://local.openedx.io:8000/login",
 	logoutUrl: "http://local.openedx.io:8000/logout",
 	environment: EnvironmentTypes.DEVELOPMENT,
+	// commonAppConfig (mitolHeader / mitolFooter) is loaded at runtime from the LMS
+	// frontend_site_config API rather than hardcoded here. The dev server proxies
+	// /api/frontend_site_config/v1 to lmsBaseUrl; the response is deep-merged over
+	// this static config. Requires ENABLE_MFE_CONFIG_API + FRONTEND_SITE_CONFIG set
+	// on the LMS.
 	runtimeConfigJsonUrl: "/api/frontend_site_config/v1/",
 	apps: [
 		shellApp,
 		headerApp,
 		footerApp,
-		createStyleOverrideApp("@shared/styles/mitxonline.scss"),
 		createMITOLFooterApp(),
 		createMITxOnlineHeaderApp(),
-		wrapWithAppsPath(instructorDashboardApp),
+		createMITOLInstructorDashboardApp(),
 	],
 };
 

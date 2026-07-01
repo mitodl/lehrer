@@ -3,26 +3,15 @@ import {
 	headerApp,
 	shellApp,
 	EnvironmentTypes,
-	type App,
 	type SiteConfig,
 } from "@openedx/frontend-base";
 
-import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxHeaderApp } from "@shared/header";
-import { createStyleOverrideApp } from "@shared/styles/styleLoader";
+import { createMITOLInstructorDashboardApp } from "@shared/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
-
-// App routes are relative paths (e.g. 'instructor-dashboard/:courseId'), but the
-// LMS constructs tab hrefs using the full /apps/instructor-dashboard/... URL and
-// the app converts those back to clientPath values it passes to React Router Link.
-// Wrapping routes in an 'apps' parent makes the router match /apps/* without a
-// basename, so Link's absolute paths are not double-prefixed.
-const wrapWithAppsPath = (app: App): App =>
-	app.routes
-		? { ...app, routes: [{ path: "apps", children: app.routes }] }
-		: app;
+import "@shared/styles/mitx.scss";
 
 // Covers both mitx and mitx-staging deployments via a single build.
 // Production defaults — all fields are overridden at runtime by /api/frontend_site_config/v1/,
@@ -41,10 +30,9 @@ const siteConfig: SiteConfig = {
 		shellApp,
 		headerApp,
 		footerApp,
-		createStyleOverrideApp("@shared/styles/mitx.scss"),
 		createMITOLFooterApp(),
 		createMITxHeaderApp(),
-		wrapWithAppsPath(instructorDashboardApp),
+		createMITOLInstructorDashboardApp(),
 		// TODO: add further module libraries as they are verified against the named release
 	],
 };

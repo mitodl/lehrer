@@ -3,3 +3,8 @@ dist/
 .env
 .env.*
 *.tgz
+# Local-dev snapshot of ../shared (the @shared/* alias source), created via
+# `cp -R ../shared ./shared` for `npm run dev`. Anchored to this folder so it
+# only ignores mitxonline/shared, not the canonical frontend/shared which Dagger
+# mounts via --shared-src. Never commit the snapshot.
+/shared/

@@ -3,21 +3,15 @@ import {
 	headerApp,
 	shellApp,
 	EnvironmentTypes,
-	type App,
 	type SiteConfig,
 } from "@openedx/frontend-base";
 
-import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxOnlineHeaderApp } from "@shared/header";
-import { createStyleOverrideApp } from "@shared/styles/styleLoader";
+import { createMITOLInstructorDashboardApp } from "@shared/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
-
-const wrapWithAppsPath = (app: App): App =>
-	app.routes
-		? { ...app, routes: [{ path: "apps", children: app.routes }] }
-		: app;
+import "@shared/styles/mitxonline.scss";
 
 // Production defaults — all fields are overridden at runtime by /api/frontend_site_config/v1/,
 // which reads from the FRONTEND_SITE_CONFIG Django setting in the LMS configmap.
@@ -41,10 +35,9 @@ const siteConfig: SiteConfig = {
 		shellApp,
 		headerApp,
 		footerApp,
-		createStyleOverrideApp("@shared/styles/mitxonline.scss"),
 		createMITOLFooterApp(),
 		createMITxOnlineHeaderApp(),
-		wrapWithAppsPath(instructorDashboardApp),
+		createMITOLInstructorDashboardApp(),
 		// TODO: add further module libraries as they are migrated to frontend-base
 	],
 };
