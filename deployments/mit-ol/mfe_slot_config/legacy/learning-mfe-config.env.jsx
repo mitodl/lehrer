@@ -9,9 +9,15 @@ import { useIntl } from '@edx/frontend-platform/i18n';
 import config from './common-mfe-config.env.jsx';
 import SidebarAIDrawerCoordinator from './SidebarAIDrawerCoordinator.jsx';
 import ResponsiveCourseTabs from './ResponsiveCourseTabs.jsx';
+import FeedbackDrawerManagerSidebar from './FeedbackDrawerManagerSidebar.jsx';
 
 // When ENABLE_AI_DRAWER_SLOT is disabled or unset
 const ENABLE_AI_DRAWER_SLOT = process.env.ENABLE_AI_DRAWER_SLOT === "true";
+// Per-block feedback shares the AI-drawer sidebar mount (no separate enable flag);
+// the LMS-side ol_openedx_feedback.feedback_enabled CourseWaffleFlag is the gate.
+// FEEDBACK_SLOT_MODE is presentation-only: 'true' => inline in the AskTIM column
+// (handled by SidebarAIDrawerCoordinator); 'false' => right-side overlay loader.
+const FEEDBACK_SLOT_MODE = process.env.FEEDBACK_SLOT_MODE === "true";
 
 if (!ENABLE_AI_DRAWER_SLOT) {
   import(
@@ -160,7 +166,9 @@ if (process.env.DEPLOYMENT_NAME?.includes("mitxonline")) {
           },
         ],
       },
-      // Slot-based AskTim Chatbot - only if feature flag is enabled
+      // Slot-based AskTim Chatbot + per-block feedback drawer share this slot.
+      // The coordinator owns the column (AskTIM, plus inline feedback when
+      // FEEDBACK_SLOT_MODE); the overlay loader handles feedback when NOT in slot mode.
       ...(ENABLE_AI_DRAWER_SLOT ? {
         'org.openedx.frontend.learning.notifications_discussions_sidebar.v1': {
             keepDefault: false,
@@ -173,6 +181,14 @@ if (process.env.DEPLOYMENT_NAME?.includes("mitxonline")) {
                         RenderWidget: ({ courseId }) => <SidebarAIDrawerCoordinator courseId={courseId} />,
                     },
                 },
+                ...(!FEEDBACK_SLOT_MODE ? [{
+                    op: PLUGIN_OPERATIONS.Insert,
+                    widget: {
+                        id: 'feedback_drawer_loader',
+                        type: DIRECT_PLUGIN,
+                        RenderWidget: () => <FeedbackDrawerManagerSidebar />,
+                    },
+                }] : []),
             ],
         },
       } : {}),

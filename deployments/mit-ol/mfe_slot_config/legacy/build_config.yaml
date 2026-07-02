@@ -24,6 +24,11 @@ mfes:
     extra_slot_files:
     - AIDrawerManagerSidebar.jsx
     - ResponsiveCourseTabs.jsx
+    # Per-block feedback drawer; shares the AI-drawer sidebar mount + coordinator.
+    - FeedbackDrawerManagerSidebar.jsx
+    - FeedbackDrawerSlot.jsx
+    - feedbackBundle.js
+    - useFeedbackEnrichment.js
         # The AI-drawer coordinator ships in two variants; pick by release.
     - dest: SidebarAIDrawerCoordinator.jsx
       by_release:
