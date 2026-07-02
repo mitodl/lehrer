@@ -85,7 +85,7 @@ const useStickyDrawerHeight = (wrapperRef, active) => {
             if (mq.matches) {
                 window.addEventListener('scroll', schedule, { passive: true });
                 window.addEventListener('resize', schedule);
-                if (!resizeObserver && wrapper.parentElement) {
+                if (!resizeObserver && wrapper.parentElement && typeof ResizeObserver !== 'undefined') {
                     resizeObserver = new ResizeObserver(schedule);
                     resizeObserver.observe(wrapper.parentElement);
                 }
@@ -144,7 +144,7 @@ const SidebarAIDrawerCoordinator = ({ courseId }) => {
             // Opening AskTIM hides feedback (they share this column).
             if (FEEDBACK_SLOT_MODE) {
                 setShowFeedback(false);
-                window.postMessage({ type: FEEDBACK_CLOSE_MESSAGE }, messageOrigin);
+                window.postMessage({ type: FEEDBACK_CLOSE_MESSAGE }, window.location.origin);
             }
             if (currentSidebar !== null) {
                 toggleSidebar(null);
@@ -153,7 +153,7 @@ const SidebarAIDrawerCoordinator = ({ courseId }) => {
             setShowFeedback(true);
             // Opening feedback hides AskTIM and the discussions sidebar.
             if (showAIDrawerRef.current) {
-                window.postMessage({ type: AI_DRAWER_CLOSE_MESSAGE }, messageOrigin);
+                window.postMessage({ type: AI_DRAWER_CLOSE_MESSAGE }, window.location.origin);
             }
             setShowAIDrawer(false);
             if (currentSidebar !== null) {
@@ -175,10 +175,10 @@ const SidebarAIDrawerCoordinator = ({ courseId }) => {
             // Opening the discussions sidebar also hides feedback.
             if (FEEDBACK_SLOT_MODE) {
                 setShowFeedback(false);
-                window.postMessage({ type: FEEDBACK_CLOSE_MESSAGE }, messageOrigin);
+                window.postMessage({ type: FEEDBACK_CLOSE_MESSAGE }, window.location.origin);
             }
         }
-    }, [currentSidebar, messageOrigin]);
+    }, [currentSidebar]);
 
     useEffect(() => {
         showAIDrawerRef.current = showAIDrawer;
@@ -196,20 +196,20 @@ const SidebarAIDrawerCoordinator = ({ courseId }) => {
                     {
                         type: AI_DRAWER_CLOSE_MESSAGE,
                     },
-                    messageOrigin
+                    window.location.origin
                 );
             }
             setShowAIDrawer(false);
             // Auto-close feedback on unit change too (mirrors AskTIM).
             if (FEEDBACK_SLOT_MODE) {
                 if (showFeedbackRef.current) {
-                    window.postMessage({ type: FEEDBACK_CLOSE_MESSAGE }, messageOrigin);
+                    window.postMessage({ type: FEEDBACK_CLOSE_MESSAGE }, window.location.origin);
                 }
                 setShowFeedback(false);
             }
         }
         prevUnitIdRef.current = unitId;
-    }, [unitId, messageOrigin]);
+    }, [unitId]);
 
     // AskTIM and the feedback slot share the same sticky `.ai-drawer-wrapper`
     // sizing, so both track the available viewport space on scroll identically.
