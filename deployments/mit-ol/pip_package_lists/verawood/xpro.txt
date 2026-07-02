@@ -15,7 +15,7 @@ ol-openedx-sentry
 ol-social-auth
 openedx-scorm-xblock
 pydantic-settings[yaml]==2.14.2
-django-aqueduct==0.5.0
+django-aqueduct==0.6.0
 ol-openedx-chat
 ol-openedx-chat-xblock
 
