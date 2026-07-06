@@ -92,14 +92,34 @@ function PoweredBy() {
 function MITOLDesktopFooterLayout() {
 	return (
 		<footer className="d-flex flex-column align-items-stretch">
-			<div className="pt-3 px-3 d-flex flex-row gap-3 gap-md-5 justify-content-between align-items-start">
-				<div className="flex-basis-0 d-flex align-items-center">
+			{/* Grid with equal, shrinkable side tracks (minmax(0, 1fr)) and an auto
+			    center track: the center links stay exactly page-centered — and thus
+			    aligned with the centered copyright row below — regardless of the
+			    logo / "Powered by" widths. (Equal flex columns don't achieve this
+			    because a flex item can't shrink below its content's min-width, so a
+			    wide logo pushes the center off-center.)
+
+			    NOTE: the grid MUST be declared via inline style, not the `d-grid` /
+			    `gap-*` Bootstrap utility classes — Paragon ships Bootstrap 4, which
+			    has no such classes (they are Bootstrap 5). With `d-grid` the element
+			    silently stays `display: block`, so the three cells stack vertically
+			    and the "Powered by" logo drops between the links and the copyright. */}
+			<div
+				className="pt-3 px-3"
+				style={{
+					display: "grid",
+					gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
+					columnGap: "1.5rem",
+					alignItems: "center",
+				}}
+			>
+				<div className="d-flex align-items-center">
 					<Slot id="org.openedx.frontend.slot.footer.desktopLeftLinks.v1" />
 				</div>
-				<div className="flex-grow-1 flex-basis-0 d-flex justify-content-center">
+				<div className="d-flex justify-content-center">
 					<Slot id="org.openedx.frontend.slot.footer.desktopCenterLinks.v1" />
 				</div>
-				<div className="flex-basis-0 d-flex justify-content-end align-items-start">
+				<div className="d-flex justify-content-end align-items-center">
 					<PoweredBy />
 				</div>
 			</div>
