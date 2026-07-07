@@ -13,15 +13,31 @@ requires = ["uv_build>=0.11.2,<0.12.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
-dev = ["pre-commit>=4.5.1"]
+dev = [
+  "mypy==1.19.1",
+  "pre-commit>=4.5.1",
+  "pydantic-settings[yaml]",
+  "pytest>=8",
+  "ruff==0.14.14",
+  "types-PyYAML",
+  "types-requests",
+]
 
 [tool.mypy]
+# Lets mypy resolve lehrer.* imports from disk (e.g. `from lehrer.cli import
+# local_dev`) even when a single unrelated file is passed as the only CLI
+# argument — the case for a normal incremental commit under the pre-commit
+# hook's isolated environment, which doesn't have lehrer itself installed.
+mypy_path = "src"
 exclude = [
   # All files under deployments/ (OL-specific config) import Django, pydantic,
   # django_aqueduct, and openedx.* which only exist inside the edx-platform
   # container at runtime, not in lehrer's own venv.
   "deployments/",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff.lint.per-file-ignores]
 # deployments/mit-ol/settings/ contains three kinds of files that deliberately

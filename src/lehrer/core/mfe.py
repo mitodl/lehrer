@@ -344,7 +344,7 @@ class OpenedxMfe:
 
         mfe_cfg = config.mfe(mfe_name)
 
-        return await self.build_legacy(
+        return await self.build_legacy(  # type: ignore[attr-defined]
             mfe_name=mfe_name,
             mfe_repo=mfe_repo,
             mfe_source=mfe_source,
