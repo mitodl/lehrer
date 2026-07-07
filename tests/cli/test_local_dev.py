@@ -79,18 +79,19 @@ class TestRequiredHostPorts:
 
 class TestPortInUse:
     def test_bound_port_reports_in_use(self) -> None:
-        # Bind to 0.0.0.0, mirroring _port_in_use's own bind (which mirrors
-        # k3d's loadbalancer bind) — a short-lived local test socket, not a
-        # listener exposed beyond this process.
+        # A loopback-only bind still blocks _port_in_use's own 0.0.0.0 bind
+        # attempt on the same port (the wildcard address can't be bound while
+        # any specific address already holds that port), so this avoids
+        # binding to all interfaces in test code without weakening the check.
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as held:
-            held.bind(("0.0.0.0", 0))  # noqa: S104  # lgtm[py/bind-socket-all-network-interfaces]
+            held.bind(("127.0.0.1", 0))
             held.listen(1)
             port = held.getsockname()[1]
             assert local_dev._port_in_use(port) is True
 
     def test_free_port_reports_not_in_use(self) -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-            probe.bind(("0.0.0.0", 0))  # noqa: S104  # lgtm[py/bind-socket-all-network-interfaces]
+            probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
         assert local_dev._port_in_use(port) is False
 

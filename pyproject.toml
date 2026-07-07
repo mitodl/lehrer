@@ -24,6 +24,11 @@ dev = [
 ]
 
 [tool.mypy]
+# Lets mypy resolve lehrer.* imports from disk (e.g. `from lehrer.cli import
+# local_dev`) even when a single unrelated file is passed as the only CLI
+# argument — the case for a normal incremental commit under the pre-commit
+# hook's isolated environment, which doesn't have lehrer itself installed.
+mypy_path = "src"
 exclude = [
   # All files under deployments/ (OL-specific config) import Django, pydantic,
   # django_aqueduct, and openedx.* which only exist inside the edx-platform
