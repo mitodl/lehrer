@@ -79,15 +79,18 @@ class TestRequiredHostPorts:
 
 class TestPortInUse:
     def test_bound_port_reports_in_use(self) -> None:
+        # Bind to 0.0.0.0, mirroring _port_in_use's own bind (which mirrors
+        # k3d's loadbalancer bind) — a short-lived local test socket, not a
+        # listener exposed beyond this process.
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as held:
-            held.bind(("0.0.0.0", 0))  # noqa: S104
+            held.bind(("0.0.0.0", 0))  # noqa: S104  # lgtm[py/bind-socket-all-network-interfaces]
             held.listen(1)
             port = held.getsockname()[1]
             assert local_dev._port_in_use(port) is True
 
     def test_free_port_reports_not_in_use(self) -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-            probe.bind(("0.0.0.0", 0))  # noqa: S104
+            probe.bind(("0.0.0.0", 0))  # noqa: S104  # lgtm[py/bind-socket-all-network-interfaces]
             port = probe.getsockname()[1]
         assert local_dev._port_in_use(port) is False
 
