@@ -1008,7 +1008,7 @@ class OpenedxPlatform:
         # (npm ~/.npm, pip /tmp artefacts) accumulate here and are discarded
         # when we copy only the three needed directories to the clean base
         # below, following the same multi-stage pattern.
-        deps = self.apt_base(python_version=python_version)
+        deps: dagger.Container = self.apt_base(python_version=python_version)
         deps = self.get_code(
             deps,
             source=source,
@@ -1029,7 +1029,7 @@ class OpenedxPlatform:
         # ── Clean base ────────────────────────────────────────────────────────
         # Start fresh (equivalent to a multi-stage build's clean base layer).
         # Copy only the built artefacts; npm/uv/pip caches are left behind.
-        container = self.apt_base(python_version=python_version)
+        container: dagger.Container = self.apt_base(python_version=python_version)
         container = (
             container.with_directory("/openedx/venv", deps.directory("/openedx/venv"))
             .with_directory(
@@ -1199,7 +1199,7 @@ class OpenedxPlatform:
             python_version = "3.12" if release_name == "master" else "3.11"
 
         # ── Base system + code ────────────────────────────────────────────────
-        container = self.apt_base(python_version=python_version)
+        container: dagger.Container = self.apt_base(python_version=python_version)
         container = self.get_code(
             container,
             edx_platform_git_repo=platform_repo,

@@ -259,13 +259,18 @@ class ProductionSettingsMixin(BaseSettings):
         CELERY_BROKER_HOSTNAME and CELERY_BROKER_PASSWORD arrive as flat env
         vars (hostname from a ConfigMap, password from a Secret).
         """
-        if self.CELERY_BROKER_TRANSPORT and not getattr(self, "BROKER_URL", None):
-            user = quote(self.CELERY_BROKER_USER or "", safe="")
-            password = quote(self.CELERY_BROKER_PASSWORD or "", safe="")
+        # CELERY_BROKER_* fields below come from the generated AqueductSettings
+        # sibling class (see module docstring), unknown to mypy when checking
+        # this mixin in isolation.
+        if self.CELERY_BROKER_TRANSPORT and not getattr(  # type: ignore[attr-defined]
+            self, "BROKER_URL", None
+        ):
+            user = quote(self.CELERY_BROKER_USER or "", safe="")  # type: ignore[attr-defined]
+            password = quote(self.CELERY_BROKER_PASSWORD or "", safe="")  # type: ignore[attr-defined]
             self.BROKER_URL = (  # type: ignore[attr-defined]
-                f"{self.CELERY_BROKER_TRANSPORT}://"
+                f"{self.CELERY_BROKER_TRANSPORT}://"  # type: ignore[attr-defined]
                 f"{user}:{password}"
-                f"@{self.CELERY_BROKER_HOSTNAME}/{self.CELERY_BROKER_VHOST}"
+                f"@{self.CELERY_BROKER_HOSTNAME}/{self.CELERY_BROKER_VHOST}"  # type: ignore[attr-defined]
             )
         if isinstance(self.CELERY_BROKER_USE_SSL, dict):
             self.BROKER_USE_SSL = self.CELERY_BROKER_USE_SSL
@@ -409,7 +414,7 @@ class ProductionSettingsMixin(BaseSettings):
         """
         if not self.MYSQL_HOST:
             return self
-        for alias, db in self.DATABASES.items():
+        for alias, db in self.DATABASES.items():  # type: ignore[attr-defined]
             db["HOST"] = self.MYSQL_HOST
             db["PORT"] = str(self.MYSQL_PORT)
             if self.MYSQL_USER:

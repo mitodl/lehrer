@@ -13,7 +13,14 @@ requires = ["uv_build>=0.11.2,<0.12.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
-dev = ["pre-commit>=4.5.1"]
+dev = [
+  "mypy>=1.19",
+  "pre-commit>=4.5.1",
+  "pydantic-settings[yaml]",
+  "pytest>=8",
+  "types-PyYAML",
+  "types-requests",
+]
 
 [tool.mypy]
 exclude = [
@@ -22,6 +29,9 @@ exclude = [
   # container at runtime, not in lehrer's own venv.
   "deployments/",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff.lint.per-file-ignores]
 # deployments/mit-ol/settings/ contains three kinds of files that deliberately
