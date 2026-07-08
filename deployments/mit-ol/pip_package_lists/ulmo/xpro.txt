@@ -7,16 +7,16 @@ edx-username-changer==0.5.0
 git+https://github.com/mitodl/ubcpi.git@master#egg=ubcpi-xblock
 openedx-companion-auth==1.2.0
 nodeenv>=1.7.0
-ol-openedx-checkout-external
+ol-openedx-checkout-external==0.2.0
 ol-openedx-course-export==0.2.0
-ol-openedx-course-structure-api
-ol-openedx-logging
-ol-openedx-sentry
-ol-social-auth
-openedx-scorm-xblock
+ol-openedx-course-structure-api==0.2.0
+ol-openedx-logging==0.3.5
+ol-openedx-sentry==0.3.0
+ol-social-auth==0.2.2
+openedx-scorm-xblock==19.0.4
 pydantic-settings[yaml]==2.14.2
-ol-openedx-chat
-ol-openedx-chat-xblock
+ol-openedx-chat==0.5.9
+ol-openedx-chat-xblock==0.4.6
 
 # Open Telemetry support
 opentelemetry-api

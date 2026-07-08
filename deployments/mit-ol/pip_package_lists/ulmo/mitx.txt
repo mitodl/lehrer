@@ -2,25 +2,25 @@ celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedule
 granian==2.7.9
 django-redis==6.0.0
 ol-openedx-git-auto-export==0.8.2
-edx-sga
+edx-sga==0.29.0
 edx-sysadmin==0.4.2
 git+https://github.com/raccoongang/xblock-pdf.git@d8948bf3c7127e23be202d1f8600f1ba293ba978#egg=xblock-pdf
-invideoquiz-xblock
+invideoquiz-xblock==2.0.0
 nodeenv>=1.7.0
 ol-openedx-canvas-integration==0.8.0
 ol-openedx-course-export==0.2.0
-ol-openedx-course-structure-api
+ol-openedx-course-structure-api==0.2.0
 ol-openedx-logging==0.3.5
 ol-openedx-rapid-response-reports==0.4.0
 ol-openedx-sentry==0.3.0
-openedx-scorm-xblock>=19.0.1,<19.1.0
+openedx-scorm-xblock==19.0.4
 pip==26.1.2
 pydantic-settings[yaml]==2.14.2
 rapid-response-xblock==0.11.0
 
 # Experimental Plugins for AI features
-ol-openedx-chat
-ol-openedx-chat-xblock
+ol-openedx-chat==0.5.9
+ol-openedx-chat-xblock==0.4.6
 
 # Open Telemetry support
 opentelemetry-api

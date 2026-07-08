@@ -9,9 +9,9 @@ openai==2.43.0
 
 # Experimental Plugins for Translations feature
 # install at the end to override any dependency issues
-ol-openedx-course-translations
-ol-openedx-auto-select-language
-ol-openedx-ai-static-translations
+ol-openedx-course-translations==0.8.0
+ol-openedx-auto-select-language==0.1.2
+ol-openedx-ai-static-translations==0.1.1
 
 # Install edx-submissions from mitodl's fork + branch
 git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-csrf-exempt-session-auth#egg=edx-submissions
