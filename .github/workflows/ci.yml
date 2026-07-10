@@ -23,4 +23,5 @@ jobs:
     - run: uv run mypy --config-file=pyproject.toml src/lehrer tests
     - run: uv run pytest tests/ -v
     - run: uv run pre-commit run build-config-schema --all-files
+    - run: uv run pre-commit run build-manifest-schema --all-files
     - run: uv run pre-commit run lehrer-core-boundary --all-files

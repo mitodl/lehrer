@@ -8,8 +8,9 @@ for building Open edX services with lehrer.
 | Directory / File | Purpose |
 |---|---|
 | `settings/` | Django settings for edx-platform (LMS + CMS) |
-| `pip_package_lists/` | Per-release, per-deployment pip requirements |
-| `pip_package_overrides/` | Packages that must be built from source (`lxml`, `xmlsec`) |
+| `build_manifest.yaml` | Declarative edx-platform build cells (repo/branch, python/node, theme, translations, pip packages) — see `plans/06-build-manifest.md` |
+| `pip_package_lists/` | Per-release, per-deployment pip requirements (legacy; superseded by `build_manifest.yaml`, kept until the ol-infrastructure cutover) |
+| `pip_package_overrides/` | Packages that must be built from source (`lxml`, `xmlsec`) (legacy; superseded by `build_manifest.yaml`) |
 | `mfe_slot_config/legacy/` | Slot configuration JSX files for legacy MFE builds |
 | `mfe_slot_config/frontend/` | Future OEP-65 Site Project (see README inside) |
 | `codejail_config/` | sudoers file for the codejail sandbox |

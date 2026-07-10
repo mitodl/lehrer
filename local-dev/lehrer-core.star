@@ -209,8 +209,7 @@ def setup(cfg):
             " --deployment-name " + deploy_name +
             " --release-name " + release_name +
             " --settings-namespace " + settings_ns +
-            " --pip-package-lists " + dep_cfg + "/pip_package_lists" +
-            " --pip-package-overrides " + dep_cfg + "/pip_package_overrides" +
+            " --build-manifest " + dep_cfg + "/build_manifest.yaml" +
             " --custom-settings " + dep_cfg + "/settings" +
             " export --path $tmp && " +
             "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
@@ -219,8 +218,7 @@ def setup(cfg):
             "rm -f $tmp"
         ),
         deps=[
-            dep_cfg + "/pip_package_lists",
-            dep_cfg + "/pip_package_overrides",
+            dep_cfg + "/build_manifest.yaml",
             dep_cfg + "/settings",
             lehrer_core_src,
         ],
