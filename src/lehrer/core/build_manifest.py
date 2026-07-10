@@ -76,9 +76,13 @@ class Cell(BaseModel):
         Fields with no ``CellDefaults`` counterpart (``platform_branch``,
         ``theme_repo``, ``theme_branch``, ``packages_to_remove``) return the
         cell's own value unchanged.
+
+        A field explicitly set on the cell wins even when its value is an
+        empty list — ``model_fields_set`` (not just non-emptiness) is what
+        distinguishes "explicitly overridden to []" from "not set here".
         """
         cell_value = getattr(self, field)
-        if cell_value not in (None, []):
+        if field in self.model_fields_set and cell_value is not None:
             return cell_value
         if field == "python_version":
             return manifest.release_python.get(self.release)

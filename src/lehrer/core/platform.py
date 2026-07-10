@@ -29,7 +29,7 @@ def _resolve_field(
         return explicit
     if cell is not None and manifest is not None:
         value = cell.resolved(field, manifest)
-        if value not in (None, []):
+        if value is not None:
             return cast("_T", value)
     return default
 
@@ -1113,19 +1113,19 @@ class OpenedxPlatform:
             extra_ssh_hosts = []
             if cell is not None and manifest is not None:
                 resolved_hosts = cell.resolved("extra_ssh_hosts", manifest)
-                if resolved_hosts:
+                if resolved_hosts is not None:
                     extra_ssh_hosts = cast("list[str]", resolved_hosts)
         if packages_to_remove is None:
             packages_to_remove = []
             if cell is not None and manifest is not None:
                 resolved_removals = cell.resolved("packages_to_remove", manifest)
-                if resolved_removals:
+                if resolved_removals is not None:
                     packages_to_remove = cast("list[str]", resolved_removals)
         if extra_npm_packages is None:
             extra_npm_packages = []
             if cell is not None and manifest is not None:
                 resolved_npm = cell.resolved("extra_npm_packages", manifest)
-                if resolved_npm:
+                if resolved_npm is not None:
                     extra_npm_packages = cast("list[str]", resolved_npm)
 
         # Determine Python version: explicit arg > manifest cell/release_python
@@ -1373,7 +1373,7 @@ class OpenedxPlatform:
             packages_to_remove = []
             if cell is not None and manifest is not None:
                 resolved_removals = cell.resolved("packages_to_remove", manifest)
-                if resolved_removals:
+                if resolved_removals is not None:
                     packages_to_remove = cast("list[str]", resolved_removals)
 
         if python_version is None:

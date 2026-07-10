@@ -40,6 +40,27 @@ def _manifest_path(group: str) -> Path:
     return _paths.repo_root() / "deployments" / group / "build_manifest.yaml"
 
 
+def _default_manifest_path() -> Path:
+    """Return a manifest path when the caller didn't pass ``--manifest``.
+
+    Prefers ``deployments/mit-ol`` (this repo's reference deployment) but
+    falls back to auto-discovering any ``build_manifest.yaml`` under
+    ``deployments/`` so generic/external operators without a ``mit-ol``
+    directory still get a usable default.
+    """
+    mit_ol = _manifest_path("mit-ol")
+    if mit_ol.exists():
+        return mit_ol
+    manifests = sorted(_paths.repo_root().glob("deployments/*/build_manifest.yaml"))
+    if not manifests:
+        msg = (
+            "no build_manifest.yaml found under deployments/ and no --manifest "
+            "path was given"
+        )
+        raise FileNotFoundError(msg)
+    return manifests[0]
+
+
 def _parse_cell(cell: str) -> tuple[str, str, str]:
     parts = cell.split("/")
     if len(parts) != 3:  # noqa: PLR2004
@@ -101,7 +122,7 @@ def cells(
     ``lehrer.core.build_manifest.load_manifest`` directly instead of shelling
     out to this command when consuming from Python.
     """
-    path = Path(manifest) if manifest else _manifest_path("mit-ol")
+    path = Path(manifest) if manifest else _default_manifest_path()
     build_manifest = load_manifest(path)
     for build_cell in build_manifest.cells:
         print(f"{build_cell.release}/{build_cell.deployment}")  # noqa: T201

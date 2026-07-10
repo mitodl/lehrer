@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from lehrer.core.build_manifest import (
     BuildManifest,
     Cell,
+    CellDefaults,
     load_manifest,
 )
 
@@ -201,6 +202,35 @@ class TestMatrixValues:
         expected = MIT_OL_MATRIX[(release, deployment)]
         for field, value in expected.items():
             assert cell.resolved(field, mit_ol_manifest) == value
+
+
+class TestResolvedRespectsExplicitEmptyOverride:
+    """A cell explicitly overriding a list default to [] must win, not fall back."""
+
+    def test_override_list_to_empty_respected(self) -> None:
+        manifest = BuildManifest(
+            version=1,
+            defaults=CellDefaults(extra_ssh_hosts=["github.mit.edu"]),
+            cells=[
+                Cell(
+                    release="master",
+                    deployment="x",
+                    packages=["a==1"],
+                    extra_ssh_hosts=[],
+                )
+            ],
+        )
+        cell = manifest.resolve_cell("master", "x")
+        assert cell.resolved("extra_ssh_hosts", manifest) == []
+
+    def test_unset_list_still_falls_back_to_default(self) -> None:
+        manifest = BuildManifest(
+            version=1,
+            defaults=CellDefaults(extra_ssh_hosts=["github.mit.edu"]),
+            cells=[Cell(release="master", deployment="x", packages=["a==1"])],
+        )
+        cell = manifest.resolve_cell("master", "x")
+        assert cell.resolved("extra_ssh_hosts", manifest) == ["github.mit.edu"]
 
 
 class TestBuildManifestStructure:
