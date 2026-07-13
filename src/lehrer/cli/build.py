@@ -13,12 +13,14 @@ escape hatch for any function not given a dedicated wrapper.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import cyclopts
 
 from lehrer.cli import _paths
 from lehrer.cli._proc import run
+from lehrer.core.build_manifest import load_manifest
 
 app = cyclopts.App(
     name="build",
@@ -34,6 +36,40 @@ def _dagger(*argv: str) -> None:
     run("dagger", *argv, cwd=str(_paths.repo_root()))
 
 
+def _manifest_path(group: str) -> Path:
+    return _paths.repo_root() / "deployments" / group / "build_manifest.yaml"
+
+
+def _default_manifest_path() -> Path:
+    """Return a manifest path when the caller didn't pass ``--manifest``.
+
+    Prefers ``deployments/mit-ol`` (this repo's reference deployment) but
+    falls back to auto-discovering any ``build_manifest.yaml`` under
+    ``deployments/`` so generic/external operators without a ``mit-ol``
+    directory still get a usable default.
+    """
+    mit_ol = _manifest_path("mit-ol")
+    if mit_ol.exists():
+        return mit_ol
+    manifests = sorted(_paths.repo_root().glob("deployments/*/build_manifest.yaml"))
+    if not manifests:
+        msg = (
+            "no build_manifest.yaml found under deployments/ and no --manifest "
+            "path was given"
+        )
+        raise FileNotFoundError(msg)
+    return manifests[0]
+
+
+def _parse_cell(cell: str) -> tuple[str, str, str]:
+    parts = cell.split("/")
+    if len(parts) != 3:  # noqa: PLR2004
+        msg = f"--cell must be <group>/<release>/<deployment>, got {cell!r}"
+        raise ValueError(msg)
+    group, release, deployment = parts
+    return group, release, deployment
+
+
 @app.command
 def functions() -> None:
     """List all available Dagger functions (``dagger functions``)."""
@@ -41,9 +77,55 @@ def functions() -> None:
 
 
 @app.command
-def platform(*dagger_args: DaggerArgs) -> None:
+def platform(
+    cell: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            help=(
+                "<group>/<release>/<deployment> (e.g. mit-ol/master/mitxonline). "
+                "Resolves deployments/<group>/build_manifest.yaml and forwards "
+                "--build-manifest/--release-name/--deployment-name."
+            )
+        ),
+    ] = None,
+    *dagger_args: DaggerArgs,
+) -> None:
     """Build the edx-platform LMS/CMS image (``platform build-platform``)."""
-    _dagger("call", "platform", "build-platform", *dagger_args)
+    if cell is None:
+        _dagger("call", "platform", "build-platform", *dagger_args)
+        return
+    group, release, deployment = _parse_cell(cell)
+    _dagger(
+        "call",
+        "platform",
+        "build-platform",
+        "--build-manifest",
+        str(_manifest_path(group)),
+        "--release-name",
+        release,
+        "--deployment-name",
+        deployment,
+        *dagger_args,
+    )
+
+
+@app.command
+def cells(
+    manifest: Annotated[
+        str | None, cyclopts.Parameter(help="Path to a build_manifest.yaml.")
+    ] = None,
+) -> None:
+    """Print the (release, deployment) cells in a build_manifest.yaml.
+
+    The consumption API external consumers (e.g. ol-infrastructure's Concourse
+    pipeline generator) cross-check their topology coordinates against — call
+    ``lehrer.core.build_manifest.load_manifest`` directly instead of shelling
+    out to this command when consuming from Python.
+    """
+    path = Path(manifest) if manifest else _default_manifest_path()
+    build_manifest = load_manifest(path)
+    for build_cell in build_manifest.cells:
+        print(f"{build_cell.release}/{build_cell.deployment}")  # noqa: T201
 
 
 @app.command(name="mfe-legacy")

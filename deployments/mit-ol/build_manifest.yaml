@@ -1,0 +1,348 @@
+---
+# yaml-language-server: $schema=../../build_manifest.schema.json
+version: 1
+defaults:
+  settings_namespace: mitol
+  platform_repo: https://github.com/openedx/edx-platform
+  translations_repo: https://github.com/openedx/openedx-translations
+  translations_branch: main
+  node_version: '24'
+  extra_ssh_hosts:
+  - github.mit.edu
+  extra_npm_packages:
+  - git+https://github.com/verificient/edx-proctoring-proctortrack.git#f0fa9edbd16aa5af5a41ac309d2609e529ea8732
+release_python:
+  master: '3.12'
+  ulmo: '3.11'
+  verawood: '3.12'
+cells:
+- release: master
+  deployment: mitxonline
+  platform_branch: master
+  translations_repo: https://github.com/mitodl/mitxonline-translations
+  packages_to_remove:
+  - edx-name-affirmation
+  theme_repo: https://github.com/mitodl/mitxonline-theme
+  theme_branch: main
+  packages:
+  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - granian==2.7.9
+  - django-redis==6.0.0
+  - ol-openedx-git-auto-export==0.8.2
+  - edx-sysadmin==0.4.2
+  - edx-username-changer==0.5.0
+  - openedx-companion-auth==1.2.0
+  - nodeenv>=1.7.0
+  - ol-openedx-checkout-external==0.2.0
+  - ol-openedx-course-export==0.2.0
+  - ol-openedx-course-outline-api==0.1.0
+  - ol-openedx-course-structure-api==0.2.0
+  - ol-openedx-logging==0.3.5
+  - ol-openedx-sentry==0.3.0
+  - openedx-scorm-xblock==19.0.4
+  - ol-social-auth==0.2.2
+  - pydantic-settings[yaml]==2.14.2
+  - django-aqueduct==0.9.0
+  - ol-openedx-chat==0.5.9
+  - ol-openedx-chat-xblock==0.4.6
+  - ol-openedx-lti-utilities==0.1.2
+  - ol-openedx-events-handler==0.2.1
+  - ol-openedx-course-sync==1.0.0
+  - ol-openedx-uai-content-customization==0.1.2
+  - opentelemetry-api
+  - django-extensions
+  - setuptools==81.0.0
+  - edx-sga==0.29.0
+  - git+https://github.com/raccoongang/xblock-pdf.git@d8948bf3c7127e23be202d1f8600f1ba293ba978#egg=xblock-pdf
+  - invideoquiz-xblock==2.0.0
+  - ol-openedx-canvas-integration==0.8.1
+  - ol-openedx-rapid-response-reports==0.5.1
+  - rapid-response-xblock==0.11.0
+  overrides:
+  - git+https://github.com/verificient/edx-proctoring-proctortrack.git@31c6c9923a51c903ae83760ecbbac191363aa2a2#egg=edx_proctoring_proctortrack
+  - lxml==5.3.0
+  - xmlsec==1.3.14
+  - openai==2.43.0
+  - ol-openedx-course-translations==0.8.0
+  - ol-openedx-auto-select-language==0.1.2
+  - ol-openedx-ai-static-translations==0.1.1
+  - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-csrf-exempt-session-auth#egg=edx-submissions
+- release: master
+  deployment: mitx
+  platform_branch: master
+  theme_repo: https://github.com/mitodl/mitx-theme
+  theme_branch: master
+  packages:
+  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - granian==2.7.9
+  - django-redis==6.0.0
+  - edx-sga==0.29.0
+  - edx-sysadmin==0.4.2
+  - git+https://github.com/raccoongang/xblock-pdf.git@d8948bf3c7127e23be202d1f8600f1ba293ba978#egg=xblock-pdf
+  - invideoquiz-xblock==2.0.0
+  - nodeenv>=1.7.0
+  - ol-openedx-canvas-integration==0.8.1
+  - ol-openedx-course-export==0.2.0
+  - ol-openedx-course-structure-api==0.2.0
+  - ol-openedx-logging==0.3.5
+  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-rapid-response-reports==0.5.1
+  - ol-openedx-sentry==0.3.0
+  - openedx-scorm-xblock==19.0.4
+  - pip==26.1.2
+  - pydantic-settings[yaml]==2.14.2
+  - django-aqueduct==0.9.0
+  - rapid-response-xblock==0.11.0
+  - ol-openedx-chat==0.5.9
+  - ol-openedx-chat-xblock==0.4.6
+  - opentelemetry-api
+  - django-extensions
+  - setuptools==81.0.0
+  overrides:
+  - lxml==5.3.0
+  - xmlsec==1.3.14
+  - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-csrf-exempt-session-auth#egg=edx-submissions
+- release: master
+  deployment: mitx-staging
+  platform_branch: master
+  theme_repo: https://github.com/mitodl/mitx-theme
+  theme_branch: master
+  packages:
+  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - django-redis==6.0.0
+  - granian==2.7.9
+  - edx-sga==0.29.0
+  - edx-sysadmin==0.4.2
+  - git+https://github.com/raccoongang/xblock-pdf.git@d8948bf3c7127e23be202d1f8600f1ba293ba978#egg=xblock-pdf
+  - invideoquiz-xblock==2.0.0
+  - nodeenv>=1.7.0
+  - ol-openedx-canvas-integration==0.8.1
+  - ol-openedx-course-export==0.2.0
+  - ol-openedx-course-structure-api==0.2.0
+  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-logging==0.3.5
+  - ol-openedx-rapid-response-reports==0.5.1
+  - ol-openedx-sentry==0.3.0
+  - openedx-scorm-xblock==19.0.4
+  - pip==26.1.2
+  - pydantic-settings[yaml]==2.14.2
+  - django-aqueduct==0.9.0
+  - rapid-response-xblock==0.11.0
+  - ol-openedx-chat==0.5.9
+  - ol-openedx-chat-xblock==0.4.6
+  - opentelemetry-api
+  - django-extensions
+  - setuptools==81.0.0
+  overrides:
+  - lxml==5.3.0
+  - xmlsec==1.3.14
+  - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-csrf-exempt-session-auth#egg=edx-submissions
+- release: ulmo
+  deployment: mitx
+  platform_repo: https://github.com/mitodl/edx-platform
+  platform_branch: mitx/ulmo
+  theme_repo: https://github.com/mitodl/mitx-theme
+  theme_branch: ulmo
+  packages:
+  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - granian==2.7.9
+  - django-redis==6.0.0
+  - ol-openedx-git-auto-export==0.8.2
+  - edx-sga==0.29.0
+  - edx-sysadmin==0.4.2
+  - git+https://github.com/raccoongang/xblock-pdf.git@d8948bf3c7127e23be202d1f8600f1ba293ba978#egg=xblock-pdf
+  - invideoquiz-xblock==2.0.0
+  - nodeenv>=1.7.0
+  - ol-openedx-canvas-integration==0.8.0
+  - ol-openedx-course-export==0.2.0
+  - ol-openedx-course-structure-api==0.2.0
+  - ol-openedx-logging==0.3.5
+  - ol-openedx-rapid-response-reports==0.4.0
+  - ol-openedx-sentry==0.3.0
+  - openedx-scorm-xblock==19.0.4
+  - pip==26.1.2
+  - pydantic-settings[yaml]==2.14.2
+  - rapid-response-xblock==0.11.0
+  - ol-openedx-chat==0.5.9
+  - ol-openedx-chat-xblock==0.4.6
+  - opentelemetry-api
+  - django-extensions
+  - setuptools==81.0.0
+  overrides:
+  - openedx-forum==0.4.1
+  - lxml==5.3.0
+  - xmlsec==1.3.14
+- release: ulmo
+  deployment: mitx-staging
+  platform_repo: https://github.com/mitodl/edx-platform
+  platform_branch: mitx/ulmo
+  theme_repo: https://github.com/mitodl/mitx-theme
+  theme_branch: ulmo
+  packages:
+  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - granian==2.7.9
+  - django-redis==6.0.0
+  - edx-sga==0.29.0
+  - edx-sysadmin==0.4.2
+  - git+https://github.com/raccoongang/xblock-pdf.git@d8948bf3c7127e23be202d1f8600f1ba293ba978#egg=xblock-pdf
+  - invideoquiz-xblock==2.0.0
+  - nodeenv>=1.7.0
+  - ol-openedx-canvas-integration==0.8.0
+  - ol-openedx-course-export==0.2.0
+  - ol-openedx-course-structure-api==0.2.0
+  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-logging==0.3.5
+  - ol-openedx-rapid-response-reports==0.4.0
+  - ol-openedx-sentry==0.3.0
+  - openedx-scorm-xblock==19.0.4
+  - pip==26.1.2
+  - pydantic-settings[yaml]==2.14.2
+  - rapid-response-xblock==0.11.0
+  - ol-openedx-chat==0.5.9
+  - ol-openedx-chat-xblock==0.4.6
+  - opentelemetry-api
+  - django-extensions
+  - setuptools==81.0.0
+  overrides:
+  - openedx-forum==0.4.1
+  - lxml==5.3.0
+  - xmlsec==1.3.14
+- release: ulmo
+  deployment: xpro
+  platform_branch: release/ulmo
+  theme_repo: https://github.com/mitodl/mitxpro-theme
+  theme_branch: ulmo
+  packages:
+  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - granian==2.7.9
+  - django-redis==6.0.0
+  - ol-openedx-git-auto-export==0.8.2
+  - edx-sysadmin==0.4.2
+  - edx-username-changer==0.5.0
+  - git+https://github.com/mitodl/ubcpi.git@master#egg=ubcpi-xblock
+  - openedx-companion-auth==1.2.0
+  - nodeenv>=1.7.0
+  - ol-openedx-checkout-external==0.2.0
+  - ol-openedx-course-export==0.2.0
+  - ol-openedx-course-structure-api==0.2.0
+  - ol-openedx-logging==0.3.5
+  - ol-openedx-sentry==0.3.0
+  - ol-social-auth==0.2.2
+  - openedx-scorm-xblock==19.0.4
+  - pydantic-settings[yaml]==2.14.2
+  - ol-openedx-chat==0.5.9
+  - ol-openedx-chat-xblock==0.4.6
+  - opentelemetry-api
+  - django-extensions
+  - setuptools==81.0.0
+  overrides:
+  - openedx-forum==0.4.1
+  - lxml==5.3.0
+  - xmlsec==1.3.14
+- release: verawood
+  deployment: mitx
+  platform_repo: https://github.com/mitodl/edx-platform
+  platform_branch: mitx/verawood
+  theme_repo: https://github.com/mitodl/mitx-theme
+  theme_branch: verawood
+  packages:
+  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - granian==2.7.9
+  - django-redis==6.0.0
+  - ol-openedx-git-auto-export==0.8.2
+  - edx-sga==0.29.0
+  - edx-sysadmin==0.4.2
+  - git+https://github.com/raccoongang/xblock-pdf.git@d8948bf3c7127e23be202d1f8600f1ba293ba978#egg=xblock-pdf
+  - invideoquiz-xblock==2.0.0
+  - nodeenv>=1.7.0
+  - ol-openedx-canvas-integration==0.8.1
+  - ol-openedx-course-export==0.2.0
+  - ol-openedx-course-structure-api==0.2.0
+  - ol-openedx-logging==0.3.5
+  - ol-openedx-rapid-response-reports==0.5.1
+  - ol-openedx-sentry==0.3.0
+  - openedx-scorm-xblock==19.0.4
+  - pip==26.1.2
+  - pydantic-settings[yaml]==2.14.2
+  - django-aqueduct==0.9.0
+  - rapid-response-xblock==0.11.0
+  - ol-openedx-chat==0.5.9
+  - ol-openedx-chat-xblock==0.4.6
+  - opentelemetry-api
+  - django-extensions
+  - setuptools==81.0.0
+  overrides:
+  - openedx-forum==0.4.3
+  - lxml==5.3.0
+  - xmlsec==1.3.14
+  - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-csrf-exempt-session-auth#egg=edx-submissions
+- release: verawood
+  deployment: mitx-staging
+  platform_repo: https://github.com/mitodl/edx-platform
+  platform_branch: mitx/verawood
+  theme_repo: https://github.com/mitodl/mitx-theme
+  theme_branch: verawood
+  packages:
+  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - granian==2.7.9
+  - django-redis==6.0.0
+  - edx-sga==0.29.0
+  - edx-sysadmin==0.4.2
+  - git+https://github.com/raccoongang/xblock-pdf.git@d8948bf3c7127e23be202d1f8600f1ba293ba978#egg=xblock-pdf
+  - invideoquiz-xblock==2.0.0
+  - nodeenv>=1.7.0
+  - ol-openedx-canvas-integration==0.8.1
+  - ol-openedx-course-export==0.2.0
+  - ol-openedx-course-structure-api==0.2.0
+  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-logging==0.3.5
+  - ol-openedx-rapid-response-reports==0.5.1
+  - ol-openedx-sentry==0.3.0
+  - openedx-scorm-xblock==19.0.4
+  - pip==26.1.2
+  - pydantic-settings[yaml]==2.14.2
+  - django-aqueduct==0.9.0
+  - rapid-response-xblock==0.11.0
+  - ol-openedx-chat==0.5.9
+  - ol-openedx-chat-xblock==0.4.6
+  - opentelemetry-api
+  - django-extensions
+  - setuptools==81.0.0
+  overrides:
+  - lxml==5.3.0
+  - xmlsec==1.3.14
+  - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-csrf-exempt-session-auth#egg=edx-submissions
+- release: verawood
+  deployment: xpro
+  platform_branch: release/verawood
+  theme_repo: https://github.com/mitodl/mitxpro-theme
+  theme_branch: verawood
+  packages:
+  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - granian==2.7.9
+  - django-redis==6.0.0
+  - ol-openedx-git-auto-export==0.8.2
+  - edx-sysadmin==0.4.2
+  - edx-username-changer==0.5.0
+  - git+https://github.com/mitodl/ubcpi.git@master#egg=ubcpi-xblock
+  - openedx-companion-auth==1.2.0
+  - nodeenv>=1.7.0
+  - ol-openedx-checkout-external==0.2.0
+  - ol-openedx-course-export==0.2.0
+  - ol-openedx-course-structure-api==0.2.0
+  - ol-openedx-logging==0.3.5
+  - ol-openedx-sentry==0.3.0
+  - ol-social-auth==0.2.2
+  - openedx-scorm-xblock==19.0.4
+  - pydantic-settings[yaml]==2.14.2
+  - django-aqueduct==0.9.0
+  - ol-openedx-chat==0.5.9
+  - ol-openedx-chat-xblock==0.4.6
+  - opentelemetry-api
+  - django-extensions
+  - setuptools==81.0.0
+  overrides:
+  - openedx-forum==0.4.3
+  - lxml==5.3.0
+  - xmlsec==1.3.14
+  - git+https://github.com/mitodl/edx-search.git@fix/typesense-url-length-scale#egg=edx-search
