@@ -995,7 +995,6 @@ class AqueductSettings(ProductionSettingsMixin):
     ENABLE_MAX_FAILED_LOGIN_ATTEMPTS: bool = Field(default=True)
     ENABLE_MFE_CONFIG_API: bool = Field(default=False)
     ENABLE_MKTG_EMAIL_OPT_IN: bool = Field(default=False)
-    ENABLE_MKTG_SITE: bool = Field(default=False)
     ENABLE_MOBILE_REST_API: bool = Field(default=False)
     ENABLE_MULTICOURSE: bool = Field(default=False)
     ENABLE_NEW_BULK_EMAIL_EXPERIENCE: bool = Field(default=False)
@@ -1886,24 +1885,6 @@ class AqueductSettings(ProductionSettingsMixin):
     )
     MILESTONES_APP: bool = Field(default=False)
     MKTG_URLS: dict[str, Any] = Field(default_factory=lambda: {})
-    MKTG_URL_LINK_MAP: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "ABOUT": "about",
-            "CONTACT": "contact",
-            "FAQ": "help",
-            "COURSES": "courses",
-            "ROOT": "root",
-            "TOS": "tos",
-            "HONOR": "honor",
-            "TOS_AND_HONOR": "edx-terms-service",
-            "PRIVACY": "privacy",
-            "PRESS": "press",
-            "BLOG": "blog",
-            "DONATE": "donate",
-            "SITEMAP.XML": "sitemap_xml",
-            "WHAT_IS_VERIFIED_CERT": "verified-certificate",
-        }
-    )
     MKTG_URL_OVERRIDES: dict[str, Any] = Field(default_factory=lambda: {})
     MOBILE_APP_USER_AGENT_REGEXES: list[Any] = Field(
         default_factory=lambda: ["edX/org.edx.mobile"]

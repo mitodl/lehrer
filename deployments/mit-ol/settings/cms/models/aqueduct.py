@@ -911,7 +911,6 @@ class AqueductSettings(ProductionSettingsMixin):
     ENABLE_LIBRARY_INDEX: bool = Field(default=False)
     ENABLE_LTI_PII_ACKNOWLEDGEMENT: bool = Field(default=False)
     ENABLE_MAX_FAILED_LOGIN_ATTEMPTS: bool = Field(default=False)
-    ENABLE_MKTG_SITE: bool = Field(default=False)
     ENABLE_MOBILE_REST_API: bool = Field(default=False)
     ENABLE_ORA_ALL_FILE_URLS: bool = Field(default=False)
     ENABLE_ORA_USER_STATE_UPLOAD_DATA: bool = Field(default=False)
@@ -1804,24 +1803,6 @@ class AqueductSettings(ProductionSettingsMixin):
     MIT_LEARN_API_BASE_URL: str = Field(default="")
     MIT_LEARN_SUMMARY_FLASHCARD_URL: str = Field(default="")
     MKTG_URLS: dict[str, Any] = Field(default_factory=lambda: {})
-    MKTG_URL_LINK_MAP: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "ABOUT": "about",
-            "CONTACT": "contact",
-            "FAQ": "help",
-            "COURSES": "courses",
-            "ROOT": "root",
-            "TOS": "tos",
-            "HONOR": "honor",
-            "TOS_AND_HONOR": "edx-terms-service",
-            "PRIVACY": "privacy",
-            "PRESS": "press",
-            "BLOG": "blog",
-            "DONATE": "donate",
-            "SITEMAP.XML": "sitemap_xml",
-            "WHAT_IS_VERIFIED_CERT": "verified-certificate",
-        }
-    )
     MKTG_URL_OVERRIDES: dict[str, Any] = Field(default_factory=lambda: {})
     MODULESTORE: dict[str, Any] = Field(
         default_factory=lambda: {
