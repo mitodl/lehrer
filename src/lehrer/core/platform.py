@@ -30,8 +30,19 @@ def _plugin_import_script(plugin_dists: list[str]) -> str:
     """
     return "\n".join(
         [
-            "import importlib, sys",
+            "import importlib, os, sys",
             "import importlib.metadata as im",
+            # Initialize Django before importing plugins.  Many Open edX plugins
+            # and XBlocks touch settings or declare models at import time, so a
+            # bare import without an app registry raises AppRegistryNotReady /
+            # ImproperlyConfigured — a false positive unrelated to compatibility.
+            # Guarded: if setup can't run here, fall back to bare imports.
+            "try:",
+            "    import django",
+            "    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'lms.envs.test')",
+            "    django.setup()",
+            "except Exception as exc:",  # noqa: E501
+            "    sys.stderr.write(f'django.setup() skipped: {exc!r}\\n')",
             f"targets = {plugin_dists!r}",
             "def _norm(name):",
             "    import re",
@@ -42,7 +53,9 @@ def _plugin_import_script(plugin_dists: list[str]) -> str:
             "        dist_to_modules.setdefault(_norm(d), []).append(mod)",
             "installed = set()",
             "for dist in im.distributions():",
-            "    name = dist.metadata['Name']",
+            # Distribution.name is the standard accessor (Python >= 3.10); it
+            # avoids re-parsing the metadata file that dist.metadata['Name'] does.
+            "    name = dist.name",
             "    if name:",
             "        installed.add(_norm(name))",
             "failures = []",
@@ -1415,21 +1428,23 @@ class OpenedxPlatform:
             extra_npm_packages=extra_npm_packages,
         )
 
-        # Plugin distributions to smoke-import.  Prefer the manifest cell (the
-        # source of truth); fall back to parsing the materialized .txt when
-        # called with bare --pip-package-lists and no manifest.
-        if cell is not None:
-            plugin_dists = plugin_distributions([*cell.packages, *cell.overrides])
-        else:
-            list_txt = await pip_package_lists.file(
-                f"{release_name}/{deployment_name}.txt"
-            ).contents()
-            override_txt = await pip_package_overrides.file(
-                f"{release_name}/{deployment_name}.txt"
-            ).contents()
-            plugin_dists = plugin_distributions(
-                [*list_txt.splitlines(), *override_txt.splitlines()]
-            )
+        # Derive the plugin distributions to smoke-import from the SAME
+        # requirement files install_deps installs from — the effective
+        # directories resolved above (materialized from the manifest cell, or
+        # the caller's explicit --pip-package-lists when those were passed and
+        # win over the manifest).  Reading the cell directly would diverge from
+        # what was installed whenever both a manifest and explicit dirs are
+        # supplied, reporting manifest-only plugins as missing and skipping
+        # newly installed ones.
+        list_txt = await pip_package_lists.file(
+            f"{release_name}/{deployment_name}.txt"
+        ).contents()
+        override_txt = await pip_package_overrides.file(
+            f"{release_name}/{deployment_name}.txt"
+        ).contents()
+        plugin_dists = plugin_distributions(
+            [*list_txt.splitlines(), *override_txt.splitlines()]
+        )
 
         import_script = _plugin_import_script(plugin_dists)
         return await (

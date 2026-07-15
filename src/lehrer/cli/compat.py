@@ -46,25 +46,42 @@ _MANIFEST_NAMES = ("build_manifest.yaml", "build_manifest.yml")
 _LIST_DIRS = ("pip_package_lists", "pip_package_overrides")
 
 
-def _manifest_rel_path(group: str) -> str:
-    return f"{_DEPLOYMENTS}/{group}/build_manifest.yaml"
-
-
 @cache
+def _manifest_file(repo_root: Path, group: str) -> Path | None:
+    """Return the group's existing ``build_manifest.{yaml,yml}``, or ``None``.
+
+    Both extensions in ``_MANIFEST_NAMES`` are honoured so an operator on
+    ``.yml`` is not silently ignored.
+    """
+    for name in _MANIFEST_NAMES:
+        path = repo_root / _DEPLOYMENTS / group / name
+        if path.exists():
+            return path
+    return None
+
+
+def _manifest_rel_path(repo_root: Path, group: str) -> str:
+    """POSIX repo-relative path of the group's manifest (``.yaml`` if absent)."""
+    path = _manifest_file(repo_root, group)
+    if path is None:
+        return f"{_DEPLOYMENTS}/{group}/build_manifest.yaml"
+    return path.relative_to(repo_root).as_posix()
+
+
 def _load_group_manifest(repo_root: Path, group: str) -> BuildManifest | None:
-    """Load ``deployments/<group>/build_manifest.yaml`` or ``None`` if absent."""
-    path = repo_root / _DEPLOYMENTS / group / "build_manifest.yaml"
-    if not path.exists():
+    """Load the group's ``build_manifest.{yaml,yml}``, or ``None`` if absent."""
+    path = _manifest_file(repo_root, group)
+    if path is None:
         return None
     return load_manifest(path)
 
 
-def _cell(group: str, release: str, deployment: str) -> dict[str, str]:
+def _cell(repo_root: Path, group: str, release: str, deployment: str) -> dict[str, str]:
     return {
         "group": group,
         "release": release,
         "deployment": deployment,
-        "manifest": _manifest_rel_path(group),
+        "manifest": _manifest_rel_path(repo_root, group),
     }
 
 
@@ -72,7 +89,7 @@ def _manifest_cells(repo_root: Path, group: str) -> list[dict[str, str]]:
     manifest = _load_group_manifest(repo_root, group)
     if manifest is None:
         return []
-    return [_cell(group, c.release, c.deployment) for c in manifest.cells]
+    return [_cell(repo_root, group, c.release, c.deployment) for c in manifest.cells]
 
 
 def _cell_exists(repo_root: Path, group: str, release: str, deployment: str) -> bool:
@@ -105,10 +122,10 @@ def _cells_for_path(path: str, repo_root: Path) -> list[dict[str, str]]:
         release = parts[3]
         deployment = PurePosixPath(parts[4]).stem
         if _cell_exists(repo_root, group, release, deployment):
-            return [_cell(group, release, deployment)]
+            return [_cell(repo_root, group, release, deployment)]
         sys.stderr.write(
             f"compat: skipping {path} — no ({release}, {deployment}) cell in "
-            f"{_manifest_rel_path(group)}\n"
+            f"{_manifest_rel_path(repo_root, group)}\n"
         )
     return []
 
@@ -129,11 +146,12 @@ def affected_cells(changed_paths: list[str], repo_root: Path) -> list[dict[str, 
 
 
 def all_cells(repo_root: Path) -> list[dict[str, str]]:
-    """Every cell across all ``deployments/*/build_manifest.yaml`` manifests."""
+    """Every cell across all ``deployments/*/build_manifest.{yaml,yml}`` manifests."""
+    manifest_paths: list[Path] = []
+    for name in _MANIFEST_NAMES:
+        manifest_paths.extend(repo_root.glob(f"{_DEPLOYMENTS}/*/{name}"))
     cells: list[dict[str, str]] = []
-    for manifest_path in sorted(
-        repo_root.glob(f"{_DEPLOYMENTS}/*/build_manifest.yaml")
-    ):
+    for manifest_path in sorted(manifest_paths):
         group = manifest_path.parent.name
         cells.extend(_manifest_cells(repo_root, group))
     return _dedupe(cells)
@@ -146,7 +164,7 @@ def matrix(
         cyclopts.Parameter(
             help=(
                 "Changed file paths (repo-relative). If omitted and --all is "
-                "not set, paths are read from stdin, one per line."
+                "not set, paths are read from a non-tty stdin, one per line."
             )
         ),
     ] = None,
@@ -170,6 +188,14 @@ def matrix(
     if all_cells_flag:
         cells = all_cells(repo_root)
     else:
-        paths = changed_paths if changed_paths else sys.stdin.read().splitlines()
+        if changed_paths:
+            paths = changed_paths
+        elif not sys.stdin.isatty():
+            # No args and piped input: read paths from stdin. Guard on isatty so
+            # an interactive invocation returns an empty matrix instead of
+            # blocking forever on a read that will never receive EOF.
+            paths = sys.stdin.read().splitlines()
+        else:
+            paths = []
         cells = affected_cells(paths, repo_root)
     print(json.dumps({"any": bool(cells), "cells": cells}))  # noqa: T201

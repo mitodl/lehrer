@@ -4,18 +4,22 @@ name: Plugin Compatibility Matrix
 # Verify that each (release × deployment) build cell's pinned requirement set
 # still installs and imports against its matching edx-platform branch.
 #
-#   * On a PR that touches requirements, run only the affected cells.
+#   * On a PR, the enumerate job computes the affected cells from the diff and
+#     runs only those; a PR touching no requirements yields an empty matrix and
+#     the check job is skipped. The workflow deliberately has NO top-level
+#     `paths:` filter: a workflow skipped by a path filter never reports its
+#     status, which would leave an unrelated PR pending on a required check.
+#     Running enumerate on every PR (it's cheap) and gating only the matrix job
+#     keeps the check reportable on every PR.
 #   * On the weekly schedule (and manual dispatch with `all`), run every cell,
 #     to catch drift in cells no recent PR touched.
 #
-# Renovate bumps pinned versions in both the pip_package_lists/*.txt files and
-# inside build_manifest.yaml, so all three path families are watched.
+# build_manifest.yaml is the source of truth (see plans/06); the legacy
+# pip_package_lists/*.txt trees are kept transiently and a fast-checks
+# faithfulness test enforces manifest == .txt, so testing the manifest pins is
+# equivalent to testing the changed requirement lines.
 on:
   pull_request:
-    paths:
-    - deployments/*/pip_package_lists/**
-    - deployments/*/pip_package_overrides/**
-    - deployments/*/build_manifest.yaml
   schedule:
     # Mondays 06:00 UTC — full matrix.
   - cron: "0 6 * * 1"
@@ -29,6 +33,12 @@ on:
 concurrency:
   group: plugin-compat-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+# Least privilege: both jobs only read the repo (checkout + diff); the Dagger
+# check needs no token scopes. Resolves the CodeQL "workflow does not limit the
+# permissions of the GITHUB_TOKEN" finding.
+permissions:
+  contents: read
 
 jobs:
   enumerate:
@@ -50,12 +60,22 @@ jobs:
         EVENT_NAME: ${{ github.event_name }}
         RUN_ALL: ${{ inputs.all_cells }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       run: |
         set -euo pipefail
         if [ "$EVENT_NAME" = "schedule" ] || [ "$RUN_ALL" = "true" ]; then
           json="$(uv run lehrer compat matrix --all)"
         else
-          json="$(git diff --name-only "$BASE_SHA" HEAD \
+          # PRs carry a base sha; a manual (workflow_dispatch) run does not, so
+          # fall back to the default branch. Without this, `git diff "" HEAD`
+          # exits fatally under `set -e` and the manual run never enumerates.
+          if [ -n "$BASE_SHA" ]; then
+            base="$BASE_SHA"
+          else
+            git fetch --quiet --depth=1 origin "$DEFAULT_BRANCH"
+            base="origin/$DEFAULT_BRANCH"
+          fi
+          json="$(git diff --name-only "$base" HEAD \
             | uv run lehrer compat matrix)"
         fi
         echo "any=$(echo "$json" | jq -r '.any')" >> "$GITHUB_OUTPUT"

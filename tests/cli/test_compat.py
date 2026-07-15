@@ -31,8 +31,8 @@ def repo(tmp_path: Path) -> Path:
     group_dir = tmp_path / "deployments" / "mit-ol"
     group_dir.mkdir(parents=True)
     (group_dir / "build_manifest.yaml").write_text(MANIFEST)
-    # Clear the module-level manifest cache so each tmp repo is read fresh.
-    compat._load_group_manifest.cache_clear()
+    # Clear the module-level manifest-file cache so each tmp repo is read fresh.
+    compat._manifest_file.cache_clear()
     return tmp_path
 
 
@@ -106,3 +106,19 @@ def test_all_cells(repo: Path) -> None:
         ("mit-ol", "master", "mitx"),
         ("mit-ol", "ulmo", "xpro"),
     }
+
+
+def test_yml_extension_manifest_is_honored(tmp_path: Path) -> None:
+    group_dir = tmp_path / "deployments" / "acme"
+    group_dir.mkdir(parents=True)
+    (group_dir / "build_manifest.yml").write_text(MANIFEST)
+    compat._manifest_file.cache_clear()
+
+    # Discovered by both the full-matrix glob and per-path attribution.
+    all_keys = _keys(compat.all_cells(tmp_path))
+    assert ("acme", "master", "mitxonline") in all_keys
+
+    affected = compat.affected_cells(["deployments/acme/build_manifest.yml"], tmp_path)
+    assert _keys(affected) == all_keys
+    # The emitted manifest path points at the real .yml file, not a .yaml guess.
+    assert affected[0]["manifest"] == "deployments/acme/build_manifest.yml"
