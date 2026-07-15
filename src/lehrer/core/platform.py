@@ -1344,6 +1344,15 @@ class OpenedxPlatform:
 
         Any failing check exits non-zero and fails the calling ``dagger call``.
 
+        Scope (by design): this is the fast, Python-only tier of the
+        verification pyramid — it installs Python deps only
+        (``install_node=False``) and does not compile frontend assets. Plugin
+        JS/CSS build breakage is a webpack/sass concern that only surfaces in a
+        full platform asset build, which is exercised by the scheduled canary
+        running :meth:`build_platform` (whose ``build_static_assets`` step
+        compiles plugin-contributed webpack config). Keeping this tier
+        Python-only is what lets it gate every PR cheaply.
+
         Args:
             deployment_name: Deployment name.
             release_name: edx-platform release / branch name (e.g. master).
