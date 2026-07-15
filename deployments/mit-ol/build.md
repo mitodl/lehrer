@@ -180,7 +180,61 @@ cp generated/cms/models/aqueduct.py deployments/mit-ol/settings/cms/models/aqued
 
 ---
 
-## 9. Publishing images
+## 9. Running test suites inside built images
+
+`test` targets run each service's own upstream test suite inside a built image,
+under the deployment's configuration — so a regression particular to a
+`(deployment × release × plugin set)` surfaces here rather than in production.
+They are the execution engine for the plugin-compat matrix's deep tier and the
+scheduled canary.
+
+### edx-platform (`platform test`)
+
+Defaults to a curated smoke subset (courseware, student, third_party_auth for
+LMS) run under `lms.envs.lehrer_test` — derived from `lms.envs.test` with the
+deployment's `FEATURES` overlaid; the deployment's plugins load automatically
+via the Open edX plugin framework. Only a MongoDB service (the modulestore) is
+provisioned — the stock test settings use sqlite + a dummy cache + the mock
+search engine.
+
+```bash
+# Smoke subset (LMS) for a cell:
+lehrer build test --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings
+
+# Studio (CMS):
+lehrer build test --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings \
+  --service cms
+
+# Target specific apps / paths / node-ids (e.g. a plugin's integration tests):
+lehrer build test --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings \
+  --test-paths lms/djangoapps/courseware/tests/test_views.py
+
+# Whole service tree (hours — canary tier), or add --markers for a -m expr:
+lehrer build test --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings --full
+```
+
+### codejail (`codejail test`) and notes (`notes test`)
+
+Small suites — run wholesale in the build container.
+
+```bash
+lehrer build codejail-test \
+  --release-name master \
+  --codejail-config ./deployments/mit-ol/codejail_config
+
+lehrer build notes-test \
+  --release-name master \
+  --notes-repo https://github.com/openedx/edx-notes-api \
+  --notes-config ./deployments/mit-ol/notes_config
+```
+
+---
+
+## 10. Publishing images
 
 Pipe any `build-platform` or `codejail build` result into `publish-platform`:
 

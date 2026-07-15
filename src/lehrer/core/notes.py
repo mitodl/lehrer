@@ -41,6 +41,28 @@ class OpenedxNotes:
         Returns:
             Built edx-notes container
         """
+        return await self._build(
+            release_name=release_name,
+            python_version=python_version,
+            notes_code=notes_code,
+            notes_repo=notes_repo,
+            notes_config=notes_config,
+        )
+
+    async def _build(
+        self,
+        release_name: str = "master",
+        python_version: str = "3.11",
+        notes_code: dagger.Directory | None = None,
+        notes_repo: str | None = None,
+        notes_config: dagger.Directory | None = None,
+    ) -> dagger.Container:
+        """Assemble the edx-notes-api container (shared by ``build`` and ``test``).
+
+        Kept undecorated so other methods can ``await`` it: the ``@function``
+        decorator's type erases the coroutine return, making a decorated
+        ``build`` un-awaitable from within the module.
+        """
         # Default to notes_config directory if not provided
         if notes_config is None:
             raise ValueError(
@@ -142,3 +164,72 @@ class OpenedxNotes:
         )
 
         return container
+
+    @function
+    async def test(
+        self,
+        release_name: str = "master",
+        python_version: str = "3.11",
+        notes_code: dagger.Directory | None = None,
+        notes_repo: str | None = None,
+        notes_config: dagger.Directory | None = None,
+        test_paths: list[str] | None = None,
+        settings_module: str = "notesserver.settings.test",
+        elasticsearch_image: str = "docker.io/elasticsearch:7.17.9",
+    ) -> str:
+        """Run the edx-notes-api test suite inside the built image.
+
+        The notes suite is small and runs wholesale in the build container.
+        edx-notes-api's test settings use sqlite for the database but require an
+        Elasticsearch backend (``ELASTICSEARCH_URL``), so a single-node ES
+        service is provisioned and wired in.
+
+        Args:
+            release_name: Git branch/tag (e.g., master, open-release/sumac.master).
+            python_version: Python version (default: 3.11).
+            notes_code: Local edx-notes-api source (optional).
+            notes_repo: Git repository URL (required if notes_code not provided).
+            notes_config: Directory containing env_config.py.
+            test_paths: pytest target paths (default: auto-discover from the repo
+                root at ``/app/edx-notes-api``).
+            settings_module: Django settings module for the run
+                (default: ``notesserver.settings.test``).
+            elasticsearch_image: Elasticsearch image for the search service.
+
+        Returns:
+            The pytest stdout (a failing suite exits non-zero and fails the call).
+        """
+        container = await self._build(
+            release_name=release_name,
+            python_version=python_version,
+            notes_code=notes_code,
+            notes_repo=notes_repo,
+            notes_config=notes_config,
+        )
+        elasticsearch = (
+            dag.container()
+            .from_(elasticsearch_image)
+            .with_env_variable("discovery.type", "single-node")
+            .with_env_variable("xpack.security.enabled", "false")
+            .with_env_variable("ES_JAVA_OPTS", "-Xms512m -Xmx512m")
+            .with_exposed_port(9200)
+            .as_service(use_entrypoint=True)
+        )
+        return await (
+            container.with_user("root")
+            .with_workdir("/app/edx-notes-api")
+            .with_exec(
+                [
+                    "sh",
+                    "-c",
+                    "if [ -f requirements/test.txt ]; then "
+                    "pip install --no-cache-dir -r requirements/test.txt; "
+                    "else pip install --no-cache-dir pytest pytest-django; fi",
+                ]
+            )
+            .with_service_binding("elasticsearch", elasticsearch)
+            .with_env_variable("ELASTICSEARCH_URL", "elasticsearch:9200")
+            .with_env_variable("DJANGO_SETTINGS_MODULE", settings_module)
+            .with_exec(["python", "-m", "pytest", *(test_paths or [])])
+            .stdout()
+        )
