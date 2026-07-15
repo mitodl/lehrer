@@ -110,6 +110,39 @@ def platform(
 
 
 @app.command
+def check(
+    cell: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            help=(
+                "<group>/<release>/<deployment> (e.g. mit-ol/master/mitxonline). "
+                "Resolves deployments/<group>/build_manifest.yaml and forwards "
+                "--build-manifest/--release-name/--deployment-name."
+            )
+        ),
+    ] = None,
+    *dagger_args: DaggerArgs,
+) -> None:
+    """Verify a cell's requirements install + import (``platform check-deployment``)."""
+    if cell is None:
+        _dagger("call", "platform", "check-deployment", *dagger_args)
+        return
+    group, release, deployment = _parse_cell(cell)
+    _dagger(
+        "call",
+        "platform",
+        "check-deployment",
+        "--build-manifest",
+        str(_manifest_path(group)),
+        "--release-name",
+        release,
+        "--deployment-name",
+        deployment,
+        *dagger_args,
+    )
+
+
+@app.command
 def cells(
     manifest: Annotated[
         str | None, cyclopts.Parameter(help="Path to a build_manifest.yaml.")
