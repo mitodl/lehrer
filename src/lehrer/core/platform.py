@@ -324,6 +324,7 @@ class OpenedxPlatform:
         node_version: str = "20.18.0",
         packages_to_remove: list[str] | None = None,
         extra_npm_packages: list[str] | None = None,
+        install_node: bool = True,
     ) -> dagger.Container:
         """Install Python and Node.js dependencies using uv
 
@@ -340,6 +341,11 @@ class OpenedxPlatform:
             extra_npm_packages: Additional npm packages to install after
                 ``npm clean-install`` (e.g., private packages from git).
                 Default: empty list — no extra packages.
+            install_node: Install Node.js (nodeenv) and run ``npm clean-install``
+                for edx-platform's frontend assets. Default ``True``. Set
+                ``False`` for Python-only consumers (e.g. plugin import checks,
+                settings regeneration) that never build webpack assets — the
+                Python environment above is complete without it.
 
         Returns:
             Container with all dependencies installed
@@ -431,7 +437,10 @@ class OpenedxPlatform:
             ["uv", "pip", "install", "setuptools<82", "wheel", "pip"]
         )
 
-        # Install Node.js using nodeenv
+        # Install Node.js using nodeenv (skipped for Python-only consumers).
+        if not install_node:
+            return container
+
         container = (
             container.with_workdir("/openedx/edx-platform")
             .with_env_variable("NPM_REGISTRY", "https://registry.npmjs.org/")
@@ -1426,6 +1435,10 @@ class OpenedxPlatform:
             node_version=node_version,
             packages_to_remove=packages_to_remove,
             extra_npm_packages=extra_npm_packages,
+            # Plugin import compat needs only the Python env; Node/webpack are
+            # irrelevant here and installing them (nodeenv download) is a
+            # needless failure surface for a check that never builds assets.
+            install_node=False,
         )
 
         # Derive the plugin distributions to smoke-import from the SAME
