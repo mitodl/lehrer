@@ -245,6 +245,10 @@ class OpenedxCodejail:
             python_version=python_version,
             codejail_config=codejail_config,
         )
+        # Install as root (system site-packages), then drop back to the
+        # non-root `debian` user the service actually runs as, so the suite
+        # runs under the same permissions as production rather than masking
+        # permission issues by running as root.
         return await (
             container.with_user("root")
             .with_workdir("/codejail")
@@ -257,6 +261,14 @@ class OpenedxCodejail:
                     "else pip install --no-cache-dir pytest; fi",
                 ]
             )
-            .with_exec(["python", "-m", "pytest", *(test_paths or [])])
+            .with_user("debian")
+            .with_exec(
+                [
+                    "python",
+                    "-m",
+                    "pytest",
+                    *(test_paths if test_paths is not None else []),
+                ]
+            )
             .stdout()
         )

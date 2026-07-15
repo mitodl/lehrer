@@ -113,9 +113,13 @@ _SMOKE_PATHS: dict[str, list[str]] = {
         "cms/djangoapps/contentstore/tests",
     ],
 }
+# Mirror the roots upstream edx-platform's own full runs collect. `common`
+# covers common/djangoapps + common/lib; `xmodule` is a sibling top-level tree
+# (core modulestore/XBlock tests) that neither `common` nor the service root
+# picks up, so name it explicitly or the canary silently skips it.
 _FULL_PATHS: dict[str, list[str]] = {
-    "lms": ["lms", "openedx", "common"],
-    "cms": ["cms", "openedx", "common"],
+    "lms": ["lms", "openedx", "common", "xmodule"],
+    "cms": ["cms", "openedx", "common", "xmodule"],
 }
 
 
@@ -130,16 +134,28 @@ def _test_paths(service: str, full: bool) -> list[str]:  # noqa: FBT001
 def _derive_test_settings(service: str) -> str:
     """Source of the derived deployment test settings module for ``service``.
 
-    Layers the deployment's configuration onto edx-platform's own test
-    settings.  ``{service}.envs.test`` stays authoritative for the test harness
-    (sqlite DBs, dummy cache, mock search engine, in-memory email) — the pieces
-    that make the suite runnable without a production backing stack — while the
-    deployment's plugins register automatically through the Open edX plugin
-    framework the moment their distributions are pip-installed, so
-    ``INSTALLED_APPS`` already reflects the deployment's plugin set.  This
-    module additionally overlays the deployment's ``FEATURES`` so flag-gated
-    code paths (contributed by those plugins) are exercised under test rather
-    than left at the upstream defaults.
+    Starts from edx-platform's own test settings and layers the deployment's
+    configuration on top.  ``{service}.envs.test`` stays authoritative for the
+    test harness (sqlite DBs, dummy cache, mock search engine, in-memory email)
+    — the pieces that make the suite runnable without a production backing
+    stack.
+
+    The **primary** compatibility signal is that the deployment's plugins are
+    installed and register automatically through the Open edX plugin framework
+    the moment their distributions are pip-installed, so ``INSTALLED_APPS``
+    already reflects the deployment's plugin set here.
+
+    The **FEATURES overlay is conditional**: the deployment's real flag values
+    live in ``OL_SETTINGS_DIR`` YAML config-sources (K8s ConfigMaps at runtime),
+    not in the generated model — whose ``FEATURES`` field default is ``None``.
+    So the overlay contributes flags only when the caller supplies the cell's
+    config-sources directory (``platform test --config-sources ...``), which
+    mounts it at ``/openedx/config-sources`` before this module imports
+    ``AqueductSettings``.  Without it the run uses the upstream test FEATURES,
+    still against the deployment's plugin set.  The merge is done in place
+    (item assignment) rather than by rebinding ``FEATURES``, so a modern
+    edx-platform ``FeaturesProxy`` — through which ``@override_settings`` and
+    top-level flag reads flow — is preserved, not replaced by a plain dict.
     """
     if service not in _SMOKE_PATHS:
         msg = f"service must be one of {sorted(_SMOKE_PATHS)}, got {service!r}"
@@ -155,7 +171,10 @@ def _derive_test_settings(service: str) -> str:
             "# Overlay the deployment's feature flags on top of the upstream test",
             "# harness.  Guarded: a deployment without generated models (or one",
             "# whose model cannot instantiate standalone) still runs the suite",
-            "# against the plugin set, just without the FEATURES overlay.",
+            "# against the plugin set, just without the FEATURES overlay.  The",
+            "# flag values are only non-empty when the cell's config-sources were",
+            "# mounted at /openedx/config-sources (see `platform test",
+            "# --config-sources`); the generated FEATURES default is None.",
             "try:",
             f"    from {service}.envs.models.aqueduct import AqueductSettings",
             "    _deployment = AqueductSettings()",
@@ -169,7 +188,11 @@ def _derive_test_settings(service: str) -> str:
             "if _deployment is not None:",
             "    _features = getattr(_deployment, 'FEATURES', None)",
             "    if _features:",
-            "        FEATURES = {**FEATURES, **_features}  # noqa: F405",
+            "        # Merge in place so a FeaturesProxy is preserved, not",
+            "        # replaced by a plain dict (which would drop @override_settings",
+            "        # and top-level flag reflection).",
+            "        for _flag, _value in dict(_features).items():",
+            "            FEATURES[_flag] = _value  # noqa: F405",
             "",
         ]
     )
@@ -1574,24 +1597,28 @@ class OpenedxPlatform:
         settings_module: str | None = None,
         install_node: bool = False,  # noqa: FBT001, FBT002
         mongo_image: str = "mongo:7",
+        config_sources: dagger.Directory | None = None,
     ) -> str:
         """Run the edx-platform test suite for a build cell inside its image.
 
         This is the execution engine for the verification pyramid's deep tier:
         it installs the *same* dependency set a production build would (via
         :meth:`install_deps`, not a parallel resolver), installs edx-platform's
-        own test requirements, and runs pytest under settings derived from the
-        deployment's ``AqueductSettings`` — so a regression particular to a
+        own test requirements, and runs pytest against the deployment's
+        installed plugin set — so a regression particular to a
         ``(deployment × release × plugin set)`` surfaces here rather than in
         production.
 
         Settings: the run uses ``{service}.envs.lehrer_test``, generated by
         :func:`_derive_test_settings`.  It starts from ``{service}.envs.test``
         (authoritative for the test harness — sqlite DBs, dummy cache, mock
-        search engine) and overlays the deployment's ``FEATURES``.  The
-        deployment's plugins register automatically via the Open edX plugin
-        framework once installed, so ``INSTALLED_APPS`` already reflects the
-        deployment's plugin set.  Pass ``--settings-module`` to override.
+        search engine).  The deployment's plugins register automatically via the
+        Open edX plugin framework once installed, so ``INSTALLED_APPS`` already
+        reflects the deployment's plugin set — that is the primary compatibility
+        signal.  The deployment's ``FEATURES`` are overlaid *only* when
+        ``--config-sources`` is supplied (see below); otherwise the generated
+        model's ``FEATURES`` default is ``None`` and the run keeps the upstream
+        test flags.  Pass ``--settings-module`` to override the module entirely.
 
         Backing services: edx-platform's stock test settings need only MongoDB
         (the modulestore) — databases are sqlite, the cache is a dummy backend,
@@ -1634,6 +1661,15 @@ class OpenedxPlatform:
                 smoke suites are Python-only; enable for tests that need built
                 frontend assets).
             mongo_image: MongoDB image for the modulestore service container.
+            config_sources: Optional directory of the cell's rendered
+                ``OL_SETTINGS_DIR`` YAML config-sources (the same complex-type
+                values K8s ConfigMaps supply at runtime — ``FEATURES``, etc.).
+                When given, it is mounted at ``/openedx/config-sources`` before
+                the derived settings import ``AqueductSettings``, so the run
+                exercises the deployment's *actual* feature flags rather than
+                the upstream test defaults.  Omitted in a bare lehrer-repo CI
+                run (those values live in ol-infrastructure, not here), where
+                the plugin set alone is the compatibility signal.
 
         Returns:
             The pytest stdout (only reached when the suite passes; a failing
@@ -1746,6 +1782,15 @@ class OpenedxPlatform:
             )
         )
 
+        # Mount the cell's rendered config-sources at the path base.py reads
+        # (OL_SETTINGS_DIR, default /openedx/config-sources) so the FEATURES
+        # overlay lifts the deployment's real flag values, not the generated
+        # None default.  Without it the run keeps the upstream test flags.
+        if config_sources is not None:
+            container = container.with_directory(
+                "/openedx/config-sources", config_sources
+            )
+
         # MongoDB is the one backing service the stock test settings require.
         mongo = (
             dag.container()
@@ -1755,7 +1800,10 @@ class OpenedxPlatform:
         )
 
         ds = settings_module or f"{service}.envs.lehrer_test"
-        paths = test_paths if test_paths else _test_paths(service, full)
+        # `is not None`, not truthiness: an explicitly-passed empty list is an
+        # intentional override (discover from the repo root), distinct from the
+        # unset default that falls back to the curated smoke/full paths.
+        paths = test_paths if test_paths is not None else _test_paths(service, full)
         # --no-migrations (pytest-django): create the schema straight from the
         # models instead of running every historical migration — the default
         # for edx-platform's own runs and the difference between minutes and

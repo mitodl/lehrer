@@ -35,7 +35,10 @@ def test_derive_test_settings_is_valid_python(service: str) -> None:
     assert f"from {service}.envs.test import *" in source
     # Overlays the deployment feature flags from the generated model.
     assert f"from {service}.envs.models.aqueduct import AqueductSettings" in source
-    assert "FEATURES = {**FEATURES, **_features}" in source
+    # Merge in place (item assignment), not a rebind, so a FeaturesProxy on
+    # modern edx-platform is preserved rather than replaced by a plain dict.
+    assert "FEATURES[_flag] = _value" in source
+    assert "FEATURES = {" not in source
 
 
 def test_derive_test_settings_rejects_unknown_service() -> None:

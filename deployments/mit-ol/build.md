@@ -191,11 +191,17 @@ scheduled canary.
 ### edx-platform (`platform test`)
 
 Defaults to a curated smoke subset (courseware, student, third_party_auth for
-LMS) run under `lms.envs.lehrer_test` — derived from `lms.envs.test` with the
-deployment's `FEATURES` overlaid; the deployment's plugins load automatically
-via the Open edX plugin framework. Only a MongoDB service (the modulestore) is
-provisioned — the stock test settings use sqlite + a dummy cache + the mock
-search engine.
+LMS) run under `lms.envs.lehrer_test` — derived from `lms.envs.test`. The
+deployment's plugins load automatically via the Open edX plugin framework, so
+the run exercises the deployment's plugin set (the primary compatibility
+signal). Only a MongoDB service (the modulestore) is provisioned — the stock
+test settings use sqlite + a dummy cache + the mock search engine.
+
+The deployment's actual `FEATURES` flags are overlaid **only** when you pass
+`--config-sources` pointing at the cell's rendered `OL_SETTINGS_DIR` YAMLs
+(the complex-type values K8s ConfigMaps supply at runtime — these live in
+ol-infrastructure, not this repo). Without it, the run keeps the upstream test
+flags. `--full` uses the same roots upstream collects (including `xmodule`).
 
 ```bash
 # Smoke subset (LMS) for a cell:

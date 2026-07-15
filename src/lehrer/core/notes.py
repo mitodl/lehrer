@@ -215,6 +215,10 @@ class OpenedxNotes:
             .with_exposed_port(9200)
             .as_service(use_entrypoint=True)
         )
+        # Install as root (system site-packages), then drop back to the
+        # non-root `app` user the service actually runs as, so the suite runs
+        # under the same permissions as production rather than masking
+        # permission issues by running as root.
         return await (
             container.with_user("root")
             .with_workdir("/app/edx-notes-api")
@@ -227,9 +231,17 @@ class OpenedxNotes:
                     "else pip install --no-cache-dir pytest pytest-django; fi",
                 ]
             )
+            .with_user("app")
             .with_service_binding("elasticsearch", elasticsearch)
             .with_env_variable("ELASTICSEARCH_URL", "elasticsearch:9200")
             .with_env_variable("DJANGO_SETTINGS_MODULE", settings_module)
-            .with_exec(["python", "-m", "pytest", *(test_paths or [])])
+            .with_exec(
+                [
+                    "python",
+                    "-m",
+                    "pytest",
+                    *(test_paths if test_paths is not None else []),
+                ]
+            )
             .stdout()
         )
