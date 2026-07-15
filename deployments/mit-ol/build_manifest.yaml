@@ -38,7 +38,7 @@ cells:
   - ol-openedx-course-outline-api==0.1.0
   - ol-openedx-course-structure-api==0.2.0
   - ol-openedx-logging==0.3.5
-  - ol-openedx-sentry==0.3.0
+  - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
   - ol-social-auth==0.2.2
   - pydantic-settings[yaml]==2.14.2
@@ -87,7 +87,7 @@ cells:
   - ol-openedx-logging==0.3.5
   - ol-openedx-git-auto-export==0.8.2
   - ol-openedx-rapid-response-reports==0.5.1
-  - ol-openedx-sentry==0.3.0
+  - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
   - pip==26.1.2
   - pydantic-settings[yaml]==2.14.2
@@ -122,7 +122,7 @@ cells:
   - ol-openedx-git-auto-export==0.8.2
   - ol-openedx-logging==0.3.5
   - ol-openedx-rapid-response-reports==0.5.1
-  - ol-openedx-sentry==0.3.0
+  - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
   - pip==26.1.2
   - pydantic-settings[yaml]==2.14.2
@@ -158,7 +158,7 @@ cells:
   - ol-openedx-course-structure-api==0.2.0
   - ol-openedx-logging==0.3.5
   - ol-openedx-rapid-response-reports==0.4.0
-  - ol-openedx-sentry==0.3.0
+  - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
   - pip==26.1.2
   - pydantic-settings[yaml]==2.14.2
@@ -193,7 +193,7 @@ cells:
   - ol-openedx-git-auto-export==0.8.2
   - ol-openedx-logging==0.3.5
   - ol-openedx-rapid-response-reports==0.4.0
-  - ol-openedx-sentry==0.3.0
+  - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
   - pip==26.1.2
   - pydantic-settings[yaml]==2.14.2
@@ -226,7 +226,7 @@ cells:
   - ol-openedx-course-export==0.2.0
   - ol-openedx-course-structure-api==0.2.0
   - ol-openedx-logging==0.3.5
-  - ol-openedx-sentry==0.3.0
+  - ol-openedx-sentry==0.4.0
   - ol-social-auth==0.2.2
   - openedx-scorm-xblock==19.0.4
   - pydantic-settings[yaml]==2.14.2
@@ -260,7 +260,7 @@ cells:
   - ol-openedx-course-structure-api==0.2.0
   - ol-openedx-logging==0.3.5
   - ol-openedx-rapid-response-reports==0.5.1
-  - ol-openedx-sentry==0.3.0
+  - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
   - pip==26.1.2
   - pydantic-settings[yaml]==2.14.2
@@ -297,7 +297,7 @@ cells:
   - ol-openedx-git-auto-export==0.8.2
   - ol-openedx-logging==0.3.5
   - ol-openedx-rapid-response-reports==0.5.1
-  - ol-openedx-sentry==0.3.0
+  - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
   - pip==26.1.2
   - pydantic-settings[yaml]==2.14.2
@@ -331,7 +331,7 @@ cells:
   - ol-openedx-course-export==0.2.0
   - ol-openedx-course-structure-api==0.2.0
   - ol-openedx-logging==0.3.5
-  - ol-openedx-sentry==0.3.0
+  - ol-openedx-sentry==0.4.0
   - ol-social-auth==0.2.2
   - openedx-scorm-xblock==19.0.4
   - pydantic-settings[yaml]==2.14.2
