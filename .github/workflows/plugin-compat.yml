@@ -119,3 +119,33 @@ jobs:
           --build-manifest "$MANIFEST" \
           --release-name "$RELEASE" \
           --deployment-name "$DEPLOYMENT"
+
+  # Single always-reporting status suitable as the required branch-protection
+  # check. The per-cell `check` job can't be required directly: it is skipped
+  # on PRs that touch no requirements, and a skipped-but-required job wedges
+  # every unrelated PR. This job runs on every PR, passing when the matrix
+  # succeeded OR was legitimately skipped, and failing when any cell failed —
+  # so a broken plugin bump actually blocks merge while unrelated PRs stay
+  # green. Require `gate` (not `enumerate`, which stays green even when a cell
+  # fails, nor `check`, which skips).
+  gate:
+    needs: [enumerate, check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Evaluate plugin-compat result
+      env:
+        ENUM_RESULT: ${{ needs.enumerate.result }}
+        CHECK_RESULT: ${{ needs.check.result }}
+      run: |
+        set -euo pipefail
+        echo "enumerate: $ENUM_RESULT / check: $CHECK_RESULT"
+        if [ "$ENUM_RESULT" != "success" ]; then
+          echo "::error::enumerate did not succeed ($ENUM_RESULT)."
+          exit 1
+        fi
+        if [ "$CHECK_RESULT" = "failure" ] || [ "$CHECK_RESULT" = "cancelled" ]; then
+          echo "::error::One or more plugin-compat cells failed."
+          exit 1
+        fi
+        echo "plugin-compat gate passed (matrix: $CHECK_RESULT)."
