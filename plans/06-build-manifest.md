@@ -110,7 +110,6 @@ cells:
       - ol-openedx-logging==0.3.5
       - openedx-scorm-xblock==19.0.4
       - setuptools==81.0.0
-      - git+https://github.com/raccoongang/xblock-pdf.git@d8948bf...#egg=xblock-pdf
       # ...
     overrides:
       - git+https://github.com/verificient/edx-proctoring-proctortrack.git@31c6c99...#egg=edx_proctoring_proctortrack
