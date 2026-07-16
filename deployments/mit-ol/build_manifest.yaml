@@ -238,8 +238,8 @@ cells:
   - xmlsec==1.3.14
 - release: verawood
   deployment: mitx
-  platform_repo: https://github.com/mitodl/edx-platform
-  platform_branch: mitx/verawood
+  platform_repo: https://github.com/openedx/edx-platform
+  platform_branch: release/verawood
   theme_repo: https://github.com/mitodl/mitx-theme
   theme_branch: verawood
   packages:
@@ -274,8 +274,8 @@ cells:
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-csrf-exempt-session-auth#egg=edx-submissions
 - release: verawood
   deployment: mitx-staging
-  platform_repo: https://github.com/mitodl/edx-platform
-  platform_branch: mitx/verawood
+  platform_repo: https://github.com/openedx/edx-platform
+  platform_branch: release/verawood
   theme_repo: https://github.com/mitodl/mitx-theme
   theme_branch: verawood
   packages:
