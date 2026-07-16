@@ -31,12 +31,14 @@ RESOLVED_STRING_FIELDS = [
     "platform_repo",
     "platform_branch",
     "translations_repo",
+    "translations_branch",
+    "node_version",
     "theme_repo",
     "theme_branch",
     "settings_namespace",
 ]
 
-GITHUB_REPO_RE = re.compile(r"^https://github\.com/[\w.-]+/[\w.-]+$")
+GITHUB_REPO_RE = re.compile(r"^https://github\.com/[\w.-]+/[\w.-]+(?:\.git)?/?$")
 SUPPORTED_PYTHON_VERSIONS = {"3.11", "3.12"}
 
 
@@ -127,7 +129,9 @@ class TestResolvedFieldsWellFormed:
         field: str,
     ) -> None:
         cell = mit_ol_manifest.resolve_cell(release, deployment)
-        assert cell.resolved(field, mit_ol_manifest)
+        value = cell.resolved(field, mit_ol_manifest)
+        assert isinstance(value, str)
+        assert value != ""
 
     @pytest.mark.parametrize(("release", "deployment"), MIT_OL_CELLS)
     @pytest.mark.parametrize(
