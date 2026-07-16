@@ -6,8 +6,96 @@ values have been removed; callers supply their own settings namespace, SSH
 hosts, package overrides, and translations repository.
 """
 
+from typing import TypeVar, cast
+
 import dagger
+import yaml
 from dagger import dag, function, object_type
+
+from lehrer.core.build_manifest import BuildManifest, Cell
+from lehrer.core.plugin_imports import plugin_distributions
+
+_T = TypeVar("_T")
+
+
+def _plugin_import_script(plugin_dists: list[str]) -> str:
+    """Build the in-container script that smoke-imports each plugin distribution.
+
+    The distribution → import-module mapping is resolved at runtime from the
+    installed metadata (``importlib.metadata.packages_distributions``) so a
+    healthy plugin is never failed by a stale hand-maintained mapping.  A
+    distribution that did not install at all is a hard failure; one that
+    installed but exposes no importable top-level module is reported and
+    skipped (namespace-only or data-only distributions).
+    """
+    return "\n".join(
+        [
+            "import importlib, os, sys",
+            "import importlib.metadata as im",
+            # Initialize Django before importing plugins.  Many Open edX plugins
+            # and XBlocks touch settings or declare models at import time, so a
+            # bare import without an app registry raises AppRegistryNotReady /
+            # ImproperlyConfigured — a false positive unrelated to compatibility.
+            # Guarded: if setup can't run here, fall back to bare imports.
+            "try:",
+            "    import django",
+            "    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'lms.envs.test')",
+            "    django.setup()",
+            "except Exception as exc:",  # noqa: E501
+            "    sys.stderr.write(f'django.setup() skipped: {exc!r}\\n')",
+            f"targets = {plugin_dists!r}",
+            "def _norm(name):",
+            "    import re",
+            "    return re.sub(r'[-_.]+', '-', name).lower()",
+            "dist_to_modules = {}",
+            "for mod, dists in im.packages_distributions().items():",
+            "    for d in dists:",
+            "        dist_to_modules.setdefault(_norm(d), []).append(mod)",
+            "installed = set()",
+            "for dist in im.distributions():",
+            # Distribution.name is the standard accessor (Python >= 3.10); it
+            # avoids re-parsing the metadata file that dist.metadata['Name'] does.
+            "    name = dist.name",
+            "    if name:",
+            "        installed.add(_norm(name))",
+            "failures = []",
+            "for dist in targets:",
+            "    if dist not in installed:",
+            "        print(f'MISSING: {dist} did not install'); failures.append(dist)",
+            "        continue",
+            "    modules = sorted(set(dist_to_modules.get(dist, [])))",
+            "    if not modules:",
+            "        print(f'SKIP:    {dist} installed, no importable top-level module')",
+            "        continue",
+            "    for module in modules:",
+            "        try:",
+            "            importlib.import_module(module)",
+            "            print(f'OK:      {dist} -> import {module}')",
+            "        except Exception as exc:",  # noqa: E501
+            "            print(f'FAIL:    {dist} -> import {module}: {exc!r}')",
+            "            failures.append(f'{dist}:{module}')",
+            "if failures:",
+            "    sys.exit(f'plugin import check failed for {len(failures)}: {failures}')",
+            "print(f'plugin import check passed for {len(targets)} distributions')",
+        ]
+    )
+
+
+def _resolve_field(
+    explicit: _T | None,
+    cell: Cell | None,
+    manifest: BuildManifest | None,
+    field: str,
+    default: _T,
+) -> _T:
+    """Resolve a build param: explicit CLI arg > manifest cell > hardcoded default."""
+    if explicit is not None:
+        return explicit
+    if cell is not None and manifest is not None:
+        value = cell.resolved(field, manifest)
+        if value is not None:
+            return cast("_T", value)
+    return default
 
 
 @object_type
@@ -236,6 +324,7 @@ class OpenedxPlatform:
         node_version: str = "20.18.0",
         packages_to_remove: list[str] | None = None,
         extra_npm_packages: list[str] | None = None,
+        install_node: bool = True,
     ) -> dagger.Container:
         """Install Python and Node.js dependencies using uv
 
@@ -252,6 +341,11 @@ class OpenedxPlatform:
             extra_npm_packages: Additional npm packages to install after
                 ``npm clean-install`` (e.g., private packages from git).
                 Default: empty list — no extra packages.
+            install_node: Install Node.js (nodeenv) and run ``npm clean-install``
+                for edx-platform's frontend assets. Default ``True``. Set
+                ``False`` for Python-only consumers (e.g. plugin import checks,
+                settings regeneration) that never build webpack assets — the
+                Python environment above is complete without it.
 
         Returns:
             Container with all dependencies installed
@@ -343,7 +437,10 @@ class OpenedxPlatform:
             ["uv", "pip", "install", "setuptools<82", "wheel", "pip"]
         )
 
-        # Install Node.js using nodeenv
+        # Install Node.js using nodeenv (skipped for Python-only consumers).
+        if not install_node:
+            return container
+
         container = (
             container.with_workdir("/openedx/edx-platform")
             .with_env_variable("NPM_REGISTRY", "https://registry.npmjs.org/")
@@ -930,27 +1027,57 @@ class OpenedxPlatform:
 
         return container
 
+    async def _resolve_manifest_cell(
+        self,
+        build_manifest: dagger.File,
+        release_name: str,
+        deployment_name: str,
+    ) -> tuple[BuildManifest, Cell]:
+        """Parse ``build_manifest`` and resolve the requested cell.
+
+        Dagger-coupled (reads file contents); all parsing/rendering/resolution
+        beyond that is delegated to the pure ``build_manifest`` module.
+        """
+        manifest = BuildManifest.model_validate(
+            yaml.safe_load(await build_manifest.contents())
+        )
+        cell = manifest.resolve_cell(release_name, deployment_name)
+        return manifest, cell
+
+    def _materialize_cell_requirements(
+        self, release_name: str, deployment_name: str, cell: Cell
+    ) -> tuple[dagger.Directory, dagger.Directory]:
+        """Materialize a cell's packages/overrides into the ``install_deps`` layout."""
+        lists = dag.directory().with_new_file(
+            f"{release_name}/{deployment_name}.txt", cell.render_packages()
+        )
+        overrides = dag.directory().with_new_file(
+            f"{release_name}/{deployment_name}.txt", cell.render_overrides()
+        )
+        return lists, overrides
+
     @function
     async def build_platform(
         self,
         deployment_name: str,
         release_name: str,
-        pip_package_lists: dagger.Directory,
-        pip_package_overrides: dagger.Directory,
         custom_settings: dagger.Directory,
-        translations_repo: str = "openedx/openedx-translations",
+        build_manifest: dagger.File | None = None,
+        pip_package_lists: dagger.Directory | None = None,
+        pip_package_overrides: dagger.Directory | None = None,
+        translations_repo: str | None = None,
         source: dagger.Directory | None = None,
-        platform_repo: str = "https://github.com/openedx/edx-platform",
-        platform_branch: str = "master",
+        platform_repo: str | None = None,
+        platform_branch: str | None = None,
         theme_source: dagger.Directory | None = None,
         theme_repo: str | None = None,
         theme_branch: str | None = None,
         python_version: str | None = None,
-        node_version: str = "20.18.0",
+        node_version: str | None = None,
         locale_version: str = "master",
-        translations_branch: str = "main",
+        translations_branch: str | None = None,
         include_locales: bool = True,
-        settings_namespace: str = "production",
+        settings_namespace: str | None = None,
         extra_ssh_hosts: list[str] | None = None,
         packages_to_remove: list[str] | None = None,
         extra_npm_packages: list[str] | None = None,
@@ -962,9 +1089,17 @@ class OpenedxPlatform:
         Args:
             deployment_name: Deployment name
             release_name: Release name (e.g., master, sumac, redwood)
-            pip_package_lists: Directory with pip requirements files
-            pip_package_overrides: Directory with pip override requirements
             custom_settings: Directory with custom settings files
+            build_manifest: Optional ``build_manifest.yaml`` (see
+                ``lehrer.core.build_manifest``). When given, the cell matching
+                ``(release_name, deployment_name)`` supplies
+                ``pip_package_lists``/``pip_package_overrides`` (materialized
+                on the fly) and every other parameter below that the caller
+                did not pass explicitly — an explicit CLI arg always wins.
+            pip_package_lists: Directory with pip requirements files. Required
+                unless ``build_manifest`` is given.
+            pip_package_overrides: Directory with pip override requirements.
+                Required unless ``build_manifest`` is given.
             translations_repo: Translations repository (default:
                 ``"openedx/openedx-translations"`` — the upstream community
                 repo).  Pass your deployment's own translations repo if you
@@ -992,23 +1127,96 @@ class OpenedxPlatform:
         Returns:
             Container ready to be deployed
         """
+        manifest: BuildManifest | None = None
+        cell: Cell | None = None
+        if build_manifest is not None:
+            manifest, cell = await self._resolve_manifest_cell(
+                build_manifest, release_name, deployment_name
+            )
+            manifest_lists, manifest_overrides = self._materialize_cell_requirements(
+                release_name, deployment_name, cell
+            )
+            if pip_package_lists is None:
+                pip_package_lists = manifest_lists
+            if pip_package_overrides is None:
+                pip_package_overrides = manifest_overrides
+
+        if pip_package_lists is None or pip_package_overrides is None:
+            msg = (
+                "build_platform requires either --build-manifest, or both "
+                "--pip-package-lists and --pip-package-overrides"
+            )
+            raise ValueError(msg)
+
+        platform_repo = _resolve_field(
+            platform_repo,
+            cell,
+            manifest,
+            "platform_repo",
+            "https://github.com/openedx/edx-platform",
+        )
+        platform_branch = _resolve_field(
+            platform_branch, cell, manifest, "platform_branch", "master"
+        )
+        translations_repo = _resolve_field(
+            translations_repo,
+            cell,
+            manifest,
+            "translations_repo",
+            "openedx/openedx-translations",
+        )
+        translations_branch = _resolve_field(
+            translations_branch, cell, manifest, "translations_branch", "main"
+        )
+        settings_namespace = _resolve_field(
+            settings_namespace, cell, manifest, "settings_namespace", "production"
+        )
+        node_version = _resolve_field(
+            node_version, cell, manifest, "node_version", "20.18.0"
+        )
+        if theme_repo is None and cell is not None and manifest is not None:
+            resolved_theme_repo = cell.resolved("theme_repo", manifest)
+            if resolved_theme_repo:
+                theme_repo = cast("str", resolved_theme_repo)
+        if theme_branch is None and cell is not None and manifest is not None:
+            resolved_theme_branch = cell.resolved("theme_branch", manifest)
+            if resolved_theme_branch:
+                theme_branch = cast("str", resolved_theme_branch)
         if extra_ssh_hosts is None:
             extra_ssh_hosts = []
+            if cell is not None and manifest is not None:
+                resolved_hosts = cell.resolved("extra_ssh_hosts", manifest)
+                if resolved_hosts is not None:
+                    extra_ssh_hosts = cast("list[str]", resolved_hosts)
         if packages_to_remove is None:
             packages_to_remove = []
+            if cell is not None and manifest is not None:
+                resolved_removals = cell.resolved("packages_to_remove", manifest)
+                if resolved_removals is not None:
+                    packages_to_remove = cast("list[str]", resolved_removals)
         if extra_npm_packages is None:
             extra_npm_packages = []
+            if cell is not None and manifest is not None:
+                resolved_npm = cell.resolved("extra_npm_packages", manifest)
+                if resolved_npm is not None:
+                    extra_npm_packages = cast("list[str]", resolved_npm)
 
-        # Determine Python version based on release if not explicitly provided
+        # Determine Python version: explicit arg > manifest cell/release_python
+        # > 3.12-for-master/3.11-otherwise fallback.
         if python_version is None:
-            python_version = "3.12" if release_name == "master" else "3.11"
+            resolved_python_version = None
+            if cell is not None and manifest is not None:
+                resolved_python_version = cell.resolved("python_version", manifest)
+            python_version = cast("str | None", resolved_python_version) or (
+                "3.12" if release_name == "master" else "3.11"
+            )
 
         # ── Deps chain ────────────────────────────────────────────────────────
         # Run the heavy install steps on a throw-away chain.  All build caches
         # (npm ~/.npm, pip /tmp artefacts) accumulate here and are discarded
         # when we copy only the three needed directories to the clean base
         # below, following the same multi-stage pattern.
-        deps = self.apt_base(python_version=python_version)
+        deps: dagger.Container = self.apt_base(python_version=python_version)
         deps = self.get_code(
             deps,
             source=source,
@@ -1029,7 +1237,7 @@ class OpenedxPlatform:
         # ── Clean base ────────────────────────────────────────────────────────
         # Start fresh (equivalent to a multi-stage build's clean base layer).
         # Copy only the built artefacts; npm/uv/pip caches are left behind.
-        container = self.apt_base(python_version=python_version)
+        container: dagger.Container = self.apt_base(python_version=python_version)
         container = (
             container.with_directory("/openedx/venv", deps.directory("/openedx/venv"))
             .with_directory(
@@ -1102,6 +1310,172 @@ class OpenedxPlatform:
         return container
 
     @function
+    async def check_deployment(
+        self,
+        deployment_name: str,
+        release_name: str,
+        build_manifest: dagger.File | None = None,
+        pip_package_lists: dagger.Directory | None = None,
+        pip_package_overrides: dagger.Directory | None = None,
+        platform_repo: str | None = None,
+        platform_branch: str | None = None,
+        python_version: str | None = None,
+        node_version: str | None = None,
+        packages_to_remove: list[str] | None = None,
+        extra_npm_packages: list[str] | None = None,
+    ) -> str:
+        """Verify a build cell's pinned requirements against edx-platform.
+
+        This is the execution engine for the plugin-compat matrix.  For the
+        given ``(release_name, deployment_name)`` cell it installs the exact
+        same dependency set a production build would (via :meth:`install_deps`,
+        not a parallel resolver that could drift), then runs three checks that
+        catch a plugin bump which resolves but is nonetheless broken against
+        this edx-platform branch:
+
+        1. ``uv pip check`` — the resolved environment has no conflicting or
+           missing transitive dependencies.
+        2. Import every plugin distribution in the cell (``ol-*``, ``openedx-*``,
+           ``edx-*``, ``*-xblock``).  The distribution → import-module mapping is
+           read at runtime from each installed distribution's metadata, so no
+           hand-maintained mapping can drift; a distribution that failed to
+           install is a hard failure, one that installed but exposes no
+           importable top-level module is reported and skipped.
+
+        Any failing check exits non-zero and fails the calling ``dagger call``.
+
+        Scope (by design): this is the fast, Python-only tier of the
+        verification pyramid — it installs Python deps only
+        (``install_node=False``) and does not compile frontend assets. Plugin
+        JS/CSS build breakage is a webpack/sass concern that only surfaces in a
+        full platform asset build, which is exercised by the scheduled canary
+        running :meth:`build_platform` (whose ``build_static_assets`` step
+        compiles plugin-contributed webpack config). Keeping this tier
+        Python-only is what lets it gate every PR cheaply.
+
+        Args:
+            deployment_name: Deployment name.
+            release_name: edx-platform release / branch name (e.g. master).
+            build_manifest: Optional ``build_manifest.yaml``.  When given, the
+                cell matching ``(release_name, deployment_name)`` supplies the
+                requirements and every build parameter the caller did not pass.
+            pip_package_lists: Requirements directory.  Required unless
+                ``build_manifest`` is given.
+            pip_package_overrides: Overrides directory.  Required unless
+                ``build_manifest`` is given.
+            platform_repo: Git repository URL for edx-platform.
+            platform_branch: Git branch to check out.
+            python_version: Python version. Defaults to 3.12 for master, else 3.11.
+            node_version: Node.js version (default: 20.18.0).
+            packages_to_remove: Python packages to uninstall after base install.
+            extra_npm_packages: Additional npm packages to install.
+
+        Returns:
+            The combined stdout of the checks (only reached when all pass).
+        """
+        manifest: BuildManifest | None = None
+        cell: Cell | None = None
+        if build_manifest is not None:
+            manifest, cell = await self._resolve_manifest_cell(
+                build_manifest, release_name, deployment_name
+            )
+            manifest_lists, manifest_overrides = self._materialize_cell_requirements(
+                release_name, deployment_name, cell
+            )
+            if pip_package_lists is None:
+                pip_package_lists = manifest_lists
+            if pip_package_overrides is None:
+                pip_package_overrides = manifest_overrides
+
+        if pip_package_lists is None or pip_package_overrides is None:
+            msg = (
+                "check_deployment requires either --build-manifest, or both "
+                "--pip-package-lists and --pip-package-overrides"
+            )
+            raise ValueError(msg)
+
+        platform_repo = _resolve_field(
+            platform_repo,
+            cell,
+            manifest,
+            "platform_repo",
+            "https://github.com/openedx/edx-platform",
+        )
+        platform_branch = _resolve_field(
+            platform_branch, cell, manifest, "platform_branch", "master"
+        )
+        node_version = _resolve_field(
+            node_version, cell, manifest, "node_version", "20.18.0"
+        )
+        if packages_to_remove is None:
+            packages_to_remove = []
+            if cell is not None and manifest is not None:
+                resolved_removals = cell.resolved("packages_to_remove", manifest)
+                if resolved_removals is not None:
+                    packages_to_remove = cast("list[str]", resolved_removals)
+        if extra_npm_packages is None:
+            extra_npm_packages = []
+            if cell is not None and manifest is not None:
+                resolved_npm = cell.resolved("extra_npm_packages", manifest)
+                if resolved_npm is not None:
+                    extra_npm_packages = cast("list[str]", resolved_npm)
+        if python_version is None:
+            resolved_python_version = None
+            if cell is not None and manifest is not None:
+                resolved_python_version = cell.resolved("python_version", manifest)
+            python_version = cast("str | None", resolved_python_version) or (
+                "3.12" if release_name == "master" else "3.11"
+            )
+
+        # Same install path a production build uses, so this gate verifies the
+        # real resolution — not a shell reimplementation that can diverge.
+        container: dagger.Container = self.apt_base(python_version=python_version)
+        container = self.get_code(
+            container,
+            edx_platform_git_repo=platform_repo,
+            edx_platform_git_branch=platform_branch,
+        )
+        container = self.install_deps(
+            container,
+            deployment_name=deployment_name,
+            release_name=release_name,
+            pip_package_lists=pip_package_lists,
+            pip_package_overrides=pip_package_overrides,
+            node_version=node_version,
+            packages_to_remove=packages_to_remove,
+            extra_npm_packages=extra_npm_packages,
+            # Plugin import compat needs only the Python env; Node/webpack are
+            # irrelevant here and installing them (nodeenv download) is a
+            # needless failure surface for a check that never builds assets.
+            install_node=False,
+        )
+
+        # Derive the plugin distributions to smoke-import from the SAME
+        # requirement files install_deps installs from — the effective
+        # directories resolved above (materialized from the manifest cell, or
+        # the caller's explicit --pip-package-lists when those were passed and
+        # win over the manifest).  Reading the cell directly would diverge from
+        # what was installed whenever both a manifest and explicit dirs are
+        # supplied, reporting manifest-only plugins as missing and skipping
+        # newly installed ones.
+        list_txt = await pip_package_lists.file(
+            f"{release_name}/{deployment_name}.txt"
+        ).contents()
+        override_txt = await pip_package_overrides.file(
+            f"{release_name}/{deployment_name}.txt"
+        ).contents()
+        plugin_dists = plugin_distributions(
+            [*list_txt.splitlines(), *override_txt.splitlines()]
+        )
+
+        import_script = _plugin_import_script(plugin_dists)
+        return await (
+            container.with_exec(["uv", "pip", "check"])
+            .with_exec(["python", "-c", import_script])
+            .stdout()
+        )
+
+    @function
     async def publish_platform(
         self,
         container: dagger.Container,
@@ -1135,11 +1509,12 @@ class OpenedxPlatform:
     async def regenerate_aqueduct_settings(
         self,
         deployment_name: str,
-        pip_package_lists: dagger.Directory,
-        pip_package_overrides: dagger.Directory,
         release_name: str = "master",
-        platform_repo: str = "https://github.com/openedx/edx-platform",
-        platform_branch: str = "master",
+        build_manifest: dagger.File | None = None,
+        pip_package_lists: dagger.Directory | None = None,
+        pip_package_overrides: dagger.Directory | None = None,
+        platform_repo: str | None = None,
+        platform_branch: str | None = None,
         python_version: str | None = None,
         packages_to_remove: list[str] | None = None,
         aqueduct_source: dagger.Directory | None = None,
@@ -1178,9 +1553,18 @@ class OpenedxPlatform:
 
         Args:
             deployment_name: Deployment name.
-            pip_package_lists: Directory containing pip requirements files.
-            pip_package_overrides: Directory containing pip override requirements.
             release_name: edx-platform release / branch name. Default: master.
+            build_manifest: Optional ``build_manifest.yaml`` (see
+                ``lehrer.core.build_manifest``). When given, the cell matching
+                ``(release_name, deployment_name)`` supplies
+                ``pip_package_lists``/``pip_package_overrides`` (materialized
+                on the fly) and ``platform_repo``/``platform_branch``/
+                ``python_version``/``packages_to_remove`` for any of those the
+                caller did not pass explicitly.
+            pip_package_lists: Directory containing pip requirements files.
+                Required unless ``build_manifest`` is given.
+            pip_package_overrides: Directory containing pip override
+                requirements. Required unless ``build_manifest`` is given.
             platform_repo: Git repository URL for edx-platform.
             platform_branch: Git branch to check out.
             python_version: Python version. Defaults to 3.12 for master.
@@ -1192,14 +1576,55 @@ class OpenedxPlatform:
                 fixes.  Installed before the deployment requirements so its
                 version satisfies the pinned ``django-aqueduct==`` constraint.
         """
+        manifest: BuildManifest | None = None
+        cell: Cell | None = None
+        if build_manifest is not None:
+            manifest, cell = await self._resolve_manifest_cell(
+                build_manifest, release_name, deployment_name
+            )
+            manifest_lists, manifest_overrides = self._materialize_cell_requirements(
+                release_name, deployment_name, cell
+            )
+            if pip_package_lists is None:
+                pip_package_lists = manifest_lists
+            if pip_package_overrides is None:
+                pip_package_overrides = manifest_overrides
+
+        if pip_package_lists is None or pip_package_overrides is None:
+            msg = (
+                "regenerate_aqueduct_settings requires either --build-manifest, "
+                "or both --pip-package-lists and --pip-package-overrides"
+            )
+            raise ValueError(msg)
+
+        platform_repo = _resolve_field(
+            platform_repo,
+            cell,
+            manifest,
+            "platform_repo",
+            "https://github.com/openedx/edx-platform",
+        )
+        platform_branch = _resolve_field(
+            platform_branch, cell, manifest, "platform_branch", "master"
+        )
+
         if packages_to_remove is None:
             packages_to_remove = []
+            if cell is not None and manifest is not None:
+                resolved_removals = cell.resolved("packages_to_remove", manifest)
+                if resolved_removals is not None:
+                    packages_to_remove = cast("list[str]", resolved_removals)
 
         if python_version is None:
-            python_version = "3.12" if release_name == "master" else "3.11"
+            resolved_python_version = None
+            if cell is not None and manifest is not None:
+                resolved_python_version = cell.resolved("python_version", manifest)
+            python_version = cast("str | None", resolved_python_version) or (
+                "3.12" if release_name == "master" else "3.11"
+            )
 
         # ── Base system + code ────────────────────────────────────────────────
-        container = self.apt_base(python_version=python_version)
+        container: dagger.Container = self.apt_base(python_version=python_version)
         container = self.get_code(
             container,
             edx_platform_git_repo=platform_repo,

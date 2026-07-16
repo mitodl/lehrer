@@ -11,39 +11,40 @@ All commands are run from the repository root.
 
 ## 1. edx-platform — MITx Online (mitxonline), master branch
 
+All build parameters (platform branch, translations repo, theme, python/node
+version, `packages_to_remove`, pip packages) come from
+`deployments/mit-ol/build_manifest.yaml` — the single source of truth for
+every `(release, deployment)` cell (see `plans/06-build-manifest.md`).
+
+```bash
+lehrer build platform --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings
+```
+
+Equivalent raw `dagger call`:
+
 ```bash
 dagger call platform build-platform \
   --deployment-name mitxonline \
   --release-name master \
   --settings-namespace mitol \
-  --pip-package-lists ./deployments/mit-ol/pip_package_lists \
-  --pip-package-overrides ./deployments/mit-ol/pip_package_overrides \
-  --custom-settings ./deployments/mit-ol/settings \
-  --platform-branch master \
-  --translations-repo mitodl/mitxonline-translations \
-  --translations-branch main \
-  --extra-ssh-hosts '["github.mit.edu"]' \
-  --packages-to-remove '["edx-name-affirmation"]' \
-  --extra-npm-packages '["git+https://git@github.com/verificient/edx-proctoring-proctortrack.git#f0fa9edbd16aa5af5a41ac309d2609e529ea8732"]'
+  --build-manifest ./deployments/mit-ol/build_manifest.yaml \
+  --custom-settings ./deployments/mit-ol/settings
 ```
 
 ---
 
-## 2. edx-platform — MITx (mitx), teak release
+## 2. edx-platform — MITx (mitx), other cells
+
+Every cell in the matrix is built the same way — swap `--cell`. The available
+cells (`lehrer build cells --manifest ./deployments/mit-ol/build_manifest.yaml`):
+`master/mitxonline`, `master/mitx`, `master/mitx-staging`, `ulmo/mitx`,
+`ulmo/mitx-staging`, `ulmo/xpro`, `verawood/mitx`, `verawood/mitx-staging`,
+`verawood/xpro`.
 
 ```bash
-dagger call platform build-platform \
-  --deployment-name mitx \
-  --release-name teak \
-  --settings-namespace mitol \
-  --pip-package-lists ./deployments/mit-ol/pip_package_lists \
-  --pip-package-overrides ./deployments/mit-ol/pip_package_overrides \
-  --custom-settings ./deployments/mit-ol/settings \
-  --platform-branch open-release/teak.master \
-  --translations-repo mitodl/mitx-translations \
-  --translations-branch main \
-  --extra-ssh-hosts '["github.mit.edu"]' \
-  --extra-npm-packages '["git+https://git@github.com/verificient/edx-proctoring-proctortrack.git#f0fa9edbd16aa5af5a41ac309d2609e529ea8732"]'
+lehrer build platform --cell mit-ol/verawood/mitx \
+  --custom-settings ./deployments/mit-ol/settings
 ```
 
 ---
@@ -169,9 +170,8 @@ models and commit the result:
 # mitxonline
 dagger call platform regenerate-aqueduct-settings \
   --deployment-name mitxonline \
-  --pip-package-lists ./deployments/mit-ol/pip_package_lists \
-  --pip-package-overrides ./deployments/mit-ol/pip_package_overrides \
-  --packages-to-remove '["edx-name-affirmation"]' \
+  --release-name master \
+  --build-manifest ./deployments/mit-ol/build_manifest.yaml \
   export --path ./generated
 
 cp generated/lms/models/aqueduct.py deployments/mit-ol/settings/lms/models/aqueduct.py

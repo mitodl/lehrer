@@ -9,11 +9,27 @@
       "/pip_package_overrides/.*?/.*.txt/"
     ]
   },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/deployments/.+/build_manifest\\.ya?ml$/"],
+      "matchStrings": [
+        "(?<depName>[A-Za-z0-9][A-Za-z0-9._-]*?)(\\[[^\\]]+\\])?==(?<currentValue>[0-9][^\\s#]*)"
+      ],
+      "datasourceTemplate": "pypi",
+      "versioningTemplate": "pep440"
+    }
+  ],
   "packageRules": [
     {
       "matchPackageNames": ["react-router", "react-router-dom", "@remix-run/router"],
       "groupName": "react-router",
       "description": "Bump react-router, react-router-dom, and @remix-run/router together. Updating only one leaves the others pinned to an older exact version in the lockfile, which npm cannot dedupe against the bumped package - producing two separate copies of react-router with two distinct DataRouterContext instances, and a hard crash on every page (see mitodl/lehrer#75)."
+    },
+    {
+      "matchDepNames": ["setuptools", "pip", "wheel"],
+      "enabled": false,
+      "description": "setuptools is deliberately pinned <82 for pkg_resources (see pip_package_lists comments); pip/wheel are managed manually. Renovate must not bump these in build_manifest.yaml."
     }
   ]
 }

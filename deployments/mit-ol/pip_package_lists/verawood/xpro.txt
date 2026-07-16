@@ -1,5 +1,5 @@
 celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules
-granian==2.7.8
+granian==2.7.9
 django-redis==6.0.0
 ol-openedx-git-auto-export==0.8.2
 edx-sysadmin==0.4.2
@@ -7,17 +7,17 @@ edx-username-changer==0.5.0
 git+https://github.com/mitodl/ubcpi.git@master#egg=ubcpi-xblock
 openedx-companion-auth==1.2.0
 nodeenv>=1.7.0
-ol-openedx-checkout-external
+ol-openedx-checkout-external==0.2.0
 ol-openedx-course-export==0.2.0
-ol-openedx-course-structure-api
-ol-openedx-logging
-ol-openedx-sentry
-ol-social-auth
-openedx-scorm-xblock
+ol-openedx-course-structure-api==0.2.0
+ol-openedx-logging==0.3.5
+ol-openedx-sentry==0.4.0
+ol-social-auth==0.2.2
+openedx-scorm-xblock==19.0.4
 pydantic-settings[yaml]==2.14.2
-django-aqueduct==0.6.0
-ol-openedx-chat
-ol-openedx-chat-xblock
+django-aqueduct==0.9.0
+ol-openedx-chat==0.5.9
+ol-openedx-chat-xblock==0.4.6
 
 # Open Telemetry support
 opentelemetry-api

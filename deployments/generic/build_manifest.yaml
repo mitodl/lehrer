@@ -1,0 +1,19 @@
+---
+# yaml-language-server: $schema=../../build_manifest.schema.json
+version: 1
+defaults:
+  settings_namespace: production
+  platform_repo: https://github.com/openedx/edx-platform
+  translations_repo: https://github.com/openedx/openedx-translations
+  translations_branch: main
+  node_version: '24'
+release_python:
+  master: '3.12'
+cells:
+- release: master
+  deployment: generic
+  platform_branch: master
+  packages:
+  - django-aqueduct==0.9.0
+  - pydantic-settings[yaml]==2.14.2
+  overrides: []

@@ -42,10 +42,11 @@ my-deployment/
 │   ├── set_waffle_flags.py
 │   ├── process_scheduled_emails.py
 │   └── saml_pull.py
-├── pip_package_lists/
+├── build_manifest.yaml          # recommended: single source of truth for build cells
+├── pip_package_lists/           # legacy alternative to build_manifest.yaml
 │   └── {release_name}/
 │       └── {deployment_name}.txt
-├── pip_package_overrides/
+├── pip_package_overrides/       # legacy alternative to build_manifest.yaml
 │   └── {release_name}/
 │       └── {deployment_name}.txt
 ├── mfe_slot_config/
@@ -65,13 +66,24 @@ my-deployment/
 
 ### `build_platform`
 
+The recommended way to drive `build_platform` is a declarative
+`build_manifest.yaml` (see [`lehrer.core.build_manifest`](../src/lehrer/core/build_manifest.py)
+and `plans/06-build-manifest.md`) — one file per deployment group naming
+every `(release, deployment)` cell's repo/branch, python/node version, theme,
+translations, and pip packages. Pass `--build-manifest` + `--release-name` +
+`--deployment-name` (or use `lehrer build platform --cell <group>/<release>/<deployment>`)
+and every parameter below is resolved from the matching cell unless you pass
+it explicitly. `pip_package_lists`/`pip_package_overrides` directories remain
+a supported lower-level alternative.
+
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `deployment_name` | `str` | **required** | Deployment name used for theme path and pip package file names (e.g. `"mydeployment"`) |
 | `release_name` | `str` | **required** | Open edX release name (e.g. `"master"`, `"sumac"`, `"teak"`) |
-| `pip_package_lists` | `Directory` | **required** | Directory with pip requirements. Must contain `{release_name}/{deployment_name}.txt` |
-| `pip_package_overrides` | `Directory` | **required** | Directory with pip build overrides. Must contain `{release_name}/{deployment_name}.txt` |
 | `custom_settings` | `Directory` | **required** | Directory with settings files (see layout above) |
+| `build_manifest` | `File` | `None` | `build_manifest.yaml` (see above). Materializes `pip_package_lists`/`pip_package_overrides` and supplies defaults for the fields below |
+| `pip_package_lists` | `Directory` | `None` | Directory with pip requirements. Must contain `{release_name}/{deployment_name}.txt`. Required unless `build_manifest` is given |
+| `pip_package_overrides` | `Directory` | `None` | Directory with pip build overrides. Must contain `{release_name}/{deployment_name}.txt`. Required unless `build_manifest` is given |
 | `translations_repo` | `str` | `"openedx/openedx-translations"` | GitHub repository for translations (e.g. `"myorg/my-translations"`) |
 | `source` | `Directory` | `None` | Local edx-platform source (overrides `platform_repo`/`platform_branch`) |
 | `platform_repo` | `str` | `"https://github.com/openedx/edx-platform"` | Git URL for edx-platform |
@@ -295,6 +307,18 @@ dagger call platform build-platform \
   --platform-branch open-release/sumac.master \
   --translations-repo openedx/openedx-translations \
   --translations-branch main
+```
+
+The same build, driven by a `build_manifest.yaml` cell instead of separate
+flags:
+
+```bash
+dagger call platform build-platform \
+  --deployment-name mydeployment \
+  --release-name sumac \
+  --settings-namespace production \
+  --build-manifest ./my-deployment/build_manifest.yaml \
+  --custom-settings ./my-deployment/settings
 ```
 
 No `--extra-ssh-hosts`, no `--packages-to-remove`, no `--extra-npm-packages`

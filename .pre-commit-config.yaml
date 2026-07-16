@@ -6,6 +6,7 @@ ci:
   - packer_fmt
   - hadolint-docker
   - build-config-schema
+  - build-manifest-schema
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v6.0.0
@@ -14,13 +15,6 @@ repos:
   - id: end-of-file-fixer
   - id: check-yaml
     args: [--allow-multiple-documents]
-    exclude: |
-      (?x)(
-        src/ol_infrastructure/infrastructure/aws/eks/files/|
-        src/ol_infrastructure/applications/edxapp/files/edxapp/.*/.*\.yaml|
-        charts/|
-        sdk/
-      )
   - id: check-added-large-files
     args: [--maxkb=1024]
   - id: check-merge-conflict
@@ -40,23 +34,11 @@ repos:
     - --width
     - "80"
     - --preserve-quotes
-    exclude: |
-      (?x)(
-        src/ol_infrastructure/applications/edxapp/files/edxapp/.*/.*\.yaml|
-        charts/|
-        sdk/
-      )
 - repo: https://github.com/adrienverge/yamllint.git
   rev: v1.38.0
   hooks:
   - id: yamllint
     args: [--format, parsable, -d, relaxed]
-    exclude: |
-      (?x)(
-        src/ol_infrastructure/applications/edxapp/files/edxapp/.*/.*\.yaml|
-        charts/|
-        sdk/
-      )
 - repo: https://github.com/Yelp/detect-secrets
   rev: v1.5.0
   hooks:
@@ -64,14 +46,6 @@ repos:
     args:
     - --exclude-lines
     - "(^encryptedkey:|^secure:|^secretsprovider:)"
-    - --exclude-files
-    - src/bridge/secrets/
-    - --exclude-files
-    - poetry.lock
-    - --exclude-files
-    - src/ol_infrastructure/applications/ocw_site/redirect_dict
-    - --exclude-files
-    - charts/
     - --exclude-files
     - deployments/mit-ol/settings/.*/models/aqueduct\.py
     - --exclude-files
@@ -87,20 +61,17 @@ repos:
   rev: v1.19.1
   hooks:
   - id: mypy
-    exclude: |
-      (?x)(
-        dockerfiles/|
-        deployments/|
-        src/lehrer/|
-        sdk/
-      )
+    exclude: ^deployments/
     args:
-    - --explicit-package-bases
-    - --namespace-packages
     - --config-file=pyproject.toml
     - --warn-unused-configs
     additional_dependencies:
+    - cyclopts>=3
+    - dagger-io
     - pydantic>2.10
+    - pydantic-settings[yaml]
+    - pytest>=8
+    - pyyaml
     - types-PyYAML
     - types-requests
 - repo: https://github.com/shellcheck-py/shellcheck-py
@@ -131,6 +102,13 @@ repos:
     entry: "bash -c 'uv run python -c \"import json; from lehrer.core.mfe_config import\
       \ json_schema; print(json.dumps(json_schema(), indent=2))\" > build_config.schema.json'"
     files: ^(src/lehrer/core/mfe_config\.py|build_config\.schema\.json)$
+    pass_filenames: false
+  - id: build-manifest-schema
+    name: regenerate build_manifest JSON schema from the Pydantic models
+    language: system
+    entry: "bash -c 'uv run python -c \"import json; from lehrer.core.build_manifest\
+      \ import json_schema; print(json.dumps(json_schema(), indent=2))\" > build_manifest.schema.json'"
+    files: ^(src/lehrer/core/build_manifest\.py|build_manifest\.schema\.json)$
     pass_filenames: false
 - repo: https://github.com/hadolint/hadolint
   rev: v2.14.0

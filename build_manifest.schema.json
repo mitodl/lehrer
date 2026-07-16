@@ -1,0 +1,300 @@
+{
+  "$defs": {
+    "Cell": {
+      "additionalProperties": false,
+      "description": "One ``(release, deployment)`` edx-platform build cell.",
+      "properties": {
+        "release": {
+          "title": "Release",
+          "type": "string"
+        },
+        "deployment": {
+          "title": "Deployment",
+          "type": "string"
+        },
+        "packages": {
+          "description": "Verbatim active pip requirement lines (specifier + optional inline '# comment'), order-preserved.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Packages",
+          "type": "array"
+        },
+        "overrides": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Overrides",
+          "type": "array"
+        },
+        "settings_namespace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Settings Namespace"
+        },
+        "platform_repo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Platform Repo"
+        },
+        "translations_repo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Translations Repo"
+        },
+        "translations_branch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Translations Branch"
+        },
+        "node_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node Version"
+        },
+        "extra_ssh_hosts": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extra Ssh Hosts"
+        },
+        "extra_npm_packages": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extra Npm Packages"
+        },
+        "platform_branch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Platform Branch"
+        },
+        "python_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Python Version"
+        },
+        "theme_repo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Theme Repo"
+        },
+        "theme_branch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Theme Branch"
+        },
+        "packages_to_remove": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Packages To Remove",
+          "type": "array"
+        }
+      },
+      "required": [
+        "release",
+        "deployment",
+        "packages"
+      ],
+      "title": "Cell",
+      "type": "object"
+    },
+    "CellDefaults": {
+      "additionalProperties": false,
+      "description": "Group-wide values a cell may override.",
+      "properties": {
+        "settings_namespace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Settings Namespace"
+        },
+        "platform_repo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Platform Repo"
+        },
+        "translations_repo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Translations Repo"
+        },
+        "translations_branch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Translations Branch"
+        },
+        "node_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node Version"
+        },
+        "extra_ssh_hosts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra Ssh Hosts",
+          "type": "array"
+        },
+        "extra_npm_packages": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra Npm Packages",
+          "type": "array"
+        }
+      },
+      "title": "CellDefaults",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Top-level schema for an operator's ``build_manifest.yaml``.",
+  "properties": {
+    "version": {
+      "title": "Version",
+      "type": "integer"
+    },
+    "defaults": {
+      "$ref": "#/$defs/CellDefaults"
+    },
+    "release_python": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Release Python",
+      "type": "object"
+    },
+    "cells": {
+      "items": {
+        "$ref": "#/$defs/Cell"
+      },
+      "minItems": 1,
+      "title": "Cells",
+      "type": "array"
+    }
+  },
+  "required": [
+    "version",
+    "cells"
+  ],
+  "title": "BuildManifest",
+  "type": "object"
+}
