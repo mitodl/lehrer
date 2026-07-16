@@ -51,6 +51,9 @@
     align-items: center !important;
     gap: 8px;
     color: #FFF !important;
+    // Reset the native <button> UA background (the toggle renders as a button
+    // for keyboard accessibility) so it stays transparent on the dark header.
+    background-color: transparent !important;
     border-radius: 4px !important;
     border: 1px solid var(--dark-silver-gray-text-secondary, #626A73) !important;
     opacity: 0.75 !important;
@@ -107,7 +110,11 @@
   }
   }
   .dropdown-menu-right{
-    display: flex !important;
+    // Only apply display:flex while the menu is open. Bootstrap's base
+    // `.dropdown-menu` sets `display: none` when closed (no `.show`); an
+    // unscoped `display: flex !important` here would override that and keep the
+    // menu permanently visible after it is opened once.
+    &.show { display: flex !important; }
     flex-direction: column !important;
     align-items: stretch !important;
     padding: 0 !important;

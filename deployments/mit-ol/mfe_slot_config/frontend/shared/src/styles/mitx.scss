@@ -6,3 +6,40 @@
       display: none;
     }
 }
+
+// Match the legacy MITx / xPRO header user menu, which shows just the username
+// (no avatar). mitx and xpro use the default frontend-base AvatarButton toggle;
+// hide its avatar image so only the username + caret remain. (mitxonline uses
+// its own custom toggle — styled in mitxonline.scss — and is unaffected.)
+.pgn__avatar-button-avatar .pgn__avatar {
+  display: none !important;
+}
+
+// mitx and xpro keep the desktop-style header at all widths (AlwaysDesktopLayout
+// in createMITxHeaderApp / createXProHeaderApp) to match the legacy header,
+// which never collapses to a hamburger. At narrow widths, ellipsis-truncate the
+// course number + title so the lockup stays one line each instead of wrapping
+// and blowing up the header height (mirrors the legacy truncation).
+@media (max-width: 768px) {
+  // Keep the always-desktop header on ONE row that fits the viewport. Let the
+  // left side (logo + course lockup) shrink (min-width:0 breaks the flex
+  // min-content floor) and ellipsis-truncate the course number + title to
+  // whatever space is left after the logo and right-side controls — otherwise
+  // the row overflows horizontally and opening the menu scrolls the logo off
+  // the left edge. The lockup is:
+  //   <div><span.small>{number}</span><span.course-title>{title}</span></div>
+  header .d-flex.flex-grow-1,
+  header .nav:has(.course-title),
+  header div:has(> .course-title) {
+    min-width: 0;
+  }
+  header .nav:has(.course-title) {
+    overflow: hidden;
+  }
+  header div:has(> .course-title) > span {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

@@ -27,11 +27,16 @@ function useMITOLFooterConfig(): MITOLFooterConfig {
 
 function CopyrightNotice() {
 	const { copyrightText } = useMITOLFooterConfig();
+	// Support a `{year}` placeholder in the configured copyright text so the year
+	// stays current without a code change (e.g. "© {year} MIT xPRO. All rights
+	// reserved."). Text without the placeholder is rendered verbatim.
+	const text = copyrightText?.replace(
+		"{year}",
+		String(new Date().getFullYear()),
+	);
 	return (
 		<div className="d-flex flex-column justify-content-center">
-			{copyrightText && (
-				<div className="text-center x-small">{copyrightText}</div>
-			)}
+			{text && <div className="text-center x-small">{text}</div>}
 			<div className="text-center x-small">
 				edX and Open edX are registered trademarks of edX LLC.
 			</div>
@@ -131,20 +136,57 @@ function MITOLDesktopFooterLayout() {
 }
 
 /**
- * Single horizontal row of footer links matching the legacy learning MFE
- * (About Us · Terms of Service · Accessibility · Help), centered, with no
- * column labels. Each link is omitted if its URL is missing from the runtime
- * config.
+ * Footer link types the MIT OL footer can render, each mapped to its display
+ * label and the runtime-config field holding its URL.
  */
-function MITOLFooterLinks() {
-	const { aboutUrl, termsOfServiceUrl, accessibilityUrl, supportUrl } =
-		useMITOLFooterConfig();
-	const links = [
-		{ url: aboutUrl, label: "About Us" },
-		{ url: termsOfServiceUrl, label: "Terms of Service" },
-		{ url: accessibilityUrl, label: "Accessibility" },
-		{ url: supportUrl, label: "Help" },
-	].filter((link): link is { url: string; label: string } => Boolean(link.url));
+export type FooterLinkKey =
+	| "about"
+	| "privacy"
+	| "honor"
+	| "tos"
+	| "accessibility"
+	| "help";
+
+const FOOTER_LINK_DEFS: Record<
+	FooterLinkKey,
+	{ label: string; field: keyof MITOLFooterConfig }
+> = {
+	about: { label: "About Us", field: "aboutUrl" },
+	privacy: { label: "Privacy Policy", field: "privacyPolicyUrl" },
+	honor: { label: "Honor Code", field: "honorCodeUrl" },
+	tos: { label: "Terms of Service", field: "termsOfServiceUrl" },
+	accessibility: { label: "Accessibility", field: "accessibilityUrl" },
+	help: { label: "Help", field: "supportUrl" },
+};
+
+/**
+ * Default footer link set/order — the legacy learning MFE footer used by mitx
+ * and mitxonline (About Us · Terms of Service · Accessibility · Help).
+ * Deployments needing a different set pass `linkOrder` to createMITOLFooterApp
+ * (e.g. xPRO adds Privacy Policy + Honor Code).
+ */
+const DEFAULT_FOOTER_LINK_ORDER: FooterLinkKey[] = [
+	"about",
+	"tos",
+	"accessibility",
+	"help",
+];
+
+/**
+ * Single centered horizontal row of footer links (no column labels), rendered
+ * in the given order. Each link is omitted if its URL is missing from the
+ * runtime config.
+ */
+function MITOLFooterLinks({ order }: { order: FooterLinkKey[] }) {
+	const config = useMITOLFooterConfig();
+	const links = order
+		.map((key) => ({
+			url: config[FOOTER_LINK_DEFS[key].field],
+			label: FOOTER_LINK_DEFS[key].label,
+		}))
+		.filter((link): link is { url: string; label: string } =>
+			Boolean(link.url),
+		);
 	if (links.length === 0) return null;
 	return (
 		<ul className="d-flex flex-column flex-md-row flex-wrap list-unstyled gap-2 gap-md-4 menu-links align-items-center justify-content-center mb-0">
@@ -163,7 +205,14 @@ function MITOLFooterLinks() {
  * populated via FRONTEND_SITE_CONFIG in the LMS Django settings. A widget renders
  * nothing if its URL is absent from the runtime config.
  */
-export function createMITOLFooterApp(): App {
+export function createMITOLFooterApp(options?: {
+	/** Ordered footer link keys to render. Defaults to the mitx/mitxonline set. */
+	linkOrder?: FooterLinkKey[];
+}): App {
+	const linkOrder = options?.linkOrder ?? DEFAULT_FOOTER_LINK_ORDER;
+	// Close over the resolved order so the slot widget (which the shell renders
+	// without props) shows this deployment's link set.
+	const FooterLinks = () => <MITOLFooterLinks order={linkOrder} />;
 	const slots: SlotOperation[] = [
 		// Replace the shell's desktop footer layout with our own so we control the
 		// link/copyright spacing and place "Powered by Open edX" at the top right.
@@ -227,7 +276,7 @@ export function createMITOLFooterApp(): App {
 			slotId: "org.openedx.frontend.slot.footer.desktopCenterLinks.v1",
 			id: "mitol.footer.links",
 			op: WidgetOperationTypes.APPEND,
-			component: MITOLFooterLinks,
+			component: FooterLinks,
 		},
 	];
 

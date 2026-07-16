@@ -68,11 +68,18 @@ function useMITOLHeaderConfig(): MITOLHeaderConfig {
 const UserMenuToggle: FC = () => {
 	const authenticatedUser = useAuthenticatedUser();
 	if (!authenticatedUser) return null;
+	const displayName = authenticatedUser.name || authenticatedUser.username;
 	return (
 		<Dropdown.Toggle
-			as="div"
+			// Render a native <button> (not a div) so the toggle is focusable and
+			// keyboard-activatable. aria-label gives it an accessible name in the
+			// icon-only state (the username is hidden below 992px — see the
+			// mitxonline.scss media query).
+			as="button"
+			type="button"
+			aria-label={displayName}
 			id="user-nav-dropdown-custom"
-			className="d-flex align-items-center gap-2 cursor-pointer"
+			className="d-flex align-items-center gap-2 cursor-pointer bg-transparent"
 		>
 			{/* Person icon */}
 			<svg
@@ -87,9 +94,7 @@ const UserMenuToggle: FC = () => {
 					fill="white"
 				/>
 			</svg>
-			<span className="user-menu-name">
-				{authenticatedUser.name || authenticatedUser.username}
-			</span>
+			<span className="user-menu-name">{displayName}</span>
 			<svg
 				viewBox="0 0 24 24"
 				xmlns="http://www.w3.org/2000/svg"
@@ -132,6 +137,7 @@ const MITxOnlineAuthenticatedMenu: FC<{ className?: string }> = ({
 const AlwaysDesktopLayout: FC = () => (
 	<Container
 		fluid
+		size="xl"
 		className="align-items-center justify-content-between d-flex"
 	>
 		<div className="d-flex flex-grow-1 align-items-center">
@@ -353,6 +359,22 @@ const MITxLogoutMenuItem: FC = () => {
 
 export function createMITxHeaderApp(): App {
 	const slots: SlotOperation[] = [
+		// Keep the desktop-style header layout at all widths (no mobile hamburger),
+		// matching the legacy MITx header. Narrow-width trimming is in mitx.scss.
+		{
+			slotId: SLOT.desktop,
+			id: "mitol.header.mitx.desktopLayout",
+			relatedId: WIDGET.desktopLayout,
+			op: WidgetOperationTypes.REPLACE,
+			component: AlwaysDesktopLayout,
+		},
+		{
+			slotId: SLOT.mobile,
+			id: "mitol.header.mitx.mobileLayout",
+			relatedId: WIDGET.mobileLayout,
+			op: WidgetOperationTypes.REPLACE,
+			component: NoMobileLayout,
+		},
 		// Replace default menu items with LMS-based dashboard + logout.
 		{
 			slotId: SLOT.authenticatedMenu,
@@ -430,6 +452,22 @@ const XProLogoutMenuItem: FC = () => {
 
 export function createXProHeaderApp(): App {
 	const slots: SlotOperation[] = [
+		// Keep the desktop-style header layout at all widths (no mobile hamburger),
+		// matching the legacy xPRO header. Narrow-width trimming is in mitx.scss.
+		{
+			slotId: SLOT.desktop,
+			id: "mitol.header.xpro.desktopLayout",
+			relatedId: WIDGET.desktopLayout,
+			op: WidgetOperationTypes.REPLACE,
+			component: AlwaysDesktopLayout,
+		},
+		{
+			slotId: SLOT.mobile,
+			id: "mitol.header.xpro.mobileLayout",
+			relatedId: WIDGET.mobileLayout,
+			op: WidgetOperationTypes.REPLACE,
+			component: NoMobileLayout,
+		},
 		// Replace all default menu items with xPRO marketing-site links.
 		{
 			slotId: SLOT.authenticatedMenu,
