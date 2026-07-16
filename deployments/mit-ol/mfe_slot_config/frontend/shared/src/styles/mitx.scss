@@ -11,7 +11,7 @@
 // (no avatar). mitx and xpro use the default frontend-base AvatarButton toggle;
 // hide its avatar image so only the username + caret remain. (mitxonline uses
 // its own custom toggle — styled in mitxonline.scss — and is unaffected.)
-.pgn__avatar-button-avatar .pgn__avatar {
+header .pgn__avatar-button-avatar .pgn__avatar {
   display: none !important;
 }
 
