@@ -27,99 +27,17 @@ MIT_OL_CELLS = [
     ("verawood", "xpro"),
 ]
 
-# (release, deployment) -> expected resolved matrix values, per plans/06-build-manifest.md
-MIT_OL_MATRIX = {
-    ("master", "mitxonline"): {
-        "platform_repo": "https://github.com/openedx/edx-platform",
-        "platform_branch": "master",
-        "python_version": "3.12",
-        "translations_repo": "https://github.com/mitodl/mitxonline-translations",
-        "packages_to_remove": ["edx-name-affirmation"],
-        "theme_repo": "https://github.com/mitodl/mitxonline-theme",
-        "theme_branch": "main",
-        "settings_namespace": "mitol",
-    },
-    ("master", "mitx"): {
-        "platform_repo": "https://github.com/openedx/edx-platform",
-        "platform_branch": "master",
-        "python_version": "3.12",
-        "translations_repo": "https://github.com/openedx/openedx-translations",
-        "packages_to_remove": [],
-        "theme_repo": "https://github.com/mitodl/mitx-theme",
-        "theme_branch": "master",
-        "settings_namespace": "mitol",
-    },
-    ("master", "mitx-staging"): {
-        "platform_repo": "https://github.com/openedx/edx-platform",
-        "platform_branch": "master",
-        "python_version": "3.12",
-        "translations_repo": "https://github.com/openedx/openedx-translations",
-        "packages_to_remove": [],
-        "theme_repo": "https://github.com/mitodl/mitx-theme",
-        "theme_branch": "master",
-        "settings_namespace": "mitol",
-    },
-    ("ulmo", "mitx"): {
-        "platform_repo": "https://github.com/mitodl/edx-platform",
-        "platform_branch": "mitx/ulmo",
-        "python_version": "3.11",
-        "translations_repo": "https://github.com/openedx/openedx-translations",
-        "packages_to_remove": [],
-        "theme_repo": "https://github.com/mitodl/mitx-theme",
-        "theme_branch": "ulmo",
-        "settings_namespace": "mitol",
-    },
-    ("ulmo", "mitx-staging"): {
-        "platform_repo": "https://github.com/mitodl/edx-platform",
-        "platform_branch": "mitx/ulmo",
-        "python_version": "3.11",
-        "translations_repo": "https://github.com/openedx/openedx-translations",
-        "packages_to_remove": [],
-        "theme_repo": "https://github.com/mitodl/mitx-theme",
-        "theme_branch": "ulmo",
-        "settings_namespace": "mitol",
-    },
-    ("ulmo", "xpro"): {
-        "platform_repo": "https://github.com/openedx/edx-platform",
-        "platform_branch": "release/ulmo",
-        "python_version": "3.11",
-        "translations_repo": "https://github.com/openedx/openedx-translations",
-        "packages_to_remove": [],
-        "theme_repo": "https://github.com/mitodl/mitxpro-theme",
-        "theme_branch": "ulmo",
-        "settings_namespace": "mitol",
-    },
-    ("verawood", "mitx"): {
-        "platform_repo": "https://github.com/mitodl/edx-platform",
-        "platform_branch": "mitx/verawood",
-        "python_version": "3.12",
-        "translations_repo": "https://github.com/openedx/openedx-translations",
-        "packages_to_remove": [],
-        "theme_repo": "https://github.com/mitodl/mitx-theme",
-        "theme_branch": "verawood",
-        "settings_namespace": "mitol",
-    },
-    ("verawood", "mitx-staging"): {
-        "platform_repo": "https://github.com/mitodl/edx-platform",
-        "platform_branch": "mitx/verawood",
-        "python_version": "3.12",
-        "translations_repo": "https://github.com/openedx/openedx-translations",
-        "packages_to_remove": [],
-        "theme_repo": "https://github.com/mitodl/mitx-theme",
-        "theme_branch": "verawood",
-        "settings_namespace": "mitol",
-    },
-    ("verawood", "xpro"): {
-        "platform_repo": "https://github.com/openedx/edx-platform",
-        "platform_branch": "release/verawood",
-        "python_version": "3.12",
-        "translations_repo": "https://github.com/openedx/openedx-translations",
-        "packages_to_remove": [],
-        "theme_repo": "https://github.com/mitodl/mitxpro-theme",
-        "theme_branch": "verawood",
-        "settings_namespace": "mitol",
-    },
-}
+RESOLVED_STRING_FIELDS = [
+    "platform_repo",
+    "platform_branch",
+    "translations_repo",
+    "theme_repo",
+    "theme_branch",
+    "settings_namespace",
+]
+
+GITHUB_REPO_RE = re.compile(r"^https://github\.com/[\w.-]+/[\w.-]+$")
+SUPPORTED_PYTHON_VERSIONS = {"3.11", "3.12"}
 
 
 def effective_lines(text: str) -> list[str]:
@@ -191,17 +109,58 @@ class TestFaithfulnessAgainstCommittedTxt:
         assert rendered == effective_lines(path.read_text())
 
 
-class TestMatrixValues:
-    """Pin the values migrated from ol-infrastructure so drift is caught."""
+class TestResolvedFieldsWellFormed:
+    """Structural invariants for resolved cell values.
+
+    Exact repo/branch/version choices are a review-time concern (visible in
+    the build_manifest.yaml diff), not something to pin in test source —
+    otherwise every intentional config change requires an unrelated test edit.
+    """
 
     @pytest.mark.parametrize(("release", "deployment"), MIT_OL_CELLS)
-    def test_resolved_matrix_matches_spec(
+    @pytest.mark.parametrize("field", RESOLVED_STRING_FIELDS)
+    def test_string_field_is_non_empty(
+        self,
+        mit_ol_manifest: BuildManifest,
+        release: str,
+        deployment: str,
+        field: str,
+    ) -> None:
+        cell = mit_ol_manifest.resolve_cell(release, deployment)
+        assert cell.resolved(field, mit_ol_manifest)
+
+    @pytest.mark.parametrize(("release", "deployment"), MIT_OL_CELLS)
+    @pytest.mark.parametrize(
+        "field", ["platform_repo", "translations_repo", "theme_repo"]
+    )
+    def test_repo_field_is_a_github_https_url(
+        self,
+        mit_ol_manifest: BuildManifest,
+        release: str,
+        deployment: str,
+        field: str,
+    ) -> None:
+        cell = mit_ol_manifest.resolve_cell(release, deployment)
+        value = cell.resolved(field, mit_ol_manifest)
+        assert isinstance(value, str)
+        assert GITHUB_REPO_RE.match(value), f"not a github https url: {value!r}"
+
+    @pytest.mark.parametrize(("release", "deployment"), MIT_OL_CELLS)
+    def test_python_version_is_supported(
         self, mit_ol_manifest: BuildManifest, release: str, deployment: str
     ) -> None:
         cell = mit_ol_manifest.resolve_cell(release, deployment)
-        expected = MIT_OL_MATRIX[(release, deployment)]
-        for field, value in expected.items():
-            assert cell.resolved(field, mit_ol_manifest) == value
+        version = cell.resolved("python_version", mit_ol_manifest)
+        assert version in SUPPORTED_PYTHON_VERSIONS
+
+    @pytest.mark.parametrize(("release", "deployment"), MIT_OL_CELLS)
+    def test_packages_to_remove_is_a_list_of_strings(
+        self, mit_ol_manifest: BuildManifest, release: str, deployment: str
+    ) -> None:
+        cell = mit_ol_manifest.resolve_cell(release, deployment)
+        packages_to_remove = cell.resolved("packages_to_remove", mit_ol_manifest)
+        assert isinstance(packages_to_remove, list)
+        assert all(isinstance(pkg, str) for pkg in packages_to_remove)
 
 
 class TestResolvedRespectsExplicitEmptyOverride:
