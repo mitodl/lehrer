@@ -36,6 +36,24 @@ class OpenedxCodejail:
         Returns:
             Built codejail container
         """
+        return await self._build(
+            release_name=release_name,
+            python_version=python_version,
+            codejail_config=codejail_config,
+        )
+
+    async def _build(
+        self,
+        release_name: str = "master",
+        python_version: str | None = None,
+        codejail_config: dagger.Directory | None = None,
+    ) -> dagger.Container:
+        """Assemble the codejail container (shared by ``build`` and ``test``).
+
+        Kept undecorated so other methods can ``await`` it: the ``@function``
+        decorator's type erases the coroutine return, making a decorated
+        ``build`` un-awaitable from within the module.
+        """
         # Default to codejail_config directory if not provided
         if codejail_config is None:
             raise ValueError(
@@ -196,3 +214,61 @@ class OpenedxCodejail:
         )
 
         return container
+
+    @function
+    async def test(
+        self,
+        release_name: str = "master",
+        python_version: str | None = None,
+        codejail_config: dagger.Directory | None = None,
+        test_paths: list[str] | None = None,
+    ) -> str:
+        """Run the codejailservice test suite inside the built image.
+
+        The codejail suite is small, so it runs wholesale in the same container
+        a build produces — verifying the service actually imports and passes its
+        own tests under the release's pinned sandbox requirements, rather than
+        only that the image assembles.
+
+        Args:
+            release_name: Open edX release name (e.g., master, sumac, redwood).
+            python_version: Python version (defaults: master=3.12, others=3.11).
+            codejail_config: Directory containing the 01-sandbox sudoers file.
+            test_paths: pytest target paths (default: auto-discover from the repo
+                root at ``/codejail``).
+
+        Returns:
+            The pytest stdout (a failing suite exits non-zero and fails the call).
+        """
+        container = await self._build(
+            release_name=release_name,
+            python_version=python_version,
+            codejail_config=codejail_config,
+        )
+        # Install as root (system site-packages), then drop back to the
+        # non-root `debian` user the service actually runs as, so the suite
+        # runs under the same permissions as production rather than masking
+        # permission issues by running as root.
+        return await (
+            container.with_user("root")
+            .with_workdir("/codejail")
+            .with_exec(
+                [
+                    "sh",
+                    "-c",
+                    "if [ -f requirements/test.txt ]; then "
+                    "pip install --no-cache-dir -r requirements/test.txt; "
+                    "else pip install --no-cache-dir pytest; fi",
+                ]
+            )
+            .with_user("debian")
+            .with_exec(
+                [
+                    "python",
+                    "-m",
+                    "pytest",
+                    *(test_paths if test_paths is not None else []),
+                ]
+            )
+            .stdout()
+        )

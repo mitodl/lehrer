@@ -143,6 +143,56 @@ def check(
 
 
 @app.command
+def test(
+    cell: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            help=(
+                "<group>/<release>/<deployment> (e.g. mit-ol/master/mitxonline). "
+                "Resolves deployments/<group>/build_manifest.yaml and forwards "
+                "--build-manifest/--release-name/--deployment-name."
+            )
+        ),
+    ] = None,
+    *dagger_args: DaggerArgs,
+) -> None:
+    """Run the edx-platform test suite inside a built image (``platform test``).
+
+    Defaults to a curated smoke subset; pass ``--full`` for the whole suite,
+    ``--test-paths`` for specific apps/paths, or ``--service cms`` for Studio.
+    Remember ``--custom-settings ./deployments/<group>/settings``.
+    """
+    if cell is None:
+        _dagger("call", "platform", "test", *dagger_args)
+        return
+    group, release, deployment = _parse_cell(cell)
+    _dagger(
+        "call",
+        "platform",
+        "test",
+        "--build-manifest",
+        str(_manifest_path(group)),
+        "--release-name",
+        release,
+        "--deployment-name",
+        deployment,
+        *dagger_args,
+    )
+
+
+@app.command(name="codejail-test")
+def codejail_test(*dagger_args: DaggerArgs) -> None:
+    """Run the codejailservice test suite in its image (``codejail test``)."""
+    _dagger("call", "codejail", "test", *dagger_args)
+
+
+@app.command(name="notes-test")
+def notes_test(*dagger_args: DaggerArgs) -> None:
+    """Run the edx-notes-api test suite in its image (``notes test``)."""
+    _dagger("call", "notes", "test", *dagger_args)
+
+
+@app.command
 def cells(
     manifest: Annotated[
         str | None, cyclopts.Parameter(help="Path to a build_manifest.yaml.")
