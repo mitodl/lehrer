@@ -32,10 +32,16 @@ on:
         type: string
         default: mit-ol/master/mitxonline
 
-# Don't stack canary builds: a run can take the better part of an hour, and a
-# newer commit's result supersedes an in-flight one.
+# Don't stack equivalent canary builds: a run can take the better part of an
+# hour, and a newer run of the *same kind* supersedes an in-flight one. The key
+# includes the event and the dispatched cell so only like supersedes like — a
+# manual dispatch of one cell must not cancel the scheduled sweep (cancellation
+# is not a failure, so it would silently bypass the notify job), and the
+# schedule must not cancel an operator's manual run.
 concurrency:
-  group: canary-${{ github.workflow }}-${{ github.ref }}
+  group: >-
+    canary-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name
+    }}-${{ inputs.cell }}
   cancel-in-progress: true
 
 # Least privilege by default. The build job only reads the repo; the notify
@@ -84,11 +90,6 @@ jobs:
       matrix:
         cell: ${{ fromJSON(needs.enumerate.outputs.cells) }}
     name: build ${{ matrix.cell }}
-    env:
-      # If set, Dagger streams to Dagger Cloud and reuses its layer cache across
-      # runs, keeping the canary's wall-clock tolerable. Unset (empty) is fine —
-      # Dagger just runs locally with the engine's own cache.
-      DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
     steps:
     - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
     - name: Install Dagger CLI
@@ -103,6 +104,12 @@ jobs:
     - name: build-platform
       env:
         CELL: ${{ matrix.cell }}
+        # Scoped to this step only (not the job) so neither `checkout` nor the
+        # curl|sudo -E installer above can read it — least privilege. If set,
+        # Dagger streams to Dagger Cloud and reuses its layer cache across runs,
+        # keeping the canary's wall-clock tolerable; unset (empty) is fine —
+        # Dagger just runs locally with the engine's own cache.
+        DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
       run: |
         set -euo pipefail
         IFS=/ read -r group release deployment <<< "$CELL"
@@ -150,8 +157,8 @@ jobs:
           "" \
           "A new edx-platform commit likely broke a pinned MIT OL plugin or the" \
           "aqueduct settings for the canary cell. Reproduce locally with" \
-          "\`lehrer build platform mit-ol/master/mitxonline\` and inspect the" \
-          "failing step.")"
+          "\`lehrer build platform mit-ol/master/mitxonline --custom-settings" \
+          " ./deployments/mit-ol/settings\` and inspect the failing step.")"
         existing="$(gh issue list --label canary-failure --state open \
           --json number --jq '.[0].number // empty')"
         if [ -n "$existing" ]; then
