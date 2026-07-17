@@ -8,6 +8,7 @@ hosts, package overrides, and translations repository.
 
 import json
 import re
+import shlex
 import urllib.request
 from typing import TypeVar, cast
 
@@ -24,6 +25,11 @@ from lehrer.core.plugin_tests import (
 )
 
 _T = TypeVar("_T")
+
+# ruff version used to format generated aqueduct models inside the regeneration
+# container. Keep in sync with the ``ruff==`` pin in pyproject.toml so the
+# committed model matches what CI's ``ruff format --check`` expects.
+_RUFF_VERSION = "0.15.20"
 
 # Where the full list of released Node versions lives. Each entry is
 # ``{"version": "v24.18.0", ...}``; the file is authoritative for which
@@ -894,8 +900,11 @@ class OpenedxPlatform:
             # django-aqueduct settings:
             # models/base.py    → ProductionSettingsMixin from lehrer core
             # models/__init__.py → makes models/ a package for relative imports
-            # models/aqueduct.py → generated AqueductSettings(ProductionSettingsMixin)
-            # aqueduct.py       → DJANGO_SETTINGS_MODULE entry point
+            # models/aqueduct.py → pure generated AqueductSettings(BaseSettings)
+            # aqueduct.py       → entry point; composes
+            #                     <Svc>ProductionSettings(ProductionSettingsMixin,
+            #                     AqueductSettings) then configure_django_settings
+            #                     (DJANGO_SETTINGS_MODULE=<svc>.envs.aqueduct)
             .with_file(
                 "/openedx/edx-platform/lms/envs/models/base.py",
                 lehrer_base,
@@ -2000,23 +2009,31 @@ class OpenedxPlatform:
     ) -> dagger.Directory:
         """Regenerate the AqueductSettings pydantic models for LMS and CMS.
 
-        Installs the Python dependencies (no Node/webpack), injects minimal
-        generation shims that do ``from <service>.envs.common import *;
-        derive_settings()``, then calls ``ModuleInspector`` and
-        ``SettingsModelGenerator`` from django-aqueduct directly — no
-        management command needed, no INSTALLED_APPS dependency.
+        Installs the Python dependencies (no Node/webpack), then runs
+        django-aqueduct's ``generate_aqueduct_settings`` management command
+        (codegen v2), which discovers settings by *static AST analysis* of
+        ``<service>.envs.common`` — the module is never imported, so there are
+        no shims, no ``derive_settings``, no plugin booting, and no regex
+        post-processing of the rendered model.  Policy (``extra="allow"``,
+        ``class_name``, ``enrich_url_types=false``) comes from an injected
+        ``[tool.aqueduct]`` block; ``--modules``/``--output`` are per service.
 
-        Because the shims only import common.py and derive settings (exactly
-        as the upstream ``generate_aqueduct_settings`` workflow works), all
-        settings contributed by custom plugins via ``add_plugins()`` are
-        captured automatically.
+        Because static discovery reads only common.py's *source*, the generated
+        ``INSTALLED_APPS`` (and the other settings openedx's ``add_plugins()``
+        augments at runtime) is a *plugin-incomplete* snapshot.  That is by
+        design: at runtime ``configure_django_settings(base="…envs.common")``
+        defers those un-overridden settings to the live, plugin-complete base
+        (django-aqueduct >= 0.10.0 overlay semantics).  The boot self-test below
+        exercises that overlay path and asserts no base/plugin app is dropped.
 
         Returns a directory containing:
-          lms/models/aqueduct.py  — AqueductSettings(ProductionSettingsMixin)
-          cms/models/aqueduct.py  — AqueductSettings(ProductionSettingsMixin)
+          lms/models/aqueduct.py  — AqueductSettings(BaseSettings)
+          cms/models/aqueduct.py  — AqueductSettings(BaseSettings)
 
-        The generated class already inherits ``ProductionSettingsMixin`` so
-        regeneration cannot accidentally lose the mixin.
+        The generated model is pure codegen output (subclasses ``BaseSettings``);
+        ``ProductionSettingsMixin`` is composed by each service's entry module
+        (``class <Svc>ProductionSettings(ProductionSettingsMixin, AqueductSettings)``),
+        never by the generated file.
 
         Usage::
 
@@ -2184,150 +2201,150 @@ class OpenedxPlatform:
             ["uv", "pip", "install", "-e", "."]
         )
 
-        # ── Inject minimal generation shims ───────────────────────────────────
-        # These shims do exactly what the upstream generate_aqueduct_settings
-        # workflow recommends: import common.py (which calls add_plugins so all
-        # plugin settings are included) then resolve Derived values.  We write
-        # them to throw-away module names so we never conflict with anything in
-        # the platform source tree.
-        lms_shim = (
-            "# Temporary generation shim — not committed to the platform.\n"
-            "from lms.envs.common import *  # noqa: F401,F403\n"
-            "from openedx.core.lib.derived import derive_settings\n"
-            "derive_settings(__name__)\n"
+        # ── codegen v2 generation setup ───────────────────────────────────────
+        # django-aqueduct >= 0.7.0 discovers settings by *static AST analysis* of
+        # the source module — it never imports common.py, so no shims, no
+        # derive_settings, no plugin booting, and no regex post-processing of the
+        # rendered model are needed.  The management command needs Django set up
+        # only enough to be discovered, so we hand it a throwaway settings module
+        # whose sole INSTALLED_APPS entry is django_aqueduct itself.
+        gen_settings = (
+            "# Throwaway settings — lets `python -m django` load the\n"
+            "# generate_aqueduct_settings command.  It does NOT drive generation:\n"
+            "# static AST discovery reads lms/cms.envs.common source directly.\n"
+            'SECRET_KEY = "lehrer-aqueduct-generation"  # noqa: S105\n'  # pragma: allowlist secret
+            'INSTALLED_APPS = ["django_aqueduct"]\n'
+            "DATABASES: dict = {}\n"
+            "USE_TZ = True\n"
         )
-        cms_shim = (
-            "# Temporary generation shim — not committed to the platform.\n"
-            "from cms.envs.common import *  # noqa: F401,F403\n"
-            "# LMS_ROOT_URL may be a Derived sentinel; provide a concrete default\n"
-            "# so derive_settings can resolve dependents.\n"
-            "if not isinstance(LMS_ROOT_URL, str):  # noqa: F821\n"
-            "    LMS_ROOT_URL = 'http://localhost:18000'  # noqa: F821\n"
-            "from openedx.core.lib.derived import derive_settings\n"
-            "derive_settings(__name__)\n"
+        # [tool.aqueduct] policy block (deliberate, documented choices):
+        #   extra="allow"       — edx-platform + openedx plugins inject many
+        #                         settings the static common.py snapshot does not
+        #                         model; "forbid"/"ignore" would reject/drop them.
+        #   enrich_url_types=false — 0.9.0 made str→AnyUrl promotion opt-in after
+        #                         it broke on Django's many relative-URL settings.
+        # (--modules/--output vary per service and stay on the CLI.)
+        aqueduct_toml = (
+            "\n[tool.aqueduct]\n"
+            'class_name = "AqueductSettings"\n'
+            'extra = "allow"\n'
+            "enrich_url_types = false\n"
         )
         container = (
-            container.with_new_file("./lehrer_lms_shim.py", contents=lms_shim)
-            .with_new_file("./lehrer_cms_shim.py", contents=cms_shim)
+            container.with_new_file(
+                "/openedx/edx-platform/lehrer_gen_settings.py", contents=gen_settings
+            )
+            .with_exec(
+                [
+                    "sh",
+                    "-c",
+                    "printf '%s' "
+                    + shlex.quote(aqueduct_toml)
+                    + " >> /openedx/edx-platform/pyproject.toml",
+                ]
+            )
             .with_exec(["mkdir", "-p", "./lms/envs/models", "./cms/envs/models"])
-            # Inject ProductionSettingsMixin so generated files can import it
-            # and the self-test can instantiate AqueductSettings(ProductionSettingsMixin).
-            .with_file(
-                "./lms/envs/models/base.py",
-                dag.current_module().source().file("src/lehrer/settings/base.py"),
-            )
-            .with_file(
-                "./cms/envs/models/base.py",
-                dag.current_module().source().file("src/lehrer/settings/base.py"),
-            )
-            .with_new_file("./lms/envs/models/__init__.py", contents="")
-            .with_new_file("./cms/envs/models/__init__.py", contents="")
         )
 
-        # ── Generate the models ───────────────────────────────────────────────
-        # Call ModuleInspector + SettingsModelGenerator directly — no
-        # management command required, no django_aqueduct in INSTALLED_APPS
-        # required.  The shim modules import common.py into their own globals
-        # so every UPPERCASE name (including plugin settings) is discovered.
-        generate_script = "\n".join(
+        # ── Generate the models (static AST, one management command per service) ─
+        for svc in ("lms", "cms"):
+            container = container.with_exec(
+                [
+                    "sh",
+                    "-c",
+                    "DJANGO_SETTINGS_MODULE=lehrer_gen_settings "
+                    "python -m django generate_aqueduct_settings "
+                    f"--modules {svc}.envs.common "
+                    f"--output {svc}/envs/models/aqueduct.py --reset",
+                ]
+            )
+
+        # ── ruff-format the generated models ──────────────────────────────────
+        # django-aqueduct's renderer emits verbatim EXPR-default source segments
+        # (e.g. multi-line dicts/tuple concatenations copied straight from
+        # common.py), which keep the platform's own single-quote/indentation
+        # style — so the raw output is not `ruff format`-stable for a settings
+        # module as complex as edx-platform's.  Format here (pinned to lehrer's
+        # ruff version) so the committed model passes CI's `ruff format --check`
+        # and regeneration is idempotent.  Managed-region markers are comments
+        # and survive formatting.  (Renderer-side wrapping is tracked upstream in
+        # tk-codegen-v2-renderer-residual-line-wrap-gaps.)
+        container = container.with_exec(
             [
-                "import sys, os, re, importlib",
-                "os.chdir('/openedx/edx-platform')",
-                "sys.path.insert(0, '/openedx/edx-platform')",
-                "from django_aqueduct.discovery.module import ModuleInspector",
-                "from django_aqueduct.codegen.generator import SettingsModelGenerator",
-                "def _add_imports(code):",
-                "    # Add stdlib/third-party imports the generator references but omits.",
-                "    # (Optional-widening of None-default fields is handled by the",
-                "    # django-aqueduct generator itself as of 0.4.0.)",
-                "    # Note: pathlib is now always emitted by django-aqueduct >= 0.5.0;",
-                "    # 'from path import Path' is only needed for bare Path() calls that",
-                "    # are NOT preceded by 'pathlib.' (i.e. legacy path.py usage).",
-                "    extra = []",
-                "    if re.search(r'(?<!pathlib\\.)(?<!\\.)Path\\(', code) and 'from path import' not in code:",
-                "        extra.append('from path import Path')",
-                "    if 'datetime.' in code and 'import datetime' not in code:",
-                "        extra.append('import datetime')",
-                "    if extra:",
-                "        lines = code.splitlines()",
-                '        last_import = max((i for i, l in enumerate(lines) if re.match(r"^(from|import)\\s", l)), default=0)',
-                "        lines = lines[:last_import+1] + extra + lines[last_import+1:]",
-                "        code = '\\n'.join(lines) + '\\n'",
-                "    return code",
-                "def _rewrite_base_class(code):",
-                "    # Replace the generator's BaseSettings inheritance with ProductionSettingsMixin.",
-                "    # ProductionSettingsMixin already inherits BaseSettings and owns model_config,",
-                "    # so the generated class no longer needs to redeclare them.",
-                "    #",
-                "    # 1. Drop the BaseSettings / SettingsConfigDict pydantic-settings import.",
-                "    code = re.sub(",
-                "        r'from pydantic_settings import BaseSettings, SettingsConfigDict\\n',",
-                "        '',",
-                "        code,",
-                "    )",
-                "    # 2. Remove the generated model_config (inherited from the mixin).",
-                "    code = re.sub(",
-                r"        r'\\n    model_config = SettingsConfigDict\\([^)]+\\)\\n',",
-                "        '\\n',",
-                "        code,",
-                "    )",
-                "    # 3. Swap the base class.",
-                "    code = code.replace(",
-                "        'class AqueductSettings(BaseSettings):',",
-                "        'class AqueductSettings(ProductionSettingsMixin):',",
-                "    )",
-                "    # 4. Add the mixin import after the last pydantic import line.",
-                "    lines = code.splitlines()",
-                "    last_pydantic = max(",
-                "        (i for i, l in enumerate(lines) if re.match(r'^from pydantic', l)),",
-                "        default=0,",
-                "    )",
-                "    lines.insert(last_pydantic + 1, 'from .base import ProductionSettingsMixin')",
-                "    return '\\n'.join(lines) + '\\n'",
-                "def _fix_str_path_annotations(code):",
-                "    # Fix fields where the annotation is 'str' but the default is",
-                "    # pathlib.Path(...).  This arises when edx-platform settings define",
-                "    # a path as str(PROJECT_ROOT / ...) at generation time but supply a",
-                "    # PosixPath at runtime via the aqueduct overlay source.  Pydantic",
-                "    # does not coerce PosixPath → str, so the model would fail to",
-                "    # instantiate.  django-aqueduct >= 0.5.0 detects PathLike defaults",
-                "    # and emits pathlib.Path annotations correctly; this step is a",
-                "    # belt-and-braces guard for any field the generator still misses.",
-                "    return re.sub(",
-                "        r'(\\b\\w+): str = (Field\\(\\s*\\n\\s*default=pathlib\\.Path\\b)',",
-                "        r'\\1: pathlib.Path = \\2',",
-                "        code,",
-                "    )",
-                "for shim, out in [",
-                "    ('lehrer_lms_shim', 'lms/envs/models/aqueduct.py'),",
-                "    ('lehrer_cms_shim', 'cms/envs/models/aqueduct.py'),",
-                "]:",
-                "    print(f'Generating {out} from {shim} ...')",
-                "    fields = ModuleInspector(shim).discover()",
-                "    code = _add_imports(SettingsModelGenerator(fields).render())",
-                "    code = _rewrite_base_class(code)",
-                "    code = _fix_str_path_annotations(code)",
-                "    open(out, 'w').write(code)",
-                "    print(f'  {len(fields)} fields written to {out}')",
-                "# ── Boot self-test ──────────────────────────────────────────",
-                "# Fail generation (not pod boot) if a model cannot instantiate or is",
-                "# missing INSTALLED_APPS.  Load via proper package import so relative",
-                "# imports (from .base import ProductionSettingsMixin) resolve correctly.",
-                "for pkg in ['lms.envs.models.aqueduct', 'cms.envs.models.aqueduct']:",
-                "    # Force fresh import — remove any stale cached module.",
-                "    sys.modules.pop(pkg, None)",
-                "    _saved = dict(os.environ); os.environ.clear()",
-                "    try:",
-                "        _m = importlib.import_module(pkg)",
-                "        inst = _m.AqueductSettings()",
-                "    finally:",
-                "        os.environ.clear(); os.environ.update(_saved)",
-                "    apps = getattr(inst, 'INSTALLED_APPS', None)",
-                "    assert apps, f'{pkg}: INSTALLED_APPS empty/missing ({apps!r})'",
-                "    print(f'  self-test OK: {pkg} instantiates, {len(apps)} INSTALLED_APPS')",
+                "sh",
+                "-c",
+                f"uvx ruff@{_RUFF_VERSION} format "
+                "lms/envs/models/aqueduct.py cms/envs/models/aqueduct.py",
             ]
         )
-        container = container.with_exec(["python", "-c", generate_script])
+
+        # ── Boot self-test (the real runtime overlay path) ────────────────────
+        # Inject ProductionSettingsMixin (models/base.py) and a *synthetic*
+        # minimal entry per service, then import the entry — which runs
+        # configure_django_settings(base="<svc>.envs.common").  We compose the
+        # same class hierarchy the real deployment entries use
+        # (<Svc>ProductionSettings(ProductionSettingsMixin, AqueductSettings)) but
+        # skip operator-specific validators/post_configure: this test targets the
+        # framework overlay, which is operator-independent, so it stays valid for
+        # any deployment cell (deployment_name here names a requirements cell, not
+        # an operator; the operator's real entry modules live under its own
+        # settings tree and are exercised end-to-end by the plugin-compat build).
+        #
+        # The generated AqueductSettings carries only the plugin-INCOMPLETE static
+        # snapshot of INSTALLED_APPS; the overlay must defer it to the live,
+        # plugin-complete common.py value (common.py runs add_plugins on import).
+        # The self-test asserts exactly that: the final INSTALLED_APPS is a
+        # superset of the live base, i.e. no plugin/base app was dropped.
+        lehrer_base = dag.current_module().source().file("src/lehrer/settings/base.py")
+        container = container.with_file(
+            "./lms/envs/models/base.py", lehrer_base
+        ).with_file("./cms/envs/models/base.py", lehrer_base)
+        for svc in ("lms", "cms"):
+            entry = (
+                "from django_aqueduct import configure_django_settings\n"
+                "from .models.aqueduct import AqueductSettings\n"
+                "from .models.base import ProductionSettingsMixin\n\n\n"
+                "class _SelfTestSettings(ProductionSettingsMixin, AqueductSettings):\n"
+                "    pass\n\n\n"
+                f'configure_django_settings(_SelfTestSettings, base="{svc}.envs.common")\n'
+            )
+            container = container.with_new_file(
+                f"./{svc}/envs/models/__init__.py", contents=""
+            ).with_new_file(f"./{svc}/envs/aqueduct.py", contents=entry)
+        self_test = "\n".join(
+            [
+                "import importlib",
+                "failures = []",
+                "for svc in ('lms', 'cms'):",
+                "    entry = importlib.import_module(f'{svc}.envs.aqueduct')",
+                "    common = importlib.import_module(f'{svc}.envs.common')",
+                "    base_apps = set(getattr(common, 'INSTALLED_APPS', []) or [])",
+                "    final_apps = getattr(entry, 'INSTALLED_APPS', None)",
+                "    if not final_apps:",
+                "        failures.append(f'{svc}: INSTALLED_APPS empty/missing ({final_apps!r})')",
+                "        continue",
+                "    dropped = base_apps - set(final_apps)",
+                "    if dropped:",
+                "        failures.append(",
+                "            f'{svc}: overlay dropped {len(dropped)} base/plugin apps '",
+                "            f'e.g. {sorted(dropped)[:5]}'",
+                "        )",
+                "        continue",
+                "    print(",
+                "        f'  self-test OK: {svc}.envs.aqueduct boots, {len(final_apps)} '",
+                "        f'INSTALLED_APPS (live base {len(base_apps)}, none dropped)'",
+                "    )",
+                "if failures:",
+                "    raise SystemExit('SELF-TEST FAILED:\\n' + '\\n'.join(failures))",
+            ]
+        )
+        container = container.with_exec(
+            [
+                "sh",
+                "-c",
+                f"DJANGO_SETTINGS_MODULE=lehrer_gen_settings python -c {shlex.quote(self_test)}",
+            ]
+        )
 
         # ── Return the two generated model files ──────────────────────────────
         return (
