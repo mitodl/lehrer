@@ -243,3 +243,47 @@ class TestBuildManifestStructure:
                 cell.render_overrides()
             ):
                 assert requirement_re.match(line), f"not a valid requirement: {line!r}"
+
+
+class TestNodeVersionValidation:
+    """``node_version`` must reject anything that can't resolve to a real
+    prebuilt tarball, on both ``CellDefaults`` and the per-cell ``Cell``
+    override — the whole point of the pattern is to fail at manifest-load
+    rather than deep in the Node build step."""
+
+    VALID = ["24", "24.4", "24.18.0", "20"]
+    # bare-major/minor prefixes resolve at build time; these are shapes that
+    # would otherwise slip through to a nonexistent nodeenv download URL.
+    INVALID = [
+        "",  # empty
+        "v24",  # leading v
+        "24.x",  # non-numeric component
+        "24.",  # trailing dot
+        "24.18.0.1",  # too many components
+        "024.18.0",  # leading zero — not a SemVer numeric identifier
+        "24.4.0-rc.1",  # pre-release suffix (no prebuilt release)
+        "٢٤",  # Unicode digits (\d would match; [0-9] must not)
+    ]
+
+    @pytest.mark.parametrize("value", VALID)
+    def test_cell_defaults_accepts_valid(self, value: str) -> None:
+        assert CellDefaults(node_version=value).node_version == value
+
+    @pytest.mark.parametrize("value", VALID)
+    def test_cell_accepts_valid(self, value: str) -> None:
+        cell = Cell(
+            release="master", deployment="x", packages=["a==1"], node_version=value
+        )
+        assert cell.node_version == value
+
+    @pytest.mark.parametrize("value", INVALID)
+    def test_cell_defaults_rejects_invalid(self, value: str) -> None:
+        with pytest.raises(ValidationError, match="node_version"):
+            CellDefaults(node_version=value)
+
+    @pytest.mark.parametrize("value", INVALID)
+    def test_cell_rejects_invalid(self, value: str) -> None:
+        with pytest.raises(ValidationError, match="node_version"):
+            Cell(
+                release="master", deployment="x", packages=["a==1"], node_version=value
+            )

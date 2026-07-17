@@ -22,6 +22,18 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+# ``node_version`` feeds ``install_deps``, which resolves it to a full release
+# before ``nodeenv --node=<v> --prebuilt`` (nodeenv only fetches a prebuilt
+# tarball for a full ``MAJOR.MINOR.PATCH``). A bare major (``"24"``) or
+# ``MAJOR.MINOR`` prefix resolves to the latest matching release — mirroring the
+# nodejs ``github_release`` resource the Concourse pipeline historically used;
+# a full ``MAJOR.MINOR.PATCH`` is used verbatim (a reproducible pin). Each
+# component is a SemVer numeric identifier — ASCII ``[0-9]`` (not ``\d``, which
+# is Unicode-aware) and no leading zeros — so a value like ``"024.18.0"`` that
+# would slip past to a nonexistent nodeenv download URL fails fast at
+# manifest-load instead of deep in the Node build step.
+NODE_VERSION_PATTERN = r"^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,2}$"
+
 
 class CellDefaults(BaseModel):
     """Group-wide values a cell may override."""
@@ -32,7 +44,7 @@ class CellDefaults(BaseModel):
     platform_repo: str | None = None
     translations_repo: str | None = None
     translations_branch: str | None = None
-    node_version: str | None = None
+    node_version: str | None = Field(default=None, pattern=NODE_VERSION_PATTERN)
     extra_ssh_hosts: list[str] = Field(default_factory=list)
     extra_npm_packages: list[str] = Field(default_factory=list)
 
@@ -58,7 +70,7 @@ class Cell(BaseModel):
     platform_repo: str | None = None
     translations_repo: str | None = None
     translations_branch: str | None = None
-    node_version: str | None = None
+    node_version: str | None = Field(default=None, pattern=NODE_VERSION_PATTERN)
     extra_ssh_hosts: list[str] | None = None
     extra_npm_packages: list[str] | None = None
 
