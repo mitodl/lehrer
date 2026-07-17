@@ -51,7 +51,7 @@ jobs:
       with:
         # Full history so the PR base is available to diff against.
         fetch-depth: 0
-    - uses: astral-sh/setup-uv@v4
+    - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
       with:
         enable-cache: true
     - run: uv sync --all-groups
