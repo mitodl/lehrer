@@ -182,11 +182,12 @@ cp generated/cms/models/aqueduct.py deployments/mit-ol/settings/cms/models/aqued
 
 ## 9. Running test suites inside built images
 
-`test` targets run each service's own upstream test suite inside a built image,
-under the deployment's configuration — so a regression particular to a
-`(deployment × release × plugin set)` surfaces here rather than in production.
-They are the execution engine for the plugin-compat matrix's deep tier and the
-scheduled canary.
+These targets run test suites inside a built image, under the deployment's
+configuration — so a regression particular to a `(deployment × release × plugin
+set)` surfaces here rather than in production. They are the execution engine for
+the plugin-compat matrix's deep tier and the scheduled canary. Two flavours:
+`test`/`codejail-test`/`notes-test` run each service's own **upstream** suite;
+`plugin-regression` runs the **installed plugins'** own suites.
 
 ### edx-platform (`platform test`)
 
@@ -221,6 +222,31 @@ lehrer build test --cell mit-ol/master/mitxonline \
 # Whole service tree (hours — canary tier), or add --markers for a -m expr:
 lehrer build test --cell mit-ol/master/mitxonline \
   --custom-settings ./deployments/mit-ol/settings --full
+```
+
+### plugins (`platform plugin-regression`)
+
+Runs the installed plugins' **own** pytest suites against the deployment's
+platform build and derived `lehrer_test` settings — the tier above `check`
+(which only proves plugins install and import). It uses pytest **discovery**:
+whatever tests are installed in the image are run, so a plugin's suite is
+exercised the moment its distribution ships one. The maintained `ol-openedx-*`
+plugins are re-requested at their pinned version with a `[tests]` extra (default
+on; `--no-install-test-extras` to skip) so their suites and test-only deps are
+present; requesting the extra on a plugin that doesn't define one yet is a safe
+no-op. A plugin that ships no tests is reported and skipped — so today, before
+the extras land, this passes cleanly and starts running real suites as they
+appear. Results are aggregated into one JUnit report inside the image.
+
+```bash
+# All installed plugin suites for a cell (LMS settings):
+lehrer build plugin-regression --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings
+
+# Under Studio settings, without pulling the [tests] extras:
+lehrer build plugin-regression --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings \
+  --service cms --no-install-test-extras
 ```
 
 ### codejail (`codejail test`) and notes (`notes test`)
