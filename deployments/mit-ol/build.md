@@ -182,11 +182,12 @@ cp generated/cms/models/aqueduct.py deployments/mit-ol/settings/cms/models/aqued
 
 ## 9. Running test suites inside built images
 
-`test` targets run each service's own upstream test suite inside a built image,
-under the deployment's configuration — so a regression particular to a
-`(deployment × release × plugin set)` surfaces here rather than in production.
-They are the execution engine for the plugin-compat matrix's deep tier and the
-scheduled canary.
+These targets run test suites inside a built image, under the deployment's
+configuration — so a regression particular to a `(deployment × release × plugin
+set)` surfaces here rather than in production. They are the execution engine for
+the plugin-compat matrix's deep tier and the scheduled canary. `platform test`
+runs edx-platform's own suite **and** (by default) the installed plugins' own
+suites in one run; `codejail-test`/`notes-test` run those services' suites.
 
 ### edx-platform (`platform test`)
 
@@ -221,7 +222,24 @@ lehrer build test --cell mit-ol/master/mitxonline \
 # Whole service tree (hours — canary tier), or add --markers for a -m expr:
 lehrer build test --cell mit-ol/master/mitxonline \
   --custom-settings ./deployments/mit-ol/settings --full
+
+# edx-platform suite only, without the installed plugins' own suites:
+lehrer build test --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings --no-include-plugins
 ```
+
+**Plugins folded in.** With `--include-plugins` (default), the same pytest run
+also executes whatever tests the installed plugins ship — appended to the
+edx-platform targets via `--pyargs`, so one run covers edx-platform **and** the
+plugins. It uses pytest **discovery**: published plugin packages don't ship their
+tests today, so with `--install-test-extras` (default) each maintained
+`ol-openedx-*` plugin is re-requested at its pinned version with a `[tests]`
+extra (a safe no-op until the plugin defines one; any package the cell removed
+via `packages_to_remove` is excluded so the run matches production). A plugin
+that ships no tests simply collects nothing (never a failure), so this stays
+green today and starts running real plugin suites the moment one is published.
+Pass `--no-include-plugins` for the edx-platform suite alone, or
+`--no-install-test-extras` to skip the extra install.
 
 ### codejail (`codejail test`) and notes (`notes test`)
 

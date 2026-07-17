@@ -1,14 +1,26 @@
-"""``lehrer build`` — drive the Dagger build pipelines.
+"""``lehrer build`` — build and verify the Open edX images.
 
-These commands are thin, well-labelled wrappers around ``dagger call`` against
-the lehrer Dagger module (``src/lehrer/main.py``).  They run from the repo root
-so relative ``--source`` / config paths resolve the same way they would for a
-bare ``dagger call``.
+A single, consistent facade over the lehrer Dagger module
+(``src/lehrer/main.py``) so the whole build-and-verify surface is one command
+tree instead of a wall of ``dagger call`` incantations. ``lehrer build --help``
+groups the commands the way you reason about them:
 
-Every wrapper forwards its trailing arguments straight through to Dagger, so
-the full ``dagger call`` flag surface (``--help``, ``export``, ``publish``,
-``--source``, ...) is available.  Use ``lehrer build call ...`` as a raw
-escape hatch for any function not given a dedicated wrapper.
+* **Build** — produce an image or artifact (``platform``, ``codejail``,
+  ``notes``, ``mfe-legacy``, ``mfe-site``).
+* **Verify** — the compatibility pyramid for a build cell, cheapest first:
+  ``check`` (install + import) → ``test`` (edx-platform's own suite under the
+  deployment's settings, and — with ``--include-plugins``, the default — the
+  installed plugins' own suites in the same run); plus ``codejail-test`` /
+  ``notes-test`` for those services.
+* **Utilities** — ``cells``, ``functions``, and the raw ``call`` escape hatch.
+
+Each command is a thin wrapper that forwards its trailing arguments straight to
+Dagger, so the full ``dagger call`` flag surface (``--help``, ``export``,
+``publish``, ``--source``, ...) is always available. The cell-scoped commands
+(``platform``/``check``/``test``) also accept a single
+``<group>/<release>/<deployment>`` argument that expands to the right
+``--build-manifest``/``--release-name``/``--deployment-name`` so you don't
+repeat them; use ``lehrer build call ...`` for any function without a wrapper.
 """
 
 from __future__ import annotations
@@ -24,12 +36,30 @@ from lehrer.core.build_manifest import load_manifest
 
 app = cyclopts.App(
     name="build",
-    help="Run the Dagger build pipelines (edx-platform, MFEs, codejail, notes).",
+    help="Build & verify Open edX images (edx-platform, MFEs, codejail, notes).",
 )
+
+# Ordered so `--help` reads as the mental model: make images, then verify them.
+_BUILD = cyclopts.Group.create_ordered("Build")
+_VERIFY = cyclopts.Group.create_ordered("Verify")
+_UTIL = cyclopts.Group.create_ordered("Utilities")
 
 # Trailing tokens are passed verbatim to `dagger`, including ones that begin
 # with a hyphen (e.g. `--deployment-name`, `export`, `--path`).
 DaggerArgs = Annotated[str, cyclopts.Parameter(allow_leading_hyphen=True)]
+
+# The one argument every cell-scoped platform command shares: a single
+# coordinate that expands to the manifest + release + deployment flags.
+CellArg = Annotated[
+    str | None,
+    cyclopts.Parameter(
+        help=(
+            "<group>/<release>/<deployment> (e.g. mit-ol/master/mitxonline). "
+            "Resolves deployments/<group>/build_manifest.yaml and forwards "
+            "--build-manifest/--release-name/--deployment-name."
+        )
+    ),
+]
 
 
 def _dagger(*argv: str) -> None:
@@ -70,106 +100,24 @@ def _parse_cell(cell: str) -> tuple[str, str, str]:
     return group, release, deployment
 
 
-@app.command
-def functions() -> None:
-    """List all available Dagger functions (``dagger functions``)."""
-    _dagger("functions")
-
-
-@app.command
-def platform(
-    cell: Annotated[
-        str | None,
-        cyclopts.Parameter(
-            help=(
-                "<group>/<release>/<deployment> (e.g. mit-ol/master/mitxonline). "
-                "Resolves deployments/<group>/build_manifest.yaml and forwards "
-                "--build-manifest/--release-name/--deployment-name."
-            )
-        ),
-    ] = None,
-    *dagger_args: DaggerArgs,
+def _platform_cell_command(
+    subcommand: str, cell: str | None, dagger_args: tuple[str, ...]
 ) -> None:
-    """Build the edx-platform LMS/CMS image (``platform build-platform``)."""
-    if cell is None:
-        _dagger("call", "platform", "build-platform", *dagger_args)
-        return
-    group, release, deployment = _parse_cell(cell)
-    _dagger(
-        "call",
-        "platform",
-        "build-platform",
-        "--build-manifest",
-        str(_manifest_path(group)),
-        "--release-name",
-        release,
-        "--deployment-name",
-        deployment,
-        *dagger_args,
-    )
+    """Forward a cell-scoped ``platform`` subcommand to Dagger.
 
-
-@app.command
-def check(
-    cell: Annotated[
-        str | None,
-        cyclopts.Parameter(
-            help=(
-                "<group>/<release>/<deployment> (e.g. mit-ol/master/mitxonline). "
-                "Resolves deployments/<group>/build_manifest.yaml and forwards "
-                "--build-manifest/--release-name/--deployment-name."
-            )
-        ),
-    ] = None,
-    *dagger_args: DaggerArgs,
-) -> None:
-    """Verify a cell's requirements install + import (``platform check-deployment``)."""
-    if cell is None:
-        _dagger("call", "platform", "check-deployment", *dagger_args)
-        return
-    group, release, deployment = _parse_cell(cell)
-    _dagger(
-        "call",
-        "platform",
-        "check-deployment",
-        "--build-manifest",
-        str(_manifest_path(group)),
-        "--release-name",
-        release,
-        "--deployment-name",
-        deployment,
-        *dagger_args,
-    )
-
-
-@app.command
-def test(
-    cell: Annotated[
-        str | None,
-        cyclopts.Parameter(
-            help=(
-                "<group>/<release>/<deployment> (e.g. mit-ol/master/mitxonline). "
-                "Resolves deployments/<group>/build_manifest.yaml and forwards "
-                "--build-manifest/--release-name/--deployment-name."
-            )
-        ),
-    ] = None,
-    *dagger_args: DaggerArgs,
-) -> None:
-    """Run the edx-platform test suite inside a built image (``platform test``).
-
-    Defaults to a curated smoke subset; pass ``--full`` for the whole suite,
-    ``--test-paths`` for specific apps/paths, or ``--service cms`` for Studio.
-    Remember ``--custom-settings ./deployments/<group>/settings``.
+    With no ``cell`` the trailing args are passed through verbatim (the caller
+    supplies the flags themselves); with a ``<group>/<release>/<deployment>``
+    cell the manifest/release/deployment flags are filled in for them. Shared
+    by every cell-scoped platform command so they can never drift apart.
     """
     if cell is None:
-        _dagger("call", "platform", "test", *dagger_args)
+        _dagger("call", "platform", subcommand, *dagger_args)
         return
     group, release, deployment = _parse_cell(cell)
     _dagger(
         "call",
         "platform",
-        "test",
+        subcommand,
         "--build-manifest",
         str(_manifest_path(group)),
         "--release-name",
@@ -180,19 +128,70 @@ def test(
     )
 
 
-@app.command(name="codejail-test")
+@app.command(group=_BUILD)
+def platform(cell: CellArg = None, *dagger_args: DaggerArgs) -> None:
+    """Build the edx-platform LMS/CMS image (``platform build-platform``)."""
+    _platform_cell_command("build-platform", cell, dagger_args)
+
+
+@app.command(group=_BUILD)
+def codejail(*dagger_args: DaggerArgs) -> None:
+    """Build the codejail service image (``codejail build``)."""
+    _dagger("call", "codejail", "build", *dagger_args)
+
+
+@app.command(group=_BUILD)
+def notes(*dagger_args: DaggerArgs) -> None:
+    """Build the edx-notes-api image (``notes build``)."""
+    _dagger("call", "notes", "build", *dagger_args)
+
+
+@app.command(name="mfe-legacy", group=_BUILD)
+def mfe_legacy(*dagger_args: DaggerArgs) -> None:
+    """Build a legacy MFE ``dist/`` (``mfe build-legacy``)."""
+    _dagger("call", "mfe", "build-legacy", *dagger_args)
+
+
+@app.command(name="mfe-site", group=_BUILD)
+def mfe_site(*dagger_args: DaggerArgs) -> None:
+    """Build an OEP-65 Site Project (``mfe build-site``)."""
+    _dagger("call", "mfe", "build-site", *dagger_args)
+
+
+@app.command(group=_VERIFY)
+def check(cell: CellArg = None, *dagger_args: DaggerArgs) -> None:
+    """Verify a cell's requirements install + import (``platform check-deployment``)."""
+    _platform_cell_command("check-deployment", cell, dagger_args)
+
+
+@app.command(group=_VERIFY)
+def test(cell: CellArg = None, *dagger_args: DaggerArgs) -> None:
+    """Run edx-platform + installed plugin tests in a built image (``platform test``).
+
+    Runs edx-platform's own suite under the deployment's settings, and — with
+    ``--include-plugins`` (default) — the installed plugins' own suites in the
+    same run, aggregated into one report (``--no-include-plugins`` for the
+    edx-platform suite alone). Defaults to a curated smoke subset; pass
+    ``--full`` for the whole suite, ``--test-paths`` for specific apps/paths, or
+    ``--service cms`` for Studio.
+    Remember ``--custom-settings ./deployments/<group>/settings``.
+    """
+    _platform_cell_command("test", cell, dagger_args)
+
+
+@app.command(name="codejail-test", group=_VERIFY)
 def codejail_test(*dagger_args: DaggerArgs) -> None:
     """Run the codejailservice test suite in its image (``codejail test``)."""
     _dagger("call", "codejail", "test", *dagger_args)
 
 
-@app.command(name="notes-test")
+@app.command(name="notes-test", group=_VERIFY)
 def notes_test(*dagger_args: DaggerArgs) -> None:
     """Run the edx-notes-api test suite in its image (``notes test``)."""
     _dagger("call", "notes", "test", *dagger_args)
 
 
-@app.command
+@app.command(group=_UTIL)
 def cells(
     manifest: Annotated[
         str | None, cyclopts.Parameter(help="Path to a build_manifest.yaml.")
@@ -211,31 +210,13 @@ def cells(
         print(f"{build_cell.release}/{build_cell.deployment}")  # noqa: T201
 
 
-@app.command(name="mfe-legacy")
-def mfe_legacy(*dagger_args: DaggerArgs) -> None:
-    """Build a legacy MFE ``dist/`` (``mfe build-legacy``)."""
-    _dagger("call", "mfe", "build-legacy", *dagger_args)
+@app.command(group=_UTIL)
+def functions() -> None:
+    """List all available Dagger functions (``dagger functions``)."""
+    _dagger("functions")
 
 
-@app.command(name="mfe-site")
-def mfe_site(*dagger_args: DaggerArgs) -> None:
-    """Build an OEP-65 Site Project (``mfe build-site``)."""
-    _dagger("call", "mfe", "build-site", *dagger_args)
-
-
-@app.command
-def codejail(*dagger_args: DaggerArgs) -> None:
-    """Build the codejail service image (``codejail build``)."""
-    _dagger("call", "codejail", "build", *dagger_args)
-
-
-@app.command
-def notes(*dagger_args: DaggerArgs) -> None:
-    """Build the edx-notes-api image (``notes build``)."""
-    _dagger("call", "notes", "build", *dagger_args)
-
-
-@app.command
+@app.command(group=_UTIL)
 def call(*dagger_args: DaggerArgs) -> None:
     """Raw ``dagger call`` passthrough for any function or chain."""
     _dagger("call", *dagger_args)
