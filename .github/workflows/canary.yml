@@ -1,0 +1,165 @@
+---
+name: Canary Platform Build
+
+# Top of the verification pyramid. New edx-platform commits on master (or an
+# open-release branch) can break MIT OL's pinned plugin set and aqueduct
+# settings with NO change in this repo, so PR-triggered CI never sees the
+# regression until a release-day image build fails. This job runs the full
+# `dagger call platform build-platform` on a schedule — no PR needed, nothing
+# published — so upstream drift surfaces here instead of in production.
+#
+#   * Scheduled runs build the default cell set (master × mitxonline). Add an
+#     open-release cell to `default_cells` below to widen coverage; keep the
+#     set small so a run stays within a tolerable wall-clock/cost budget.
+#   * A manual dispatch can target any single <group>/<release>/<deployment>
+#     cell via the `cell` input (defaults to the primary canary cell).
+#   * A scheduled failure opens (or comments on) a `canary-failure` issue so
+#     drift is noticed without anyone watching the Actions tab. Manual runs
+#     skip the issue — the operator who dispatched already sees the result.
+#
+# This is deliberately the ONLY tier that runs a full asset-compiling build:
+# the cheap tiers (unit tests, aqueduct boot self-test, plugin-compat matrix)
+# gate every PR in minutes; this catches what only a real build can.
+on:
+  schedule:
+    # Mon/Wed/Fri 07:00 UTC — a few times a week is enough to catch upstream
+    # drift early without rebuilding the world nightly.
+  - cron: "0 7 * * 1,3,5"
+  workflow_dispatch:
+    inputs:
+      cell:
+        description: <group>/<release>/<deployment> to build (single cell).
+        type: string
+        default: mit-ol/master/mitxonline
+
+# Don't stack canary builds: a run can take the better part of an hour, and a
+# newer commit's result supersedes an in-flight one.
+concurrency:
+  group: canary-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege by default. The build job only reads the repo; the notify
+# job elevates to `issues: write` locally (see its own `permissions:` block).
+permissions:
+  contents: read
+
+jobs:
+  # Emit the cell list as JSON so the build job's matrix is data-driven: the
+  # default set on a schedule, or the single dispatched cell on demand.
+  enumerate:
+    runs-on: ubuntu-latest
+    outputs:
+      cells: ${{ steps.cells.outputs.cells }}
+    steps:
+    - id: cells
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        INPUT_CELL: ${{ inputs.cell }}
+      run: |
+        set -euo pipefail
+        # The canary cell set. Extend this array (one "<group>/<release>/<deployment>"
+        # per line) to cover an open-release branch too.
+        default_cells='["mit-ol/master/mitxonline"]'
+        if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_CELL" ]; then
+          cells="$(jq -cn --arg c "$INPUT_CELL" '[$c]')"
+        else
+          cells="$default_cells"
+        fi
+        echo "cells=$cells" >> "$GITHUB_OUTPUT"
+        {
+          echo "### Canary cells"
+          echo '```json'
+          echo "$cells" | jq .
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    needs: enumerate
+    runs-on: ubuntu-latest
+    # A full asset-compiling build is long; well under the 6h ceiling but give
+    # it a generous bound so a genuinely hung step fails loud rather than late.
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJSON(needs.enumerate.outputs.cells) }}
+    name: build ${{ matrix.cell }}
+    env:
+      # If set, Dagger streams to Dagger Cloud and reuses its layer cache across
+      # runs, keeping the canary's wall-clock tolerable. Unset (empty) is fine —
+      # Dagger just runs locally with the engine's own cache.
+      DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+    steps:
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+    - name: Install Dagger CLI
+      env:
+        # Pin to the engine version this repo's dagger.json expects.
+        DAGGER_VERSION: 0.21.3
+      run: |
+        set -euo pipefail
+        curl -fsSL https://dl.dagger.io/dagger/install.sh \
+          | BIN_DIR=/usr/local/bin sudo -E sh
+        dagger version
+    - name: build-platform
+      env:
+        CELL: ${{ matrix.cell }}
+      run: |
+        set -euo pipefail
+        IFS=/ read -r group release deployment <<< "$CELL"
+        if [ -z "$group" ] || [ -z "$release" ] || [ -z "$deployment" ]; then
+          echo "::error::cell must be <group>/<release>/<deployment>, got '$CELL'"
+          exit 1
+        fi
+        # Returns a Container; `dagger call` evaluates it, which runs the whole
+        # build pipeline (deps, plugins, asset compilation). No publish — the
+        # point is that it *builds*, not that we ship the result.
+        dagger call platform build-platform \
+          --build-manifest "deployments/$group/build_manifest.yaml" \
+          --release-name "$release" \
+          --deployment-name "$deployment" \
+          --custom-settings "deployments/$group/settings"
+
+  # Turn a scheduled failure into a durable, de-duplicated GitHub issue so
+  # upstream drift is caught before a release-day scramble. Runs only when a
+  # scheduled build failed; manual dispatchers already see their own result.
+  notify:
+    needs: build
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+    - name: Open or update the canary-failure issue
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{
+          github.run_id }}
+      run: |
+        set -euo pipefail
+        # Idempotent: creates the label on first use, updates it thereafter.
+        gh label create canary-failure \
+          --color b60205 \
+          --description "Scheduled canary platform build failed" \
+          --force
+        body="$(printf '%s\n' \
+          "The scheduled canary platform build failed on $(date -u +%Y-%m-%dT%H:%M:%SZ)." \
+          "" \
+          "Run: $RUN_URL" \
+          "" \
+          "A new edx-platform commit likely broke a pinned MIT OL plugin or the" \
+          "aqueduct settings for the canary cell. Reproduce locally with" \
+          "\`lehrer build platform mit-ol/master/mitxonline\` and inspect the" \
+          "failing step.")"
+        existing="$(gh issue list --label canary-failure --state open \
+          --json number --jq '.[0].number // empty')"
+        if [ -n "$existing" ]; then
+          gh issue comment "$existing" --body "$body"
+          echo "Commented on existing issue #$existing."
+        else
+          gh issue create \
+            --title "Canary platform build failed" \
+            --label canary-failure \
+            --body "$body"
+        fi
