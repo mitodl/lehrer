@@ -27,10 +27,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # tarball for a full ``MAJOR.MINOR.PATCH``). A bare major (``"24"``) or
 # ``MAJOR.MINOR`` prefix resolves to the latest matching release — mirroring the
 # nodejs ``github_release`` resource the Concourse pipeline historically used;
-# a full ``MAJOR.MINOR.PATCH`` is used verbatim (a reproducible pin). The
-# pattern only rejects obvious garbage (empty, non-numeric, trailing dots) so a
-# typo fails fast at manifest-load instead of deep in the Node build step.
-NODE_VERSION_PATTERN = r"^\d+(\.\d+){0,2}$"
+# a full ``MAJOR.MINOR.PATCH`` is used verbatim (a reproducible pin). Each
+# component is a SemVer numeric identifier — ASCII ``[0-9]`` (not ``\d``, which
+# is Unicode-aware) and no leading zeros — so a value like ``"024.18.0"`` that
+# would slip past to a nonexistent nodeenv download URL fails fast at
+# manifest-load instead of deep in the Node build step.
+NODE_VERSION_PATTERN = r"^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,2}$"
 
 
 class CellDefaults(BaseModel):
