@@ -27,7 +27,7 @@ cells:
   packages:
   - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
-  - django-redis==6.0.0
+  - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.2
   - edx-sysadmin==0.4.2
   - edx-username-changer==0.5.0
@@ -74,7 +74,7 @@ cells:
   packages:
   - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
-  - django-redis==6.0.0
+  - django-redis==7.0.0
   - edx-sga==0.29.0
   - edx-sysadmin==0.4.2
   - invideoquiz-xblock==2.0.0
@@ -107,7 +107,7 @@ cells:
   theme_branch: master
   packages:
   - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
-  - django-redis==6.0.0
+  - django-redis==7.0.0
   - granian==2.7.9
   - edx-sga==0.29.0
   - edx-sysadmin==0.4.2
@@ -143,7 +143,7 @@ cells:
   packages:
   - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
-  - django-redis==6.0.0
+  - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.2
   - edx-sysadmin==0.4.2
   - invideoquiz-xblock==2.0.0
@@ -178,7 +178,7 @@ cells:
   packages:
   - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
-  - django-redis==6.0.0
+  - django-redis==7.0.0
   - edx-sysadmin==0.4.2
   - invideoquiz-xblock==2.0.0
   - nodeenv>=1.7.0
@@ -212,7 +212,7 @@ cells:
   packages:
   - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
-  - django-redis==6.0.0
+  - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.2
   - edx-sysadmin==0.4.2
   - edx-username-changer==0.5.0
@@ -245,7 +245,7 @@ cells:
   packages:
   - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
-  - django-redis==6.0.0
+  - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.2
   - edx-sysadmin==0.4.2
   - invideoquiz-xblock==2.0.0
@@ -281,7 +281,7 @@ cells:
   packages:
   - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
-  - django-redis==6.0.0
+  - django-redis==7.0.0
   - edx-sysadmin==0.4.2
   - invideoquiz-xblock==2.0.0
   - nodeenv>=1.7.0
@@ -315,7 +315,7 @@ cells:
   packages:
   - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
-  - django-redis==6.0.0
+  - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.2
   - edx-sysadmin==0.4.2
   - edx-username-changer==0.5.0

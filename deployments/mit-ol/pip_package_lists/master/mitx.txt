@@ -1,6 +1,6 @@
 celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules
 granian==2.7.9
-django-redis==6.0.0
+django-redis==7.0.0
 edx-sga==0.29.0
 edx-sysadmin==0.4.2
 invideoquiz-xblock==2.0.0
