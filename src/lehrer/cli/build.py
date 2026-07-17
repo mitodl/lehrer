@@ -165,25 +165,17 @@ def check(cell: CellArg = None, *dagger_args: DaggerArgs) -> None:
 
 @app.command(group=_VERIFY)
 def test(cell: CellArg = None, *dagger_args: DaggerArgs) -> None:
-    """Run the edx-platform test suite inside a built image (``platform test``).
+    """Run edx-platform + installed plugin tests in a built image (``platform test``).
 
-    Defaults to a curated smoke subset; pass ``--full`` for the whole suite,
-    ``--test-paths`` for specific apps/paths, or ``--service cms`` for Studio.
+    Runs edx-platform's own suite under the deployment's settings, and — with
+    ``--include-plugins`` (default) — the installed plugins' own suites in the
+    same run, aggregated into one report (``--no-include-plugins`` for the
+    edx-platform suite alone). Defaults to a curated smoke subset; pass
+    ``--full`` for the whole suite, ``--test-paths`` for specific apps/paths, or
+    ``--service cms`` for Studio.
     Remember ``--custom-settings ./deployments/<group>/settings``.
     """
     _platform_cell_command("test", cell, dagger_args)
-
-
-@app.command(name="plugin-regression", group=_VERIFY)
-def plugin_regression(cell: CellArg = None, *dagger_args: DaggerArgs) -> None:
-    """Run installed plugins' own test suites in the image (``platform plugin-regression``).
-
-    Discovers and runs whatever plugin tests are installed (maintained ``ol-*``
-    plugins gain a ``[tests]`` extra by default; disable with
-    ``--no-install-test-extras``). Passes cleanly when no suite is discovered.
-    Remember ``--custom-settings ./deployments/<group>/settings``.
-    """
-    _platform_cell_command("plugin-regression", cell, dagger_args)
 
 
 @app.command(name="codejail-test", group=_VERIFY)

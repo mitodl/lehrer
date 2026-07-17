@@ -32,13 +32,13 @@ def test_cell_scoped_command_expands_to_manifest_flags(
 def test_cell_scoped_command_without_cell_is_passthrough(
     captured: list[tuple[str, ...]],
 ) -> None:
-    build.plugin_regression(None, "--custom-settings", "./settings")
+    build.check(None, "--custom-settings", "./settings")
     (argv,) = captured
     assert argv == (
         "dagger",
         "call",
         "platform",
-        "plugin-regression",
+        "check-deployment",
         "--custom-settings",
         "./settings",
     )

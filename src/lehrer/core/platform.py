@@ -17,9 +17,9 @@ from dagger import dag, function, object_type
 
 from lehrer.core.build_manifest import BuildManifest, Cell
 from lehrer.core.plugin_imports import plugin_distributions
-from lehrer.core.plugin_regression import (
+from lehrer.core.plugin_tests import (
+    combined_pytest_script,
     maintained_test_extra_specs,
-    plugin_regression_script,
 )
 
 _T = TypeVar("_T")
@@ -1662,6 +1662,8 @@ class OpenedxPlatform:
         test_paths: list[str] | None = None,
         markers: str | None = None,
         full: bool = False,  # noqa: FBT001, FBT002
+        include_plugins: bool = True,  # noqa: FBT001, FBT002
+        install_test_extras: bool = True,  # noqa: FBT001, FBT002
         settings_module: str | None = None,
         install_node: bool = False,  # noqa: FBT001, FBT002
         mongo_image: str = "mongo:7",
@@ -1699,6 +1701,19 @@ class OpenedxPlatform:
         ``--markers`` for a ``-m`` expression, or ``--full`` for the whole
         service tree (canary tier).
 
+        Plugins: with ``--include-plugins`` (default) the *same* pytest run also
+        executes whatever tests the installed plugins ship — appended to the
+        edx-platform targets via ``--pyargs`` (see
+        :func:`lehrer.core.plugin_tests.combined_pytest_script`), so one run and
+        one JUnit report cover edx-platform **and** the plugins.  With
+        ``--install-test-extras`` (default) each maintained ``ol-*`` plugin is
+        re-requested at its pinned version with a ``[tests]`` extra so its suite
+        and test-only deps are present (a safe no-op until the plugin defines
+        the extra).  A plugin that ships no tests is reported and skipped, so
+        this stays green today and starts exercising real plugin suites the
+        moment one is published; pass ``--no-include-plugins`` for the
+        edx-platform suite alone.
+
         Args:
             deployment_name: Deployment name.
             release_name: edx-platform release / branch name (e.g. master).
@@ -1723,6 +1738,13 @@ class OpenedxPlatform:
                 smoke subset for ``service`` (or the full tree with ``--full``).
             markers: Optional pytest ``-m`` marker expression.
             full: Run the whole service test tree instead of the smoke subset.
+            include_plugins: Also run the installed plugins' own test suites in
+                the same pytest run (default True). ``--no-include-plugins``
+                runs only the edx-platform targets.
+            install_test_extras: When including plugins, re-request each
+                maintained ``ol-*`` plugin at its pinned version with a
+                ``[tests]`` extra so its suite + test deps install (default
+                True; a no-op for plugins without the extra).
             settings_module: Override the Django settings module pytest loads
                 (default: the derived ``{service}.envs.lehrer_test``).
             install_node: Install Node/webpack too (default False — the default
@@ -1830,6 +1852,28 @@ class OpenedxPlatform:
             .with_exec(["uv", "pip", "install", "-r", "requirements/edx/testing.txt"])
         )
 
+        # When folding the plugins' own suites into this run, derive the plugin
+        # distributions from the SAME requirement files install_deps installed
+        # from, and add each maintained plugin's `[tests]` extra at its pinned
+        # version (a safe no-op until the plugin defines it) so its shipped
+        # tests + test deps are present.
+        plugin_dists: list[str] = []
+        if include_plugins:
+            list_txt = await pip_package_lists.file(
+                f"{release_name}/{deployment_name}.txt"
+            ).contents()
+            override_txt = await pip_package_overrides.file(
+                f"{release_name}/{deployment_name}.txt"
+            ).contents()
+            requirement_lines = [*list_txt.splitlines(), *override_txt.splitlines()]
+            plugin_dists = plugin_distributions(requirement_lines)
+            if install_test_extras:
+                extra_specs = maintained_test_extra_specs(requirement_lines)
+                if extra_specs:
+                    container = container.with_exec(
+                        ["uv", "pip", "install", *extra_specs]
+                    )
+
         # Inject the deployment's aqueduct model layer + the derived test
         # settings module.  Only the model layer is needed here (not the full
         # runtime aqueduct.py entry point) — the derived settings import
@@ -1872,253 +1916,30 @@ class OpenedxPlatform:
         # intentional override (discover from the repo root), distinct from the
         # unset default that falls back to the curated smoke/full paths.
         paths = test_paths if test_paths is not None else _test_paths(service, full)
+
+        base = (
+            container.with_service_binding("mongo", mongo)
+            .with_env_variable("EDXAPP_TEST_MONGO_HOST", "mongo")
+            .with_env_variable("EDXAPP_TEST_MONGO_PORT", "27017")
+            .with_env_variable("NO_PREREQ_INSTALL", "1")
+        )
+
         # --no-migrations (pytest-django): create the schema straight from the
         # models instead of running every historical migration — the default
         # for edx-platform's own runs and the difference between minutes and
         # tens of minutes for a smoke subset.
+        if include_plugins:
+            # One pytest run over the edx-platform paths plus the installed
+            # plugin packages (resolved at runtime), one aggregated JUnit report.
+            script = combined_pytest_script(
+                paths, plugin_dists, ds, "/openedx/reports/report.xml", markers
+            )
+            return await base.with_exec(["python", "-c", script]).stdout()
+
         pytest_cmd = ["python", "-m", "pytest", f"--ds={ds}", "--no-migrations", *paths]
         if markers:
             pytest_cmd += ["-m", markers]
-
-        return await (
-            container.with_service_binding("mongo", mongo)
-            .with_env_variable("EDXAPP_TEST_MONGO_HOST", "mongo")
-            .with_env_variable("EDXAPP_TEST_MONGO_PORT", "27017")
-            .with_env_variable("NO_PREREQ_INSTALL", "1")
-            .with_exec(pytest_cmd)
-            .stdout()
-        )
-
-    @function
-    async def plugin_regression(  # noqa: PLR0913
-        self,
-        deployment_name: str,
-        release_name: str,
-        custom_settings: dagger.Directory,
-        build_manifest: dagger.File | None = None,
-        pip_package_lists: dagger.Directory | None = None,
-        pip_package_overrides: dagger.Directory | None = None,
-        platform_repo: str | None = None,
-        platform_branch: str | None = None,
-        python_version: str | None = None,
-        node_version: str | None = None,
-        packages_to_remove: list[str] | None = None,
-        extra_npm_packages: list[str] | None = None,
-        service: str = "lms",
-        settings_module: str | None = None,
-        install_test_extras: bool = True,  # noqa: FBT001, FBT002
-        mongo_image: str = "mongo:7",
-        config_sources: dagger.Directory | None = None,
-    ) -> str:
-        """Run each installed plugin's *own* test suite inside the cell's image.
-
-        The next tier above :meth:`check_deployment` (which proves plugins
-        install and import): this runs the plugins' shipped pytest suites
-        against the deployment's platform build and derived test settings, so a
-        plugin bump — or a new edx-platform commit — that breaks a plugin's own
-        tests surfaces here rather than in production.
-
-        Strategy is pytest **discovery**, not source acquisition (see
-        :mod:`lehrer.core.plugin_regression`): published plugin packages do not
-        ship their suites and the ``open-edx-plugins`` monorepo has no
-        per-package tags, so there is no reliable "tests at the exact installed
-        version" to fetch.  Instead this runs whatever tests are *installed in
-        the image*.  With ``--install-test-extras`` (default), the maintained
-        ``ol-openedx-*`` plugins are re-requested at their pinned version with a
-        ``[tests]`` extra so their suites and test-only deps are present;
-        requesting an extra a plugin does not yet define is a safe no-op, so
-        this works before and after those extras land upstream.  A plugin that
-        ships no tests is reported and skipped, never failed — so today, before
-        the extras exist, this passes cleanly (nothing discovered) and starts
-        exercising real suites the moment a plugin publishes one.
-
-        Everything else mirrors :meth:`test`: the same production ``install_deps``
-        path, edx-platform's ``requirements/edx/testing.txt``, the injected
-        aqueduct model layer + derived ``{service}.envs.lehrer_test`` settings
-        (so the deployment's plugin set and — with ``--config-sources`` — its
-        FEATURES are loaded), and a single MongoDB modulestore service.
-
-        Args:
-            deployment_name: Deployment name.
-            release_name: edx-platform release / branch name (e.g. master).
-            custom_settings: Operator settings directory (its
-                ``{service}/models/aqueduct.py`` is injected).
-            build_manifest: Optional ``build_manifest.yaml``; the matching cell
-                supplies requirements and any build param not passed explicitly.
-            pip_package_lists: Requirements directory. Required unless
-                ``build_manifest`` is given.
-            pip_package_overrides: Overrides directory. Required unless
-                ``build_manifest`` is given.
-            platform_repo: Git repository URL for edx-platform.
-            platform_branch: Git branch to check out.
-            python_version: Python version. Defaults to 3.12 for master, else 3.11.
-            node_version: Node.js version (default: 20.18.0).
-            packages_to_remove: Python packages to uninstall after base install.
-            extra_npm_packages: Additional npm packages to install.
-            service: ``"lms"`` or ``"cms"`` — whose test settings to load.
-            settings_module: Override the Django settings module pytest loads
-                (default: the derived ``{service}.envs.lehrer_test``).
-            install_test_extras: Re-request maintained ``ol-*`` plugins with a
-                ``[tests]`` extra at their pinned version so shipped suites and
-                test deps are installed (default True; a no-op for plugins
-                without the extra).
-            mongo_image: MongoDB image for the modulestore service container.
-            config_sources: Optional rendered ``OL_SETTINGS_DIR`` directory,
-                mounted at ``/openedx/config-sources`` so the derived settings
-                overlay the deployment's real FEATURES (see :meth:`test`).
-
-        Returns:
-            The driver's stdout (a per-plugin summary), only reached when no
-            plugin suite failed; a failing suite exits non-zero and fails the
-            calling ``dagger call``.
-        """
-        if service not in _SMOKE_PATHS:
-            msg = f"service must be one of {sorted(_SMOKE_PATHS)}, got {service!r}"
-            raise ValueError(msg)
-
-        manifest: BuildManifest | None = None
-        cell: Cell | None = None
-        if build_manifest is not None:
-            manifest, cell = await self._resolve_manifest_cell(
-                build_manifest, release_name, deployment_name
-            )
-            manifest_lists, manifest_overrides = self._materialize_cell_requirements(
-                release_name, deployment_name, cell
-            )
-            if pip_package_lists is None:
-                pip_package_lists = manifest_lists
-            if pip_package_overrides is None:
-                pip_package_overrides = manifest_overrides
-
-        if pip_package_lists is None or pip_package_overrides is None:
-            msg = (
-                "plugin_regression requires either --build-manifest, or both "
-                "--pip-package-lists and --pip-package-overrides"
-            )
-            raise ValueError(msg)
-
-        platform_repo = _resolve_field(
-            platform_repo,
-            cell,
-            manifest,
-            "platform_repo",
-            "https://github.com/openedx/edx-platform",
-        )
-        platform_branch = _resolve_field(
-            platform_branch, cell, manifest, "platform_branch", "master"
-        )
-        node_version = _resolve_field(
-            node_version, cell, manifest, "node_version", "20.18.0"
-        )
-        if packages_to_remove is None:
-            packages_to_remove = []
-            if cell is not None and manifest is not None:
-                resolved_removals = cell.resolved("packages_to_remove", manifest)
-                if resolved_removals is not None:
-                    packages_to_remove = cast("list[str]", resolved_removals)
-        if extra_npm_packages is None:
-            extra_npm_packages = []
-            if cell is not None and manifest is not None:
-                resolved_npm = cell.resolved("extra_npm_packages", manifest)
-                if resolved_npm is not None:
-                    extra_npm_packages = cast("list[str]", resolved_npm)
-        if python_version is None:
-            resolved_python_version = None
-            if cell is not None and manifest is not None:
-                resolved_python_version = cell.resolved("python_version", manifest)
-            python_version = cast("str | None", resolved_python_version) or (
-                "3.12" if release_name == "master" else "3.11"
-            )
-
-        # Same install path a production build uses (Python only — plugin
-        # suites don't need webpack), so the run reflects the real resolution.
-        container: dagger.Container = self.apt_base(python_version=python_version)
-        container = self.get_code(
-            container,
-            edx_platform_git_repo=platform_repo,
-            edx_platform_git_branch=platform_branch,
-        )
-        container = self.install_deps(
-            container,
-            deployment_name=deployment_name,
-            release_name=release_name,
-            pip_package_lists=pip_package_lists,
-            pip_package_overrides=pip_package_overrides,
-            node_version=node_version,
-            packages_to_remove=packages_to_remove,
-            extra_npm_packages=extra_npm_packages,
-            install_node=False,
-        )
-
-        # Editable edx-platform + its test requirements (pytest, pytest-django,
-        # factory_boy, ...) — the harness the plugin suites run under.
-        container = (
-            container.with_workdir("/openedx/edx-platform")
-            .with_exec(["uv", "pip", "install", "-e", "."])
-            .with_exec(["uv", "pip", "install", "-r", "requirements/edx/testing.txt"])
-        )
-
-        # Derive the plugin distributions and the maintained `[tests]` extras
-        # from the SAME requirement files install_deps installed from (the
-        # effective dirs resolved above), so nothing diverges from what is in
-        # the image.
-        list_txt = await pip_package_lists.file(
-            f"{release_name}/{deployment_name}.txt"
-        ).contents()
-        override_txt = await pip_package_overrides.file(
-            f"{release_name}/{deployment_name}.txt"
-        ).contents()
-        requirement_lines = [*list_txt.splitlines(), *override_txt.splitlines()]
-        plugin_dists = plugin_distributions(requirement_lines)
-
-        # Opportunistically add each maintained plugin's `[tests]` extra at its
-        # pinned version so its shipped suite + test deps are present. Safe
-        # no-op for plugins that don't define the extra yet.
-        if install_test_extras:
-            extra_specs = maintained_test_extra_specs(requirement_lines)
-            if extra_specs:
-                container = container.with_exec(["uv", "pip", "install", *extra_specs])
-
-        # Inject the deployment's aqueduct model layer + derived test settings,
-        # exactly as `test` does, so plugins load under the deployment's config.
-        lehrer_base = dag.current_module().source().file("src/lehrer/settings/base.py")
-        container = (
-            container.with_exec(["mkdir", "-p", f"./{service}/envs/models"])
-            .with_file(f"./{service}/envs/models/base.py", lehrer_base)
-            .with_new_file(f"./{service}/envs/models/__init__.py", contents="")
-            .with_file(
-                f"./{service}/envs/models/aqueduct.py",
-                custom_settings.file(f"{service}/models/aqueduct.py"),
-            )
-            .with_new_file(
-                f"./{service}/envs/lehrer_test.py",
-                contents=_derive_test_settings(service),
-            )
-        )
-        if config_sources is not None:
-            container = container.with_directory(
-                "/openedx/config-sources", config_sources
-            )
-
-        mongo = (
-            dag.container()
-            .from_(mongo_image)
-            .with_exposed_port(27017)
-            .as_service(use_entrypoint=True)
-        )
-
-        ds = settings_module or f"{service}.envs.lehrer_test"
-        script = plugin_regression_script(
-            plugin_dists, ds, "/openedx/reports/plugins.xml"
-        )
-        return await (
-            container.with_service_binding("mongo", mongo)
-            .with_env_variable("EDXAPP_TEST_MONGO_HOST", "mongo")
-            .with_env_variable("EDXAPP_TEST_MONGO_PORT", "27017")
-            .with_env_variable("NO_PREREQ_INSTALL", "1")
-            .with_exec(["python", "-c", script])
-            .stdout()
-        )
+        return await base.with_exec(pytest_cmd).stdout()
 
     @function
     async def publish_platform(

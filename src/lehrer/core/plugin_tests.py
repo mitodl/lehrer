@@ -1,10 +1,11 @@
-"""Select and drive the installed-plugin test suites for a build cell.
+"""Fold the installed plugins' own test suites into the ``platform test`` run.
 
-The plugin-compat matrix's fast tier (:mod:`lehrer.core.plugin_imports` +
-``OpenedxPlatform.check_deployment``) proves a cell's plugins *install and
-import* against the matching edx-platform.  This module answers the next
-question in the verification pyramid: do the plugins' *own* test suites still
-pass against the deployment's platform build and settings?
+``platform test`` runs edx-platform's own suite under the deployment's derived
+settings and installed plugin set. This module lets that same run *also* execute
+whatever tests the installed plugins ship — one image build, one pytest
+invocation, one JUnit report covering edx-platform **and** the plugins — so a
+plugin bump, or a new edx-platform commit, that breaks a plugin's tests surfaces
+in the same place as an upstream regression.
 
 The strategy is pytest **discovery**, not source acquisition.  Published plugin
 wheels/sdists do not ship their test suites, and the monorepo many ``ol-*``
@@ -72,35 +73,39 @@ def maintained_test_extra_specs(lines: Iterable[str]) -> list[str]:
     return specs
 
 
-def plugin_regression_script(
-    plugin_dists: list[str], settings_module: str, junit_path: str
+def combined_pytest_script(
+    edx_paths: list[str],
+    plugin_dists: list[str],
+    settings_module: str,
+    junit_path: str,
+    markers: str | None = None,
 ) -> str:
-    """Build the in-container driver that runs pytest over installed plugin packages.
+    """Build the in-container driver that runs edx-platform *and* plugin tests.
 
     The returned program (written verbatim into the container and run with the
-    image's Python) resolves each target distribution's installed top-level
-    import packages at runtime — via ``importlib.metadata.packages_distributions``,
-    the same drift-proof resolution the import check uses — then runs pytest over
-    them with ``--pyargs`` under the deployment's derived test settings, writing
-    one aggregated JUnit report.
+    image's Python from the edx-platform workdir) runs one ``pytest`` over the
+    edx-platform ``edx_paths`` plus, appended via ``--pyargs``, the installed
+    top-level packages of each plugin distribution — resolved at runtime from
+    ``importlib.metadata.packages_distributions`` (the same drift-proof
+    resolution the import check uses).  One invocation, one aggregated JUnit
+    report at ``junit_path``.
 
-    Result semantics, so the run fails only on a *real* regression:
-
-    * a target that did not install at all is a hard failure (install drift);
-    * a target that installed but exposes no importable module is reported and
-      skipped (namespace/data-only distribution);
-    * pytest's "no tests collected" exit (5) is treated as success — the
-      expected state until a plugin ships its suite via the ``[tests]`` extra;
-    * any other non-zero pytest exit (test failures, collection/import errors)
-      propagates and fails the calling ``dagger call``.
+    A plugin distribution that did not install, or installed without an
+    importable module, is *reported and skipped* — never a hard failure, since
+    the run's pass/fail is pytest's own exit code (edx-platform's suite is the
+    load-bearing signal; the plugins are additive).  ``edx_paths`` are treated
+    as filesystem paths and the plugin packages as import names in the same
+    call: ``--pyargs`` only reinterprets args that are not existing paths.
     """
     return "\n".join(
         [
             "import sys",
             "import importlib.metadata as im",
-            f"targets = {plugin_dists!r}",
+            f"edx_paths = {edx_paths!r}",
+            f"plugin_dists = {plugin_dists!r}",
             f"settings_module = {settings_module!r}",
             f"junit_path = {junit_path!r}",
+            f"markers = {markers!r}",
             "import re",
             "def _norm(name):",
             "    return re.sub(r'[-_.]+', '-', name).lower()",
@@ -111,8 +116,8 @@ def plugin_regression_script(
             "    for d in dists:",
             "        dist_to_modules.setdefault(_norm(d), []).append(mod)",
             "installed = {_norm(d.name) for d in im.distributions() if d.name}",
-            "modules, missing, no_module = [], [], []",
-            "for dist in targets:",
+            "plugin_modules, missing, no_module = [], [], []",
+            "for dist in plugin_dists:",
             "    if dist not in installed:",
             "        missing.append(dist)",
             "        continue",
@@ -120,39 +125,31 @@ def plugin_regression_script(
             "    if not mods:",
             "        no_module.append(dist)",
             "        continue",
-            "    modules.extend(mods)",
-            "modules = sorted(set(modules))",
+            "    plugin_modules.extend(mods)",
+            "plugin_modules = sorted(set(plugin_modules))",
             "for dist in missing:",
-            "    print(f'MISSING: {dist} did not install')",
+            "    print(f'PLUGIN MISSING: {dist} did not install (skipped)')",
             "for dist in no_module:",
-            "    print(f'SKIP:    {dist} installed, no importable top-level module')",
-            "if missing:",
-            "    sys.exit(",
-            "        f'plugin regression: {len(missing)} target(s) not installed: '",
-            "        f'{missing}'",
-            "    )",
-            "if not modules:",
-            "    print('plugin regression: no installed plugin packages to scan')",
-            "    sys.exit(0)",
-            "print(f'plugin regression: scanning {len(modules)} package(s): {modules}')",
+            "    print(f'PLUGIN SKIP:    {dist} has no importable top-level module')",
+            "if plugin_modules:",
+            "    print(f'PLUGIN TESTS:   discovering in {plugin_modules}')",
+            "else:",
+            "    print('PLUGIN TESTS:   no installed plugin packages to scan')",
             "import pytest",
-            "args = [",
-            "    '--pyargs', *modules,",
+            "args = list(edx_paths)",
+            # --pyargs only reinterprets non-path args, so the edx filesystem
+            # paths above and the plugin import names here coexist in one run.
+            "if plugin_modules:",
+            "    args += ['--pyargs', *plugin_modules]",
+            "args += [",
             "    f'--ds={settings_module}',",
             "    '--no-migrations',",
             "    '-p', 'no:cacheprovider',",
             "    f'--junitxml={junit_path}',",
             "    '-ra',",
             "]",
-            "code = int(pytest.main(args))",
-            # 5 == NO_TESTS_COLLECTED: expected until the plugins ship their
-            # suites, so it must not fail the gate.
-            "if code == 5:",
-            "    print(",
-            "        'plugin regression: no plugin tests discovered (exit 5) — '",
-            "        'expected until plugins ship their [tests] extra'",
-            "    )",
-            "    sys.exit(0)",
-            "sys.exit(code)",
+            "if markers:",
+            "    args += ['-m', markers]",
+            "sys.exit(int(pytest.main(args)))",
         ]
     )

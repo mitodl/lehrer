@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import ast
 
-from lehrer.core.plugin_regression import (
+from lehrer.core.plugin_tests import (
+    combined_pytest_script,
     maintained_test_extra_specs,
-    plugin_regression_script,
 )
 
 
@@ -41,41 +41,46 @@ def test_maintained_extras_dedupes_first_wins() -> None:
     assert maintained_test_extra_specs(lines) == ["ol-openedx-logging[tests]==0.3.5"]
 
 
-def test_regression_script_is_valid_python() -> None:
-    source = plugin_regression_script(
-        ["ol-openedx-logging", "openedx-scorm-xblock"],
+def test_combined_script_is_valid_python() -> None:
+    source = combined_pytest_script(
+        ["lms/djangoapps/courseware", "common/djangoapps/student"],
+        ["ol-openedx-logging"],
         "lms.envs.lehrer_test",
-        "/openedx/reports/plugins.xml",
+        "/openedx/reports/report.xml",
     )
     ast.parse(source)  # written verbatim into the container — must parse
 
 
-def test_regression_script_embeds_targets_settings_and_report() -> None:
-    source = plugin_regression_script(
-        ["ol-openedx-logging"], "cms.envs.lehrer_test", "/openedx/reports/plugins.xml"
+def test_combined_script_embeds_edx_paths_plugins_and_report() -> None:
+    source = combined_pytest_script(
+        ["lms/djangoapps/courseware"],
+        ["ol-openedx-logging"],
+        "cms.envs.lehrer_test",
+        "/openedx/reports/report.xml",
+        markers="not slow",
     )
+    # edx-platform paths run as plain path args; plugin packages via --pyargs.
+    assert "'lms/djangoapps/courseware'" in source
     assert "'ol-openedx-logging'" in source
+    assert "'--pyargs'" in source
     assert "--ds={settings_module}" in source
     assert "cms.envs.lehrer_test" in source
-    assert "/openedx/reports/plugins.xml" in source
-    # Discovery is via --pyargs over installed packages, with an aggregated
-    # JUnit report.
-    assert "'--pyargs'" in source
-    assert "--junitxml={junit_path}" in source
-
-
-def test_regression_script_treats_no_tests_collected_as_success() -> None:
-    source = plugin_regression_script(
-        ["ol-openedx-logging"], "lms.envs.lehrer_test", "/tmp/r.xml"
-    )
-    # Exit 5 (NO_TESTS_COLLECTED) must be swallowed — the expected state until
-    # plugins ship their [tests] extra — so the gate stays green meanwhile.
-    assert "code == 5" in source
-    assert "sys.exit(code)" in source
-
-
-def test_regression_script_resolves_modules_at_runtime() -> None:
-    source = plugin_regression_script(["ol-openedx-logging"], "lms.envs.test", "/r.xml")
+    assert "/openedx/reports/report.xml" in source
+    assert "not slow" in source
     # dist -> module resolution is read from installed metadata, never a
     # hand-maintained map, so a healthy plugin can't be mis-skipped.
     assert "packages_distributions()" in source
+
+
+def test_combined_script_without_plugins_runs_edx_paths_only() -> None:
+    source = combined_pytest_script(
+        ["lms/djangoapps/courseware"],
+        [],
+        "lms.envs.lehrer_test",
+        "/openedx/reports/report.xml",
+    )
+    ast.parse(source)
+    # With no plugin dists the --pyargs branch is guarded off at runtime; the
+    # edx paths still run.
+    assert "plugin_dists = []" in source
+    assert "if plugin_modules:" in source
