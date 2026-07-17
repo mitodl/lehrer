@@ -58,16 +58,53 @@ defaults.
 
 ### Builds
 
-`lehrer build` wraps `dagger call` against the lehrer module. Trailing
-arguments are passed straight through to Dagger:
+`lehrer build` is a thin, consistent facade over the Dagger module — it saves
+you from remembering the object-scoped `dagger call` paths, and any trailing
+arguments are forwarded straight to Dagger. `lehrer build --help` groups the
+commands the way you reason about them:
+
+| Command | Wraps | Purpose |
+|---|---|---|
+| `lehrer build platform`      | `platform build-platform`   | Build the edx-platform LMS/CMS image |
+| `lehrer build codejail`      | `codejail build`            | Build the codejail service image |
+| `lehrer build notes`         | `notes build`               | Build the edx-notes-api image |
+| `lehrer build mfe-legacy`    | `mfe build-legacy`          | Build a legacy (webpack) MFE `dist/` |
+| `lehrer build mfe-site`      | `mfe build-site`            | Build an OEP-65 Site Project |
+| `lehrer build check`         | `platform check-deployment` | Verify a cell's requirements install + import |
+| `lehrer build test`          | `platform test`             | Run edx-platform + installed plugin tests in a built image |
+| `lehrer build codejail-test` | `codejail test`             | Run the codejail test suite |
+| `lehrer build notes-test`    | `notes test`                | Run the edx-notes-api test suite |
+| `lehrer build cells`         | —                           | Print the `(release, deployment)` cells in a manifest |
+| `lehrer build functions`     | `dagger functions`          | List every Dagger function |
+| `lehrer build call ...`      | `dagger call ...`           | Raw passthrough for any function without a wrapper |
+
+The cell-scoped commands (`platform`, `check`, `test`) accept a single
+`<group>/<release>/<deployment>` **cell** that expands to `--build-manifest
+deployments/<group>/build_manifest.yaml --release-name <release>
+--deployment-name <deployment>`, so you don't repeat them:
 
 ```bash
-lehrer build functions                 # dagger functions
-lehrer build platform --deployment-name mitxonline --release-name master
-lehrer build mfe-legacy --mfe-name learning ... export --path ./dist
-lehrer build codejail --release-name master
-lehrer build call mfe watch-site ...   # raw `dagger call` escape hatch
+uv sync                                          # install the CLI into the venv
+
+# Build the edx-platform image for a cell (the manifest supplies the rest):
+uv run lehrer build platform --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings
+
+# Verify a cell (cheap → thorough):
+uv run lehrer build check --cell mit-ol/master/mitxonline
+uv run lehrer build test  --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings
+
+# Other services and MFEs:
+uv run lehrer build codejail --release-name master
+uv run lehrer build mfe-legacy --mfe-name learning ... export --path ./dist
+
+# Raw escape hatch for anything without a wrapper (e.g. publish, watch-site):
+uv run lehrer build call mfe watch-site ...
 ```
+
+The rest of this README documents the underlying Dagger functions directly;
+each common one has a `lehrer build` shortcut per the table above.
 
 ## Architecture
 
@@ -93,73 +130,70 @@ The build pipeline follows these stages:
 
 ## Functions
 
-### Core Build Functions
+Every Dagger function is namespaced under a service object — `platform`, `mfe`,
+`codejail`, or `notes`. Run `lehrer build functions` (or `dagger functions`) to
+list them, and `dagger call <object> <function> --help` for a function's flags.
 
-#### `apt-base`
-Creates base Python container with system dependencies and uv binary.
+### `platform` — edx-platform
 
-```bash
-dagger call apt-base --python-version 3.11
-```
+`build-platform` assembles the whole image the way a multi-stage Docker build
+would: it first builds dependencies on one base (`apt-base` → `get-code` →
+`install-deps`), then starts a **fresh** clean base and copies only the needed
+directories across, conditionally applies `locales` (unless
+`--include-locales false`) and `themes`, and finishes with `collected` →
+`inject-aqueduct-settings` → `fetch-translations` → `build-static-assets` →
+`docker-image`. The other functions are those individual stages, plus
+`check-deployment` / `test` (verification), `publish-platform`, and
+`regenerate-aqueduct-settings`.
 
-#### `get-code`
-Gets edx-platform source code from local directory or Git.
-
-```bash
-# From Git
-dagger call apt-base get-code \
-  --edx-platform-git-repo "https://github.com/openedx/edx-platform" \
-  --edx-platform-git-branch "open-release/sumac.master"
-
-# From local directory
-dagger call apt-base get-code \
-  --source ../edx-platform
-```
-
-#### `install-deps`
-Installs Python and Node.js dependencies using uv for faster installation.
+The simplest way to drive a full build is a **cell** — the deployment's
+`build_manifest.yaml` supplies the platform/theme/translation repos, Python and
+Node versions, and requirement pins, so you pass only the cell coordinate and
+the settings directory:
 
 ```bash
-dagger call apt-base get-code \
-  --edx-platform-git-repo "..." \
-  --edx-platform-git-branch "..." \
-  install-deps \
+# Recommended: the lehrer CLI resolves the manifest for you.
+uv run lehrer build platform --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings
+
+# The same thing as a raw dagger call:
+dagger call platform build-platform \
+  --build-manifest ./deployments/mit-ol/build_manifest.yaml \
+  --release-name master \
   --deployment-name mitxonline \
-  --release-name sumac \
+  --custom-settings ./deployments/mit-ol/settings
+```
+
+Without a manifest, pass the build parameters explicitly:
+
+```bash
+dagger call platform build-platform \
+  --deployment-name mitxonline \
+  --release-name master \
   --pip-package-lists ./pip_package_lists \
-  --pip-package-overrides ./pip_package_overrides
+  --pip-package-overrides ./pip_package_overrides \
+  --custom-settings ./settings \
+  --platform-repo "https://github.com/openedx/edx-platform" \
+  --platform-branch master \
+  --theme-repo "https://github.com/mitodl/mitxonline-theme" \
+  --theme-branch main \
+  --python-version 3.12
 ```
 
-### Convenience Functions
-
-#### `build-platform`
-Chains all build steps together for a complete build.
-
-```bash
-dagger call build-platform \
---deployment-name mitxonline \
---release-name master \
---pip-package-lists ./pip_package_lists \
---pip-package-overrides ./pip_package_overrides \
---custom-settings ./settings \
---platform-repo "https://github.com/openedx/edx-platform" \
---platform-branch master \
---theme-repo "https://github.com/mitodl/mitxonline-theme" \
---theme-branch main \
---python-version 3.12
-```
-
-#### `publish-platform`
-Publishes the built image to a container registry.
+`build-platform` returns a `Container`; chain `publish-platform` to push it
+(there is no dedicated CLI wrapper — use `lehrer build call` or a raw
+`dagger call`):
 
 ```bash
-dagger call build-platform \
-  [...build args...] \
+dagger call platform build-platform \
+  --build-manifest ./deployments/mit-ol/build_manifest.yaml \
+  --release-name master --deployment-name mitxonline \
+  --custom-settings ./deployments/mit-ol/settings \
   publish-platform \
   --registry ghcr.io \
   --repository mitodl/openedx-mitxonline \
-  --tag sumac-latest \
-  --username $GITHUB_USER \
+  --tag master-latest \
+  --username "$GITHUB_USER" \
   --password env:GITHUB_TOKEN
 ```
 
@@ -217,41 +251,38 @@ custom_settings/
 
 ## Examples
 
+The examples below show the `lehrer build` form; the equivalent raw
+`dagger call platform build-platform ...` accepts the same flags.
+
 ### Build for Multiple Deployments
 
 ```bash
 # Build mitxonline
-dagger call build-platform \
-  --deployment-name mitxonline \
-  --release-name sumac \
-  [...common args...]
+uv run lehrer build platform --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings
 
 # Build mitx
-dagger call build-platform \
-  --deployment-name mitx \
-  --release-name sumac \
-  [...common args...]
+uv run lehrer build platform --cell mit-ol/master/mitx \
+  --custom-settings ./deployments/mit-ol/settings
 ```
 
 ### Use Local Source for Development
 
+Any extra flags after the `--cell` are forwarded to `build-platform`:
+
 ```bash
-dagger call build-platform \
-  --deployment-name mitxonline \
-  --release-name sumac \
+uv run lehrer build platform --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings \
   --source ../edx-platform \
-  --theme-source ../mitxonline-theme \
-  [...other args...]
+  --theme-source ../mitxonline-theme
 ```
 
-### Build Without Locales (for mitxonline)
+### Build Without Locales
 
 ```bash
-dagger call build-platform \
-  --deployment-name mitxonline \
-  --release-name sumac \
-  --include-locales false \
-  [...other args...]
+uv run lehrer build platform --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings \
+  --include-locales false
 ```
 
 ### Python Version Selection
@@ -260,63 +291,59 @@ By default:
 - **master branch**: Uses Python 3.12
 - **Other releases (sumac, redwood, etc.)**: Use Python 3.11
 
-Override with `--python-version`:
+The manifest cell can pin `python_version`; override it per-invocation with
+`--python-version`:
+
 ```bash
-dagger call build-platform \
-  --deployment-name mitxonline \
-  --release-name master \
-  --python-version 3.11 \
-  [...other args...]
+uv run lehrer build platform --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings \
+  --python-version 3.11
 ```
 
-### Building Codejail Service
+### Building the Codejail Service
 
 The codejail service provides sandboxed Python execution for running student code:
 
 ```bash
-# Build codejail for master (Python 3.12)
-dagger call build-codejail --release-name master
+uv run lehrer build codejail --release-name master          # Python 3.12
+uv run lehrer build codejail --release-name sumac           # Python 3.11
+uv run lehrer build codejail --release-name master --python-version 3.11
 
-# Build codejail for sumac release (Python 3.11)
-dagger call build-codejail --release-name sumac
-
-# Override Python version
-dagger call build-codejail --release-name master --python-version 3.11
+# Raw form:
+dagger call codejail build --release-name master
 ```
 
 Codejail automatically installs the appropriate edx-platform sandbox requirements based on the release.
 
-### Building edx-notes Service
+### Building the edx-notes Service
 
 The edx-notes-api service provides student annotation functionality:
 
 ```bash
-# Build notes for master branch
-dagger call build-notes --release-name master
+uv run lehrer build notes --release-name master
+uv run lehrer build notes --release-name open-release/sumac.master
+uv run lehrer build notes --release-name master --python-version 3.9
 
-# Build notes for specific release
-dagger call build-notes --release-name open-release/sumac.master
-
-# Use different Python version (default is 3.11)
-dagger call build-notes --release-name master --python-version 3.9
+# Raw form:
+dagger call notes build --release-name master
 ```
 
 **Note**: edx-notes-api master branch requires Python 3.9+. Older releases may work with Python 3.8.
 
 ### Publishing Service Images
 
-Both codejail and notes images can be published using standard container commands:
+The codejail and notes builds return a `Container`; chain `publish` to push it.
+There is no dedicated CLI wrapper for the chain, so use `lehrer build call` (or
+a raw `dagger call`):
 
 ```bash
 # Build and publish codejail
-dagger call build-codejail --release-name sumac \
-  publish \
-  --address ghcr.io/mitodl/openedx-codejail:sumac
+uv run lehrer build call codejail build --release-name sumac \
+  publish --address ghcr.io/mitodl/openedx-codejail:sumac
 
 # Build and publish notes
-dagger call build-notes --release-name master \
-  publish \
-  --address ghcr.io/mitodl/openedx-notes:latest
+uv run lehrer build call notes build --release-name master \
+  publish --address ghcr.io/mitodl/openedx-notes:latest
 ```
 
 ## Building Micro-Frontends (MFEs)
@@ -334,92 +361,83 @@ The module provides functions for building Open edX Micro-Frontends with deploym
 
 ### Basic MFE Build
 
+`lehrer build mfe-legacy` wraps `mfe build-legacy`. `--slot-config` (the
+operator's slot-configuration directory) is **required**, and `export --path
+./dist` writes the built bundle out:
+
 ```bash
 # Build the learning MFE
-dagger call build-mfe \
+uv run lehrer build mfe-legacy \
   --mfe-name learning \
   --mfe-repo https://github.com/openedx/frontend-app-learning \
   --mfe-branch open-release/sumac.latest \
   --deployment-name mitxonline \
+  --slot-config ./deployments/mit-ol/mfe_slot_config/legacy \
   export --path ./dist
 
-# Build with smoot-design bundle (learning MFE)
-dagger call build-mfe \
+# Build with custom styles + an extra npm bundle. Bundle specs are
+# "npm_package_spec|target_directory":
+uv run lehrer build mfe-legacy \
   --mfe-name learning \
   --mfe-repo https://github.com/openedx/frontend-app-learning \
   --mfe-branch master \
   --deployment-name mitxonline \
-  --enable-smoot-design \
-  --enable-ai-drawer \
+  --slot-config ./deployments/mit-ol/mfe_slot_config/legacy \
+  --styles-file mitxonline-styles.scss \
+  --extra-npm-bundles "@mitodl/smoot-design|public/static/smoot-design" \
   export --path ./dist
 
-# Build with custom styles
-dagger call build-mfe \
-  --mfe-name account \
+# Raw form:
+dagger call mfe build-legacy --mfe-name account \
   --mfe-repo https://github.com/openedx/frontend-app-account \
-  --mfe-branch master \
   --deployment-name mitxonline \
-  --styles-file mitxonline-styles.scss \
+  --slot-config ./deployments/mit-ol/mfe_slot_config/legacy \
   export --path ./dist
 ```
+
+Learning-MFE customizations (AI drawer slots, smoot-design, extra bundles) are
+best captured once in a `build_config.yaml` and applied with
+`build-legacy-configured` — see [Config-driven legacy
+builds](#config-driven-legacy-builds-build-legacy-configured) below.
 
 ### MFE Environment Variables
 
-MFEs require environment variables for configuration. Since Dagger doesn't support dict parameters, you need to chain `with-env-variable` calls or use a wrapper script:
+MFEs bake configuration in at build time. Pass each variable with a repeatable
+`--env-vars KEY=VALUE` flag:
 
 ```bash
-# Build with environment variables using wrapper container
-dagger call build-mfe \
+uv run lehrer build mfe-legacy \
   --mfe-name learning \
   --mfe-repo https://github.com/openedx/frontend-app-learning \
   --deployment-name mitxonline \
-  | dagger call container \
-    --env LMS_BASE_URL=https://courses.learn.mit.edu \
-    --env SITE_NAME="MIT Learn" \
-    --env APP_ID=learning \
-    directory /app/mfe/dist \
+  --slot-config ./deployments/mit-ol/mfe_slot_config/legacy \
+  --env-vars LMS_BASE_URL=https://courses.learn.mit.edu \
+  --env-vars SITE_NAME="MIT Learn" \
+  --env-vars APP_ID=learning \
   export --path ./dist
-
-# Alternatively, use with-env-variable chains:
-# This would be done programmatically in a CI/CD script
 ```
 
-For production use, create a helper function or script that generates the full build command with all required environment variables. See the Concourse pipeline values.py for full environment variable examples.
+Common variables include `LMS_BASE_URL`, `SITE_NAME`, `BASE_URL`, `APP_ID`, and
+`DEPLOYMENT_NAME`. See the Concourse pipeline `values.py` for the full set a
+production build supplies.
 
-Common environment variables include:
-- `LMS_BASE_URL` - Base URL of the LMS
-- `SITE_NAME` - Display name of the site
-- `BASE_URL` - Base URL for the MFE
-- `APP_ID` - MFE application identifier
-- `DEPLOYMENT_NAME` - Deployment name
-- `ENABLE_AI_DRAWER_SLOT` - Enable AI drawer (learning MFE)
+### Local MFE development (hot reload)
 
-See the Concourse pipeline values.py for full environment variable examples.
-
-### MFE Watch Container for Local Development
-
-For testing slot config changes locally without rebuilding:
+For iterating on slot configs without rebuilding, run the local dev environment
+with MFE hot-reload:
 
 ```bash
-# Start watch server with hot reload
-dagger call watch-mfe \
-  --mfe-source ./frontend-app-learning \
-  --deployment-name mitxonline \
-  --mfe-name learning \
-  up --ports 8080:8080
-
-# Access at http://localhost:8080
-
-# Note: Set environment variables by chaining with-env-variable calls
-# in your wrapper script or CI/CD pipeline
+uv run lehrer dev start --deployment-config ./deployments/mit-ol --mfe-hot-reload
 ```
 
-The watch container:
-- Mounts your local MFE source code
-- Mounts slot configuration files
-- Runs `npm start` with hot reload
-- Automatically rebuilds when files change
-- Perfect for testing Footer.jsx, env.config.jsx changes
+For an OEP-65 Site Project specifically, `mfe watch-site` serves a built Site
+Project with hot reload:
+
+```bash
+uv run lehrer build call mfe watch-site \
+  --site-project ./site-project up --ports 8080:8080
+# Access at http://localhost:8080
+```
 
 ### Slot Configuration Files
 
@@ -483,11 +501,19 @@ Use directory/file mounting for local sources:
 - Pass `--theme-source` for a local theme directory
 - Pass `--pip-package-lists`, `--pip-package-overrides`, `--custom-settings` as directories
 
-Use `build-platform` for a complete end-to-end build, or call individual functions
-(`apt-base`, `get-code`, `install-deps`, `collected`, etc.) and chain them for
-custom pipelines.
+Use `lehrer build platform` (or `dagger call platform build-platform`) for a
+complete end-to-end build. The individual `platform` functions are the
+pipeline's stages: `apt-base` takes a `--python-version` and *creates* the
+initial container, while the later stages (`get-code`, `install-deps`,
+`locales`, `themes`, `collected`, ...) each take a container and return the next
+one. `build-platform` is where they are wired together in
+`src/lehrer/core/platform.py`.
 
 ### GitHub Actions Example
+
+This repo's own CI drives the CLI (`uv run lehrer build ...`) — see
+`.github/workflows/`. To publish an image from a workflow you can also call the
+Dagger module directly:
 
 ```yaml
 name: Build OpenEdx Image
@@ -507,15 +533,11 @@ jobs:
           version: "latest"
           verb: call
           args: |
-            build-platform
+            platform build-platform
+            --build-manifest ./deployments/mit-ol/build_manifest.yaml
+            --release-name master
             --deployment-name mitxonline
-            --release-name sumac
-            --pip-package-lists ./pip_package_lists
-            --pip-package-overrides ./pip_package_overrides
-            --custom-settings ./settings
-            --edx-platform-git-branch open-release/sumac.master
-            --theme-git-repo https://github.com/mitodl/mitxonline-theme
-            --theme-git-branch main
+            --custom-settings ./deployments/mit-ol/settings
             publish-platform
             --registry ghcr.io
             --repository mitodl/openedx-mitxonline
@@ -531,17 +553,18 @@ jobs:
 ### Running Locally
 
 ```bash
-# Install dependencies
+# Install the CLI + dependencies
 uv sync
 
 # List available functions
-dagger functions
+uv run lehrer build functions          # or: dagger functions
 
-# Get help on a function
-dagger call build-platform --help
+# Get help on a command or the underlying function
+uv run lehrer build platform --help
+dagger call platform build-platform --help
 
-# Test a build step
-dagger call apt-base stdout
+# Evaluate a single build stage
+dagger call platform apt-base stdout
 ```
 
 ### Adding New Functions
