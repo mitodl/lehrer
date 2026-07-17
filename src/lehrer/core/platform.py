@@ -6,6 +6,9 @@ values have been removed; callers supply their own settings namespace, SSH
 hosts, package overrides, and translations repository.
 """
 
+import json
+import re
+import urllib.request
 from typing import TypeVar, cast
 
 import dagger
@@ -16,6 +19,60 @@ from lehrer.core.build_manifest import BuildManifest, Cell
 from lehrer.core.plugin_imports import plugin_distributions
 
 _T = TypeVar("_T")
+
+# Where the full list of released Node versions lives. Each entry is
+# ``{"version": "v24.18.0", ...}``; the file is authoritative for which
+# prebuilt tarballs ``nodeenv --prebuilt`` can actually fetch.
+NODE_RELEASE_INDEX_URL = "https://nodejs.org/download/release/index.json"
+_FULL_NODE_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def _node_version_key(version: str) -> tuple[int, ...]:
+    """Numeric sort key for a ``vMAJOR.MINOR.PATCH`` (or bare) version string."""
+    return tuple(int(part) for part in version.lstrip("v").split("."))
+
+
+def _pick_latest_node_version(spec: str, available: list[str]) -> str:
+    """Return the highest ``available`` release whose version starts with ``spec``.
+
+    ``spec`` is a ``MAJOR`` or ``MAJOR.MINOR`` prefix; ``available`` holds full
+    ``vMAJOR.MINOR.PATCH`` strings (the nodejs release index). Mirrors the
+    Concourse ``github_release`` resource (``tag_filter=^v(<spec>\\.\\d+\\.\\d+)``,
+    ``order_by=version``) that historically resolved this.
+    """
+    prefix = tuple(int(part) for part in spec.split("."))
+    matching = [
+        v
+        for v in available
+        if _FULL_NODE_VERSION_RE.match(v.lstrip("v"))
+        and _node_version_key(v)[: len(prefix)] == prefix
+    ]
+    if not matching:
+        msg = f"no released Node version matches {spec!r}"
+        raise ValueError(msg)
+    return max(matching, key=_node_version_key).lstrip("v")
+
+
+def _fetch_node_versions() -> list[str]:
+    """Fetch the list of released Node version strings from nodejs.org."""
+    with urllib.request.urlopen(NODE_RELEASE_INDEX_URL) as resp:  # noqa: S310
+        return [entry["version"] for entry in json.load(resp)]
+
+
+def resolve_node_version(spec: str, available: list[str] | None = None) -> str:
+    """Resolve a manifest ``node_version`` to a full ``MAJOR.MINOR.PATCH``.
+
+    A full version is returned unchanged (a reproducible pin, and — since it
+    needs no lookup — the Concourse path that passes an already-resolved
+    ``--node-version`` never hits the network). A ``MAJOR`` or ``MAJOR.MINOR``
+    prefix resolves to the latest matching release. ``available`` is injectable
+    for testing; it is fetched from :data:`NODE_RELEASE_INDEX_URL` when omitted.
+    """
+    if _FULL_NODE_VERSION_RE.match(spec):
+        return spec
+    if available is None:
+        available = _fetch_node_versions()
+    return _pick_latest_node_version(spec, available)
 
 
 def _plugin_import_script(plugin_dists: list[str]) -> str:
@@ -434,7 +491,9 @@ class OpenedxPlatform:
             release_name: Release name (e.g., sumac, redwood)
             pip_package_lists: Directory containing pip requirements files
             pip_package_overrides: Directory containing pip override requirements
-            node_version: Node.js version (default: 20.18.0)
+            node_version: Node.js version (default: 20.18.0). A ``MAJOR`` or
+                ``MAJOR.MINOR`` prefix resolves to the latest matching release;
+                a full ``MAJOR.MINOR.PATCH`` is used verbatim.
             packages_to_remove: Python packages to uninstall after base install
                 (e.g., packages that conflict with deployment-specific builds).
                 Default: empty list — no packages removed.
@@ -541,6 +600,11 @@ class OpenedxPlatform:
         if not install_node:
             return container
 
+        # nodeenv --prebuilt only resolves a tarball for a full MAJOR.MINOR.PATCH,
+        # so expand a manifest prefix (e.g. "24") to the latest matching release
+        # here — the resolution the Concourse pipeline used to do out-of-band.
+        resolved_node_version = resolve_node_version(node_version)
+
         container = (
             container.with_workdir("/openedx/edx-platform")
             .with_env_variable("NPM_REGISTRY", "https://registry.npmjs.org/")
@@ -548,7 +612,7 @@ class OpenedxPlatform:
                 [
                     "sh",
                     "-c",
-                    f"nodeenv /openedx/nodeenv --node={node_version} --prebuilt",
+                    f"nodeenv /openedx/nodeenv --node={resolved_node_version} --prebuilt",
                 ]
             )
             .with_env_variable(

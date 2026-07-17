@@ -22,13 +22,15 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-# ``node_version`` feeds ``install_deps`` -> ``nodeenv --node=<v> --prebuilt``,
-# which resolves a prebuilt tarball only for a *full* ``MAJOR.MINOR.PATCH``
-# version. A bare major like ``"24"`` 404s on nodejs.org and dies with an
-# opaque ``not enough values to unpack`` — so require full semver here and fail
-# fast at manifest-load time with a clear error instead. Renovate (node-version
-# datasource) keeps the pin current.
-NODE_VERSION_PATTERN = r"^\d+\.\d+\.\d+$"
+# ``node_version`` feeds ``install_deps``, which resolves it to a full release
+# before ``nodeenv --node=<v> --prebuilt`` (nodeenv only fetches a prebuilt
+# tarball for a full ``MAJOR.MINOR.PATCH``). A bare major (``"24"``) or
+# ``MAJOR.MINOR`` prefix resolves to the latest matching release — mirroring the
+# nodejs ``github_release`` resource the Concourse pipeline historically used;
+# a full ``MAJOR.MINOR.PATCH`` is used verbatim (a reproducible pin). The
+# pattern only rejects obvious garbage (empty, non-numeric, trailing dots) so a
+# typo fails fast at manifest-load instead of deep in the Node build step.
+NODE_VERSION_PATTERN = r"^\d+(\.\d+){0,2}$"
 
 
 class CellDefaults(BaseModel):
