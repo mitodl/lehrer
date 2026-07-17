@@ -22,6 +22,14 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+# ``node_version`` feeds ``install_deps`` -> ``nodeenv --node=<v> --prebuilt``,
+# which resolves a prebuilt tarball only for a *full* ``MAJOR.MINOR.PATCH``
+# version. A bare major like ``"24"`` 404s on nodejs.org and dies with an
+# opaque ``not enough values to unpack`` — so require full semver here and fail
+# fast at manifest-load time with a clear error instead. Renovate (node-version
+# datasource) keeps the pin current.
+NODE_VERSION_PATTERN = r"^\d+\.\d+\.\d+$"
+
 
 class CellDefaults(BaseModel):
     """Group-wide values a cell may override."""
@@ -32,7 +40,7 @@ class CellDefaults(BaseModel):
     platform_repo: str | None = None
     translations_repo: str | None = None
     translations_branch: str | None = None
-    node_version: str | None = None
+    node_version: str | None = Field(default=None, pattern=NODE_VERSION_PATTERN)
     extra_ssh_hosts: list[str] = Field(default_factory=list)
     extra_npm_packages: list[str] = Field(default_factory=list)
 
@@ -58,7 +66,7 @@ class Cell(BaseModel):
     platform_repo: str | None = None
     translations_repo: str | None = None
     translations_branch: str | None = None
-    node_version: str | None = None
+    node_version: str | None = Field(default=None, pattern=NODE_VERSION_PATTERN)
     extra_ssh_hosts: list[str] | None = None
     extra_npm_packages: list[str] | None = None
 

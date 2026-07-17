@@ -6,7 +6,7 @@ defaults:
   platform_repo: https://github.com/openedx/edx-platform
   translations_repo: https://github.com/openedx/openedx-translations
   translations_branch: main
-  node_version: '24'
+  node_version: '24.18.0'
   extra_ssh_hosts:
   - github.mit.edu
   extra_npm_packages:

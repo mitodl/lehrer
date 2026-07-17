@@ -18,6 +18,16 @@
       ],
       "datasourceTemplate": "pypi",
       "versioningTemplate": "pep440"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/deployments/.+/build_manifest\\.ya?ml$/"],
+      "matchStrings": [
+        "node_version:\\s*['\"](?<currentValue>\\d+\\.\\d+\\.\\d+)['\"]"
+      ],
+      "depNameTemplate": "node",
+      "datasourceTemplate": "node-version",
+      "versioningTemplate": "node"
     }
   ],
   "packageRules": [
@@ -30,6 +40,12 @@
       "matchDepNames": ["setuptools", "pip", "wheel"],
       "enabled": false,
       "description": "setuptools is deliberately pinned <82 for pkg_resources (see pip_package_lists comments); pip/wheel are managed manually. Renovate must not bump these in build_manifest.yaml."
+    },
+    {
+      "matchDatasources": ["node-version"],
+      "matchDepNames": ["node"],
+      "allowedVersions": "<25",
+      "description": "Keep build_manifest node_version pinned to the Node 24 line edx-platform builds against; major bumps move deliberately, not via Renovate."
     }
   ]
 }
