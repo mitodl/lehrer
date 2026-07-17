@@ -136,11 +136,15 @@ list them, and `dagger call <object> <function> --help` for a function's flags.
 
 ### `platform` — edx-platform
 
-`build-platform` chains the whole pipeline (`apt-base` → `get-code` →
-`install-deps` → `themes` → `collected` → `fetch-translations` →
-`build-static-assets` → `docker-image`) into one image. The other functions are
-the individual stages, plus `check-deployment` / `test` (verification),
-`publish-platform`, `regenerate-aqueduct-settings`, and `inject-aqueduct-settings`.
+`build-platform` assembles the whole image the way a multi-stage Docker build
+would: it first builds dependencies on one base (`apt-base` → `get-code` →
+`install-deps`), then starts a **fresh** clean base and copies only the needed
+directories across, conditionally applies `locales` (unless
+`--include-locales false`) and `themes`, and finishes with `collected` →
+`inject-aqueduct-settings` → `fetch-translations` → `build-static-assets` →
+`docker-image`. The other functions are those individual stages, plus
+`check-deployment` / `test` (verification), `publish-platform`, and
+`regenerate-aqueduct-settings`.
 
 The simplest way to drive a full build is a **cell** — the deployment's
 `build_manifest.yaml` supplies the platform/theme/translation repos, Python and
@@ -357,8 +361,9 @@ The module provides functions for building Open edX Micro-Frontends with deploym
 
 ### Basic MFE Build
 
-`lehrer build mfe-legacy` wraps `mfe build-legacy`; append `export --path ./dist`
-to write the built bundle out:
+`lehrer build mfe-legacy` wraps `mfe build-legacy`. `--slot-config` (the
+operator's slot-configuration directory) is **required**, and `export --path
+./dist` writes the built bundle out:
 
 ```bash
 # Build the learning MFE
@@ -367,22 +372,27 @@ uv run lehrer build mfe-legacy \
   --mfe-repo https://github.com/openedx/frontend-app-learning \
   --mfe-branch open-release/sumac.latest \
   --deployment-name mitxonline \
+  --slot-config ./deployments/mit-ol/mfe_slot_config/legacy \
   export --path ./dist
 
-# Build with custom styles + an extra npm bundle (e.g. smoot-design)
+# Build with custom styles + an extra npm bundle. Bundle specs are
+# "npm_package_spec|target_directory":
 uv run lehrer build mfe-legacy \
   --mfe-name learning \
   --mfe-repo https://github.com/openedx/frontend-app-learning \
   --mfe-branch master \
   --deployment-name mitxonline \
+  --slot-config ./deployments/mit-ol/mfe_slot_config/legacy \
   --styles-file mitxonline-styles.scss \
-  --extra-npm-bundles @mitodl/smoot-design \
+  --extra-npm-bundles "@mitodl/smoot-design|public/static/smoot-design" \
   export --path ./dist
 
 # Raw form:
 dagger call mfe build-legacy --mfe-name account \
   --mfe-repo https://github.com/openedx/frontend-app-account \
-  --deployment-name mitxonline export --path ./dist
+  --deployment-name mitxonline \
+  --slot-config ./deployments/mit-ol/mfe_slot_config/legacy \
+  export --path ./dist
 ```
 
 Learning-MFE customizations (AI drawer slots, smoot-design, extra bundles) are
@@ -400,6 +410,7 @@ uv run lehrer build mfe-legacy \
   --mfe-name learning \
   --mfe-repo https://github.com/openedx/frontend-app-learning \
   --deployment-name mitxonline \
+  --slot-config ./deployments/mit-ol/mfe_slot_config/legacy \
   --env-vars LMS_BASE_URL=https://courses.learn.mit.edu \
   --env-vars SITE_NAME="MIT Learn" \
   --env-vars APP_ID=learning \
@@ -491,10 +502,12 @@ Use directory/file mounting for local sources:
 - Pass `--pip-package-lists`, `--pip-package-overrides`, `--custom-settings` as directories
 
 Use `lehrer build platform` (or `dagger call platform build-platform`) for a
-complete end-to-end build. The individual `platform` functions (`apt-base`,
-`get-code`, `install-deps`, `collected`, ...) are the pipeline's stages; each
-takes and returns a `Container`, and `build-platform` is where they are wired
-together in `src/lehrer/core/platform.py`.
+complete end-to-end build. The individual `platform` functions are the
+pipeline's stages: `apt-base` takes a `--python-version` and *creates* the
+initial container, while the later stages (`get-code`, `install-deps`,
+`locales`, `themes`, `collected`, ...) each take a container and return the next
+one. `build-platform` is where they are wired together in
+`src/lehrer/core/platform.py`.
 
 ### GitHub Actions Example
 
