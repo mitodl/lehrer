@@ -230,14 +230,15 @@ lehrer build test --cell mit-ol/master/mitxonline \
 
 **Plugins folded in.** With `--include-plugins` (default), the same pytest run
 also executes whatever tests the installed plugins ship — appended to the
-edx-platform targets via `--pyargs`, so one run and one JUnit report cover
-edx-platform **and** the plugins. It uses pytest **discovery**: published plugin
-packages don't ship their tests today, so with `--install-test-extras` (default)
-each maintained `ol-openedx-*` plugin is re-requested at its pinned version with
-a `[tests]` extra (a safe no-op until the plugin defines one). A plugin that
-ships no tests is reported and skipped, so this stays green today and starts
-running real plugin suites the moment one is published. Pass
-`--no-include-plugins` for the edx-platform suite alone, or
+edx-platform targets via `--pyargs`, so one run covers edx-platform **and** the
+plugins. It uses pytest **discovery**: published plugin packages don't ship their
+tests today, so with `--install-test-extras` (default) each maintained
+`ol-openedx-*` plugin is re-requested at its pinned version with a `[tests]`
+extra (a safe no-op until the plugin defines one; any package the cell removed
+via `packages_to_remove` is excluded so the run matches production). A plugin
+that ships no tests simply collects nothing (never a failure), so this stays
+green today and starts running real plugin suites the moment one is published.
+Pass `--no-include-plugins` for the edx-platform suite alone, or
 `--no-install-test-extras` to skip the extra install.
 
 ### codejail (`codejail test`) and notes (`notes test`)

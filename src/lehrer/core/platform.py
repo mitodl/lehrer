@@ -20,6 +20,7 @@ from lehrer.core.plugin_imports import plugin_distributions
 from lehrer.core.plugin_tests import (
     combined_pytest_script,
     maintained_test_extra_specs,
+    normalize_dist,
 )
 
 _T = TypeVar("_T")
@@ -1704,15 +1705,16 @@ class OpenedxPlatform:
         Plugins: with ``--include-plugins`` (default) the *same* pytest run also
         executes whatever tests the installed plugins ship — appended to the
         edx-platform targets via ``--pyargs`` (see
-        :func:`lehrer.core.plugin_tests.combined_pytest_script`), so one run and
-        one JUnit report cover edx-platform **and** the plugins.  With
-        ``--install-test-extras`` (default) each maintained ``ol-*`` plugin is
-        re-requested at its pinned version with a ``[tests]`` extra so its suite
-        and test-only deps are present (a safe no-op until the plugin defines
-        the extra).  A plugin that ships no tests is reported and skipped, so
-        this stays green today and starts exercising real plugin suites the
-        moment one is published; pass ``--no-include-plugins`` for the
-        edx-platform suite alone.
+        :func:`lehrer.core.plugin_tests.combined_pytest_script`), so one run
+        covers edx-platform **and** the plugins.  With ``--install-test-extras``
+        (default) each maintained ``ol-*`` plugin is re-requested at its pinned
+        version with a ``[tests]`` extra so its suite and test-only deps are
+        present (a safe no-op until the plugin defines the extra); any package
+        the cell removed via ``packages_to_remove`` is excluded so the run
+        matches the production resolution.  A plugin that ships no tests simply
+        collects nothing (never a failure), so this stays green today and starts
+        exercising real plugin suites the moment one is published; pass
+        ``--no-include-plugins`` for the edx-platform suite alone.
 
         Args:
             deployment_name: Deployment name.
@@ -1867,12 +1869,25 @@ class OpenedxPlatform:
             ).contents()
             requirement_lines = [*list_txt.splitlines(), *override_txt.splitlines()]
             plugin_dists = plugin_distributions(requirement_lines)
-            if install_test_extras:
-                extra_specs = maintained_test_extra_specs(requirement_lines)
-                if extra_specs:
-                    container = container.with_exec(
-                        ["uv", "pip", "install", *extra_specs]
-                    )
+            extra_specs = (
+                maintained_test_extra_specs(requirement_lines)
+                if install_test_extras
+                else []
+            )
+            # install_deps uninstalls packages_to_remove, so a removed ol-*
+            # plugin must not be reinstalled by its [tests] extra nor handed to
+            # pytest as a target — that would make the test env diverge from the
+            # production cell. Exclude the (normalized) removals from both.
+            removals = {normalize_dist(pkg) for pkg in packages_to_remove}
+            if removals:
+                plugin_dists = [d for d in plugin_dists if d not in removals]
+                extra_specs = [
+                    spec
+                    for spec in extra_specs
+                    if spec.split("[", 1)[0] not in removals
+                ]
+            if extra_specs:
+                container = container.with_exec(["uv", "pip", "install", *extra_specs])
 
         # Inject the deployment's aqueduct model layer + the derived test
         # settings module.  Only the model layer is needed here (not the full
@@ -1930,10 +1945,8 @@ class OpenedxPlatform:
         # tens of minutes for a smoke subset.
         if include_plugins:
             # One pytest run over the edx-platform paths plus the installed
-            # plugin packages (resolved at runtime), one aggregated JUnit report.
-            script = combined_pytest_script(
-                paths, plugin_dists, ds, "/openedx/reports/report.xml", markers
-            )
+            # plugin packages (resolved at runtime).
+            script = combined_pytest_script(paths, plugin_dists, ds, markers)
             return await base.with_exec(["python", "-c", script]).stdout()
 
         pytest_cmd = ["python", "-m", "pytest", f"--ds={ds}", "--no-migrations", *paths]

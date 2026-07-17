@@ -9,14 +9,15 @@ groups the commands the way you reason about them:
   ``notes``, ``mfe-legacy``, ``mfe-site``).
 * **Verify** — the compatibility pyramid for a build cell, cheapest first:
   ``check`` (install + import) → ``test`` (edx-platform's own suite under the
-  deployment's settings) → ``plugin-regression`` (the plugins' own suites);
-  plus ``codejail-test`` / ``notes-test`` for those services.
+  deployment's settings, and — with ``--include-plugins``, the default — the
+  installed plugins' own suites in the same run); plus ``codejail-test`` /
+  ``notes-test`` for those services.
 * **Utilities** — ``cells``, ``functions``, and the raw ``call`` escape hatch.
 
 Each command is a thin wrapper that forwards its trailing arguments straight to
 Dagger, so the full ``dagger call`` flag surface (``--help``, ``export``,
 ``publish``, ``--source``, ...) is always available. The cell-scoped commands
-(``platform``/``check``/``test``/``plugin-regression``) also accept a single
+(``platform``/``check``/``test``) also accept a single
 ``<group>/<release>/<deployment>`` argument that expands to the right
 ``--build-manifest``/``--release-name``/``--deployment-name`` so you don't
 repeat them; use ``lehrer build call ...`` for any function without a wrapper.

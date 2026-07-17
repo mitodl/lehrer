@@ -25,20 +25,30 @@ def test_maintained_extras_selects_pinned_ol_plugins() -> None:
     ]
 
 
-def test_maintained_extras_skips_unpinned_and_vcs() -> None:
+def test_maintained_extras_skips_unpinned_vcs_and_wildcard() -> None:
     lines = [
         "ol-openedx-foo>=1.0",  # range, not a reproducible pin
         "ol-openedx-bar",  # unpinned
         "git+https://github.com/mitodl/ol-openedx-baz.git#egg=ol-openedx-baz",
         "ol-openedx-qux==1.2.3; python_version >= '3.11'",  # marker -> skip
+        "ol-openedx-star==1.2.*",  # wildcard could move the patch -> skip
     ]
     assert maintained_test_extra_specs(lines) == []
 
 
-def test_maintained_extras_dedupes_first_wins() -> None:
-    lines = ["ol-openedx-logging==0.3.5", "ol_openedx_logging==0.9.9"]
-    # Normalization collapses the two spellings to one dist; first pin wins.
-    assert maintained_test_extra_specs(lines) == ["ol-openedx-logging[tests]==0.3.5"]
+def test_maintained_extras_last_pin_wins_for_overrides() -> None:
+    # A cell concatenates overrides AFTER the package list and install_deps
+    # applies them last, so the extra must take the override version (0.9.9),
+    # while keeping the distribution's first-seen position.
+    lines = [
+        "ol-openedx-logging==0.3.5",
+        "ol-openedx-chat==0.5.9",
+        "ol_openedx_logging==0.9.9",  # override, later — wins its version
+    ]
+    assert maintained_test_extra_specs(lines) == [
+        "ol-openedx-logging[tests]==0.9.9",
+        "ol-openedx-chat[tests]==0.5.9",
+    ]
 
 
 def test_combined_script_is_valid_python() -> None:
@@ -46,17 +56,15 @@ def test_combined_script_is_valid_python() -> None:
         ["lms/djangoapps/courseware", "common/djangoapps/student"],
         ["ol-openedx-logging"],
         "lms.envs.lehrer_test",
-        "/openedx/reports/report.xml",
     )
     ast.parse(source)  # written verbatim into the container — must parse
 
 
-def test_combined_script_embeds_edx_paths_plugins_and_report() -> None:
+def test_combined_script_embeds_edx_paths_and_plugins() -> None:
     source = combined_pytest_script(
         ["lms/djangoapps/courseware"],
         ["ol-openedx-logging"],
         "cms.envs.lehrer_test",
-        "/openedx/reports/report.xml",
         markers="not slow",
     )
     # edx-platform paths run as plain path args; plugin packages via --pyargs.
@@ -65,7 +73,6 @@ def test_combined_script_embeds_edx_paths_plugins_and_report() -> None:
     assert "'--pyargs'" in source
     assert "--ds={settings_module}" in source
     assert "cms.envs.lehrer_test" in source
-    assert "/openedx/reports/report.xml" in source
     assert "not slow" in source
     # dist -> module resolution is read from installed metadata, never a
     # hand-maintained map, so a healthy plugin can't be mis-skipped.
@@ -77,7 +84,6 @@ def test_combined_script_without_plugins_runs_edx_paths_only() -> None:
         ["lms/djangoapps/courseware"],
         [],
         "lms.envs.lehrer_test",
-        "/openedx/reports/report.xml",
     )
     ast.parse(source)
     # With no plugin dists the --pyargs branch is guarded off at runtime; the
