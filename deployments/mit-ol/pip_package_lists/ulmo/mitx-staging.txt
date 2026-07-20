@@ -4,7 +4,7 @@ django-redis==7.0.0
 edx-sysadmin==0.4.2
 invideoquiz-xblock==2.0.0
 nodeenv>=1.7.0
-ol-openedx-canvas-integration==0.8.0
+ol-openedx-canvas-integration==0.8.2
 ol-openedx-course-export==0.2.0
 ol-openedx-course-structure-api==0.2.0
 ol-openedx-git-auto-export==0.8.2
