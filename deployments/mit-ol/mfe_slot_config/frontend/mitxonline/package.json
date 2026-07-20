@@ -11,7 +11,7 @@
     "serve": "openedx serve"
   },
   "dependencies": {
-    "@openedx/frontend-app-instructor-dashboard": "^1.0.0-alpha",
+    "@openedx/frontend-app-instructor-dashboard": "^1.1.0-alpha",
     "@openedx/frontend-base": "^1.0.0-alpha.49",
     "@openedx/paragon": "^23",
     "@tanstack/react-query": "^5",
