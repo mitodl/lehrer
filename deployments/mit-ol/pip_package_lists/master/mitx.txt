@@ -1,4 +1,4 @@
-celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules
+celery-redbeat==2.4.1  # Support for using Redis as the lock for Celery schedules
 granian==2.7.9
 django-redis==7.0.0
 edx-sga==0.29.0

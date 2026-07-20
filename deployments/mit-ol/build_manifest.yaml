@@ -25,7 +25,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitxonline-theme
   theme_branch: main
   packages:
-  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - 'celery-redbeat==2.4.1  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
   - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.2
@@ -72,7 +72,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitx-theme
   theme_branch: master
   packages:
-  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - 'celery-redbeat==2.4.1  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
   - django-redis==7.0.0
   - edx-sga==0.29.0
@@ -106,7 +106,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitx-theme
   theme_branch: master
   packages:
-  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - 'celery-redbeat==2.4.1  # Support for using Redis as the lock for Celery schedules'
   - django-redis==7.0.0
   - granian==2.7.9
   - edx-sga==0.29.0
@@ -141,7 +141,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitx-theme
   theme_branch: ulmo
   packages:
-  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - 'celery-redbeat==2.4.1  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
   - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.2
@@ -176,7 +176,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitx-theme
   theme_branch: ulmo
   packages:
-  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - 'celery-redbeat==2.4.1  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
   - django-redis==7.0.0
   - edx-sysadmin==0.4.2
@@ -210,7 +210,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitxpro-theme
   theme_branch: ulmo
   packages:
-  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - 'celery-redbeat==2.4.1  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
   - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.2
@@ -243,7 +243,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitx-theme
   theme_branch: verawood
   packages:
-  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - 'celery-redbeat==2.4.1  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
   - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.2
@@ -279,7 +279,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitx-theme
   theme_branch: verawood
   packages:
-  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - 'celery-redbeat==2.4.1  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
   - django-redis==7.0.0
   - edx-sysadmin==0.4.2
@@ -313,7 +313,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitxpro-theme
   theme_branch: verawood
   packages:
-  - 'celery-redbeat==2.3.3  # Support for using Redis as the lock for Celery schedules'
+  - 'celery-redbeat==2.4.1  # Support for using Redis as the lock for Celery schedules'
   - granian==2.7.9
   - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.2
