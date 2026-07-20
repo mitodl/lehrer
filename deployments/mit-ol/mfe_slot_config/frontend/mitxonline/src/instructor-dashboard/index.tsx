@@ -21,7 +21,7 @@ import EnrollmentActions from './EnrollmentActions';
 // factory's ungated default.
 // ---------------------------------------------------------------------------
 
-export function createMitxOnlineInstructorDashboardApp(): App {
+export function createMITxOnlineInstructorDashboardApp(): App {
   const app = createMITOLInstructorDashboardApp();
   return {
     ...app,

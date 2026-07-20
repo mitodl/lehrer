@@ -9,7 +9,7 @@ import {
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxOnlineHeaderApp } from "@shared/header";
 
-import { createMitxOnlineInstructorDashboardApp } from "./src/instructor-dashboard";
+import { createMITxOnlineInstructorDashboardApp } from "./src/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
 import "@shared/styles/mitxonline.scss";
@@ -38,7 +38,7 @@ const siteConfig: SiteConfig = {
 		footerApp,
 		createMITOLFooterApp(),
 		createMITxOnlineHeaderApp(),
-		createMitxOnlineInstructorDashboardApp(),
+		createMITxOnlineInstructorDashboardApp(),
 		// TODO: add further module libraries as they are migrated to frontend-base
 	],
 };
