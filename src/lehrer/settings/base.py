@@ -24,8 +24,48 @@ pydantic-settings sources are ordered highest-to-lowest priority:
    ``ALLOWED_HOSTS``, …).  Omitted entirely when no YAML files are present
    (e.g. during local development without a K8s config directory).
 
-3. **AqueductSettings field defaults** — typed snapshot of common.py
-   defaults captured by ``manage.py generate_aqueduct_settings``.
+3. **AqueductSettings field defaults** — typed snapshot of ``common.py``
+   defaults produced by django-aqueduct codegen v2
+   (``manage.py generate_aqueduct_settings`` static AST discovery; see
+   ``OpenedxPlatform.regenerate_aqueduct_settings``).
+
+Class hierarchy
+---------------
+The generated ``AqueductSettings`` model subclasses ``BaseSettings`` directly
+(pure codegen output, never hand-edited).  Each service's entry module composes
+``class <Svc>ProductionSettings(ProductionSettingsMixin, AqueductSettings)`` —
+**mixin first**, so this mixin's field declarations win in the pydantic MRO over
+the generated defaults.  That precedence is what makes the type corrections and
+the structural deferrals below take effect.
+
+Overlay & the openedx plugin framework
+--------------------------------------
+codegen v2 discovers settings by static AST analysis of ``common.py`` — it never
+imports the module, so it cannot see the settings openedx injects at *runtime*
+via ``add_plugins()`` (plugin apps appended to ``INSTALLED_APPS``, middleware,
+auth backends, template context processors, …).  A generated default for those
+is therefore plugin-*incomplete*.
+
+This is handled by ``configure_django_settings(base="<svc>.envs.common")`` in
+each entry module: as of django-aqueduct 0.10.0 the overlay keeps a model field
+only when it is *meaningfully carried* — set by a settings source (env/YAML) or
+assigned by a ``@model_validator``.  A field left at its static generated default
+(``INSTALLED_APPS`` and friends) defers to the live, plugin-complete base value
+(the base is imported at runtime, so ``add_plugins`` has already run).  So this
+mixin does **not** need to redeclare those settings; the framework defers them
+automatically.  A validator that must *extend* a plugin-complete list runs as a
+``post_configure`` hook instead (see the mit-ol LMS entry module).
+
+Reusable-derivations note
+-------------------------
+django-aqueduct 0.7.0+ ships a ``derivations`` library (``database_config``,
+``redis_cache``, ``first_url``, ``feature_flags``, ``admins_from_csv``).  It was
+evaluated for the validators below and does **not** fit: they target standalone
+apps (URL-based ``DATABASES``, Redis ``CACHES``, ``FEATURE_*``-prefix collection)
+whereas these are edx-platform-structural (scalar → nested ``DATABASES``,
+YAML-provided ``CACHES``, reverse ``ENABLE_*`` → ``FEATURES`` mirroring).  This
+module is also mypy-checked inside lehrer's own venv, which does not depend on
+``django_aqueduct``, so it cannot import that library regardless.
 """
 
 from __future__ import annotations
@@ -145,6 +185,15 @@ class ProductionSettingsMixin(BaseSettings):
     # e.g. {"ssl_cert_reqs": "optional"}, rather than a plain bool.
     CELERY_BROKER_USE_SSL: bool | dict[str, Any] = Field(default=False)  # type: ignore[assignment]
     BROKER_USE_SSL: bool | dict[str, Any] | None = Field(default=None)  # type: ignore[assignment]
+
+    # NOTE on structural settings (INSTALLED_APPS, MIDDLEWARE,
+    # AUTHENTICATION_BACKENDS, TEMPLATES, DATABASE_ROUTERS): these are augmented
+    # at runtime by openedx's add_plugins() and are NOT redeclared here.  The
+    # generated AqueductSettings carries only the plugin-incomplete static
+    # literal, but because the model never overrides it (no source or validator
+    # sets it), django-aqueduct's base overlay defers it to the live,
+    # plugin-complete common.py value — see the "Overlay & the openedx plugin
+    # framework" section in the module docstring above.
 
     # ------------------------------------------------------------------
     # YAML alias fields — YAML keys that differ from the Django setting name.

@@ -14,7 +14,7 @@ ol-openedx-sentry==0.4.0
 openedx-scorm-xblock==19.0.4
 pip==26.1.2
 pydantic-settings[yaml]==2.14.2
-django-aqueduct==0.9.0
+django-aqueduct==0.10.0
 rapid-response-xblock==0.11.0
 
 # Experimental Plugins for AI features
