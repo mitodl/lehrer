@@ -19,8 +19,6 @@ MIT_OL_CELLS = [
     ("master", "mitxonline"),
     ("master", "mitx"),
     ("master", "mitx-staging"),
-    ("ulmo", "mitx"),
-    ("ulmo", "mitx-staging"),
     ("ulmo", "xpro"),
     ("verawood", "mitx"),
     ("verawood", "mitx-staging"),
