@@ -236,3 +236,28 @@ class TestNodeVersionValidation:
             Cell(
                 release="master", deployment="x", packages=["a==1"], node_version=value
             )
+
+
+def test_settings_model_release_must_match_a_cell() -> None:
+    # A typo here would otherwise parse fine and silently mark every cell
+    # drift=False, disabling the gate the field exists to enable.
+    manifest = {
+        "version": 1,
+        "settings_model_release": "mastr",
+        "cells": [
+            {"release": "master", "deployment": "mitx", "packages": ["a==1"]},
+        ],
+    }
+    with pytest.raises(ValidationError, match="settings_model_release"):
+        BuildManifest.model_validate(manifest)
+
+
+def test_settings_model_release_matching_a_cell_is_accepted() -> None:
+    manifest = {
+        "version": 1,
+        "settings_model_release": "master",
+        "cells": [
+            {"release": "master", "deployment": "mitx", "packages": ["a==1"]},
+        ],
+    }
+    assert BuildManifest.model_validate(manifest).settings_model_release == "master"

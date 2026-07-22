@@ -129,8 +129,13 @@ def test_yml_extension_manifest_is_honored(tmp_path: Path) -> None:
 
 # ── settings-verify matrix ────────────────────────────────────────────────────
 
+# Every cell declares django-aqueduct: the settings-verify matrix only covers
+# cells that actually use the aqueduct settings mechanism (see _uses_aqueduct).
 SETTINGS_MANIFEST = MANIFEST.replace(
     "cells:\n", "settings_model_release: master\ncells:\n", 1
+).replace(
+    "  - ol-openedx-logging==0.3.5\n",
+    "  - ol-openedx-logging==0.3.5\n  - django-aqueduct==0.10.0\n",
 )
 
 
@@ -208,3 +213,43 @@ def test_unrelated_paths_yield_no_settings_cells(settings_repo: Path) -> None:
         )
         == []
     )
+
+
+def test_cell_without_django_aqueduct_is_excluded(tmp_path: Path) -> None:
+    # Shipping a settings tree is group-level; *using* it is per-cell. A cell
+    # that never installs the framework would fail verification with a
+    # ModuleNotFoundError that says nothing about the deployment's health.
+    # (This is exactly what mit-ol/ulmo/xpro did on the PR that added this.)
+    manifest = SETTINGS_MANIFEST.replace(
+        "- release: ulmo\n  deployment: xpro\n  packages:\n"
+        "  - ol-openedx-logging==0.3.5\n  - django-aqueduct==0.10.0\n",
+        "- release: ulmo\n  deployment: xpro\n  packages:\n"
+        "  - ol-openedx-logging==0.3.5\n",
+    )
+    group_dir = tmp_path / "deployments" / "mit-ol"
+    group_dir.mkdir(parents=True)
+    (group_dir / "build_manifest.yaml").write_text(manifest)
+    (group_dir / "settings").mkdir()
+    compat._manifest_file.cache_clear()
+
+    cells = compat.all_settings_cells(tmp_path)
+    assert ("mit-ol", "ulmo", "xpro") not in _keys(cells)
+    assert _keys(cells) == {
+        ("mit-ol", "master", "mitxonline"),
+        ("mit-ol", "master", "mitx"),
+    }
+
+
+def test_aqueduct_detected_in_overrides_too(tmp_path: Path) -> None:
+    # The pin can legitimately live in overrides rather than packages.
+    manifest = SETTINGS_MANIFEST.replace(
+        "  - ol-openedx-logging==0.3.5\n  - django-aqueduct==0.10.0\n",
+        "  - ol-openedx-logging==0.3.5\n  overrides:\n  - django-aqueduct==0.10.0\n",
+    )
+    group_dir = tmp_path / "deployments" / "mit-ol"
+    group_dir.mkdir(parents=True)
+    (group_dir / "build_manifest.yaml").write_text(manifest)
+    (group_dir / "settings").mkdir()
+    compat._manifest_file.cache_clear()
+
+    assert len(compat.all_settings_cells(tmp_path)) == 3

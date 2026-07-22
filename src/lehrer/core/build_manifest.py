@@ -132,6 +132,27 @@ class BuildManifest(BaseModel):
     cells: list[Cell] = Field(min_length=1)
 
     @model_validator(mode="after")
+    def _settings_model_release_is_a_real_release(self) -> BuildManifest:
+        """Reject a ``settings_model_release`` no cell actually declares.
+
+        The failure this prevents is silent: a typo or a stale release name
+        parses fine, but then matches no cell, so every cell is enumerated with
+        ``drift=False`` and the drift gate the field exists to enable is turned
+        off with no error anywhere. A gate that quietly stops gating is worse
+        than no gate, so this has to fail at manifest-load time.
+        """
+        if self.settings_model_release is None:
+            return self
+        releases = {cell.release for cell in self.cells}
+        if self.settings_model_release not in releases:
+            msg = (
+                f"settings_model_release={self.settings_model_release!r} matches "
+                f"no cell — available releases: {', '.join(sorted(releases))}"
+            )
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
     def _no_duplicate_cells(self) -> BuildManifest:
         seen: set[tuple[str, str]] = set()
         for cell in self.cells:

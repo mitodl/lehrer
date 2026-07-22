@@ -2781,18 +2781,33 @@ class OpenedxPlatform:
                 container,
                 ["/tmp/lms_aqueduct.py", "/tmp/cms_aqueduct.py"],  # noqa: S108
             )
+            # The remediation has to be copy-pasteable from a CI log by someone
+            # who did not write this function: the full command with this cell's
+            # coordinates, the export step (regeneration returns a Directory —
+            # without `export` nothing lands on disk), and the copy. The
+            # manifest path is the one value that genuinely varies by operator,
+            # so it stays a named placeholder rather than a wrong guess.
             for svc in ("lms", "cms"):
+                remediation = (
+                    f"DRIFT: the committed {svc}/models/aqueduct.py is stale "
+                    f"against {resolved.platform_branch}. Regenerate and commit "
+                    "it:\\n"
+                    "  dagger call platform regenerate-aqueduct-settings \\\\\\n"
+                    f"    --deployment-name {deployment_name} "
+                    f"--release-name {release_name} \\\\\\n"
+                    "    --build-manifest <your group's build_manifest.yaml> "
+                    "\\\\\\n"
+                    "    export --path ./generated\\n"
+                    f"  cp generated/{svc}/models/aqueduct.py "
+                    f"<your settings dir>/{svc}/models/aqueduct.py"
+                )
                 container = container.with_exec(
                     [
                         "sh",
                         "-c",
                         f"diff -u {svc}/envs/models/aqueduct.py "  # noqa: S108
                         f"/tmp/{svc}_aqueduct.py || {{ "
-                        f"echo 'DRIFT: the committed {svc}/models/"
-                        "aqueduct.py is stale against "
-                        f"{resolved.platform_branch}. Re-run "
-                        "`dagger call platform regenerate-aqueduct-settings` and "
-                        "commit the result.'; exit 1; }",
+                        f"printf '%s\\n' {shlex.quote(remediation)}; exit 1; }}",
                     ]
                 )
 

@@ -39,7 +39,7 @@ from typing import Annotated
 import cyclopts
 
 from lehrer.cli import _paths
-from lehrer.core.build_manifest import BuildManifest, load_manifest
+from lehrer.core.build_manifest import BuildManifest, Cell, load_manifest
 
 app = cyclopts.App(
     name="compat",
@@ -180,6 +180,9 @@ _SETTINGS_DIR = "settings"
 # (``inject_aqueduct_settings``), so a change here affects every cell in every
 # group — not just the group whose files were edited.
 _CORE_SETTINGS_PREFIX = "src/lehrer/settings/"
+# Distribution whose presence in a cell means that cell uses the aqueduct
+# settings mechanism at all (see _uses_aqueduct).
+_AQUEDUCT_DIST = "django-aqueduct"
 
 
 def _settings_cell(
@@ -197,10 +200,25 @@ def _has_settings_tree(repo_root: Path, group: str) -> bool:
     return (repo_root / _DEPLOYMENTS / group / _SETTINGS_DIR).is_dir()
 
 
+def _uses_aqueduct(cell: Cell) -> bool:
+    """Whether a cell installs django-aqueduct, i.e. uses the aqueduct settings.
+
+    Shipping a settings tree is a *group*-level fact, but using it is per-cell:
+    a group can have cells still on an older settings mechanism that never
+    install the framework.  Verifying those would import
+    ``<svc>.envs.aqueduct`` in a container where ``django_aqueduct`` does not
+    exist and fail with a ModuleNotFoundError that says nothing about the
+    deployment's actual health.  Deriving the predicate from the cell's own
+    requirement lines keeps it self-maintaining — a cell starts being verified
+    the moment it adopts the framework, with no second list to update.
+    """
+    return any(_AQUEDUCT_DIST in line for line in (*cell.packages, *cell.overrides))
+
+
 def _settings_cells_for_group(
     repo_root: Path, group: str
 ) -> list[dict[str, str | bool]]:
-    """Every settings-verify cell for a group (empty when it ships no settings)."""
+    """Settings-verify cells for a group: those that ship *and* use a settings tree."""
     manifest = _load_group_manifest(repo_root, group)
     if manifest is None or not _has_settings_tree(repo_root, group):
         return []
@@ -214,6 +232,7 @@ def _settings_cells_for_group(
             drift=drift_release is not None and c.release == drift_release,
         )
         for c in manifest.cells
+        if _uses_aqueduct(c)
     ]
 
 
