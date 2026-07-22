@@ -1,0 +1,150 @@
+---
+name: Settings Verification
+
+# Boot each group's *committed* aqueduct settings tree against a build cell's
+# pinned plugin set, and (where the model is release-matched) fail on model
+# drift. This is the tier above plugin-compat: that one proves the plugins
+# install and import, this one proves the settings they feed still resolve into
+# a Django configuration that starts.
+#
+# Structure mirrors plugin-compat.yml deliberately — enumerate → matrix → gate:
+#   * No top-level `paths:` filter. A workflow skipped by a path filter never
+#     reports its status, which would leave an unrelated PR pending on a
+#     required check. Enumerate on every PR (it's cheap) and gate only the
+#     matrix job, so the check stays reportable everywhere.
+#   * On the weekly schedule (and manual dispatch with `all`), run every cell,
+#     to catch settings that broke from upstream edx-platform drift rather than
+#     from anything in this repo.
+on:
+  pull_request:
+  schedule:
+    # Mondays 07:00 UTC — an hour after plugin-compat, so a requirements
+    # regression is already visible when these results land.
+  - cron: "0 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      all_cells:
+        description: Run the full matrix instead of only diff-affected cells.
+        type: boolean
+        default: false
+
+concurrency:
+  group: settings-verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: both jobs only read the repo (checkout + diff); the Dagger
+# check needs no token scopes.
+permissions:
+  contents: read
+
+jobs:
+  enumerate:
+    runs-on: ubuntu-latest
+    outputs:
+      any: ${{ steps.matrix.outputs.any }}
+      cells: ${{ steps.matrix.outputs.cells }}
+    steps:
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      with:
+        # Full history so the PR base is available to diff against.
+        fetch-depth: 0
+    - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      with:
+        enable-cache: true
+    - run: uv sync --all-groups
+    - id: matrix
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        RUN_ALL: ${{ inputs.all_cells }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      run: |
+        set -euo pipefail
+        if [ "$EVENT_NAME" = "schedule" ] || [ "$RUN_ALL" = "true" ]; then
+          json="$(uv run lehrer compat settings-matrix --all)"
+        else
+          # PRs carry a base sha; a manual (workflow_dispatch) run does not, so
+          # fall back to the default branch. Without this, `git diff "" HEAD`
+          # exits fatally under `set -e` and the manual run never enumerates.
+          if [ -n "$BASE_SHA" ]; then
+            base="$BASE_SHA"
+          else
+            git fetch --quiet --depth=1 origin "$DEFAULT_BRANCH"
+            base="origin/$DEFAULT_BRANCH"
+          fi
+          json="$(git diff --name-only "$base" HEAD \
+            | uv run lehrer compat settings-matrix)"
+        fi
+        echo "any=$(echo "$json" | jq -r '.any')" >> "$GITHUB_OUTPUT"
+        echo "cells=$(echo "$json" | jq -c '.cells')" >> "$GITHUB_OUTPUT"
+        {
+          echo "### Settings-verify cells"
+          echo '```json'
+          echo "$json" | jq .
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+  verify:
+    needs: enumerate
+    if: needs.enumerate.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJSON(needs.enumerate.outputs.cells) }}
+    name: ${{ matrix.cell.group }}/${{ matrix.cell.release }}/${{ matrix.cell.deployment
+      }}
+    steps:
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+    - name: Install Dagger CLI
+      env:
+        # Pin to the engine version this repo's dagger.json expects.
+        DAGGER_VERSION: 0.21.3
+      run: |
+        set -euo pipefail
+        curl -fsSL https://dl.dagger.io/dagger/install.sh \
+          | BIN_DIR=/usr/local/bin sudo -E sh
+        dagger version
+    - name: verify-settings
+      env:
+        MANIFEST: ${{ matrix.cell.manifest }}
+        RELEASE: ${{ matrix.cell.release }}
+        DEPLOYMENT: ${{ matrix.cell.deployment }}
+        SETTINGS: ${{ matrix.cell.settings }}
+        # Only the release the committed model was generated from can be
+        # compared against a fresh render (see settings_model_release).
+        DRIFT: ${{ matrix.cell.drift }}
+      run: |
+        set -euo pipefail
+        dagger call platform verify-settings \
+          --build-manifest "$MANIFEST" \
+          --release-name "$RELEASE" \
+          --deployment-name "$DEPLOYMENT" \
+          --custom-settings "$SETTINGS" \
+          --drift="$DRIFT"
+
+  # Single always-reporting status suitable as the required branch-protection
+  # check — see the same rationale in plugin-compat.yml: the per-cell `verify`
+  # job is skipped on PRs that touch no settings, and a skipped-but-required
+  # job wedges every unrelated PR.
+  gate:
+    needs: [enumerate, verify]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Evaluate settings-verify result
+      env:
+        ENUM_RESULT: ${{ needs.enumerate.result }}
+        VERIFY_RESULT: ${{ needs.verify.result }}
+      run: |
+        set -euo pipefail
+        echo "enumerate: $ENUM_RESULT / verify: $VERIFY_RESULT"
+        if [ "$ENUM_RESULT" != "success" ]; then
+          echo "::error::enumerate did not succeed ($ENUM_RESULT)."
+          exit 1
+        fi
+        if [ "$VERIFY_RESULT" = "failure" ] || [ "$VERIFY_RESULT" = "cancelled" ]; then
+          echo "::error::One or more settings-verify cells failed."
+          exit 1
+        fi
+        echo "settings-verify gate passed (matrix: $VERIFY_RESULT)."

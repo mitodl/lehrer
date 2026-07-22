@@ -71,6 +71,7 @@ commands the way you reason about them:
 | `lehrer build mfe-legacy`    | `mfe build-legacy`          | Build a legacy (webpack) MFE `dist/` |
 | `lehrer build mfe-site`      | `mfe build-site`            | Build an OEP-65 Site Project |
 | `lehrer build check`         | `platform check-deployment` | Verify a cell's requirements install + import |
+| `lehrer build verify-settings` | `platform verify-settings` | Boot a cell's committed aqueduct settings + Django system checks |
 | `lehrer build test`          | `platform test`             | Run edx-platform + installed plugin tests in a built image |
 | `lehrer build codejail-test` | `codejail test`             | Run the codejail test suite |
 | `lehrer build notes-test`    | `notes test`                | Run the edx-notes-api test suite |
@@ -142,9 +143,11 @@ would: it first builds dependencies on one base (`apt-base` → `get-code` →
 directories across, conditionally applies `locales` (unless
 `--include-locales false`) and `themes`, and finishes with `collected` →
 `inject-aqueduct-settings` → `fetch-translations` → `build-static-assets` →
-`docker-image`. The other functions are those individual stages, plus
-`check-deployment` / `test` (verification), `publish-platform`, and
-`regenerate-aqueduct-settings`.
+`docker-image`, then verifies the finished image can actually start by running
+Django's system checks for both services (`--verify-boot false` to skip while
+iterating). The other functions are those individual stages, plus
+`check-deployment` / `verify-settings` / `test` (verification),
+`publish-platform`, and `regenerate-aqueduct-settings`.
 
 The simplest way to drive a full build is a **cell** — the deployment's
 `build_manifest.yaml` supplies the platform/theme/translation repos, Python and

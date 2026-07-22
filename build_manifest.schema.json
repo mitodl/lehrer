@@ -284,6 +284,19 @@
       "title": "Release Python",
       "type": "object"
     },
+    "settings_model_release": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Release whose edx-platform source the group's committed settings/*/models/aqueduct.py was generated from. One settings tree serves every cell in the group, but the generated model is edx-platform-version-specific, so only this release's cells can be checked for model drift. Unset disables the drift gate.",
+      "title": "Settings Model Release"
+    },
     "cells": {
       "items": {
         "$ref": "#/$defs/Cell"
