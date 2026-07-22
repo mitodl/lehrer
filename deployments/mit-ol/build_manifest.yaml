@@ -15,6 +15,9 @@ release_python:
   master: '3.12'
   ulmo: '3.11'
   verawood: '3.12'
+# The committed settings/*/models/aqueduct.py was generated from this
+# release's edx-platform source; only its cells can be drift-checked.
+settings_model_release: master
 cells:
 - release: master
   deployment: mitxonline

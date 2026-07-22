@@ -92,15 +92,9 @@ jobs:
     name: build ${{ matrix.cell }}
     steps:
     - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-    - name: Install Dagger CLI
-      env:
-        # Pin to the engine version this repo's dagger.json expects.
-        DAGGER_VERSION: 0.21.3
-      run: |
-        set -euo pipefail
-        curl -fsSL https://dl.dagger.io/dagger/install.sh \
-          | BIN_DIR=/usr/local/bin sudo -E sh
-        dagger version
+    # Installs the CLI and starts an engine that pulls Docker Hub images
+    # through a caching mirror; see the action for why.
+    - uses: ./.github/actions/dagger-engine
     - name: build-platform
       env:
         CELL: ${{ matrix.cell }}
