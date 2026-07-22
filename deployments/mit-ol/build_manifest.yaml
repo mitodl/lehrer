@@ -50,7 +50,7 @@ cells:
   - ol-openedx-chat-xblock==0.4.6
   - ol-openedx-lti-utilities==0.1.2
   - ol-openedx-events-handler==0.2.1
-  - ol-openedx-course-sync==1.0.0
+  - ol-openedx-course-sync==1.0.1
   - ol-openedx-uai-content-customization==0.1.2
   - opentelemetry-api
   - django-extensions
