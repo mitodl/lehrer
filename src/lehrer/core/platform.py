@@ -167,12 +167,14 @@ def _resolve_field(
 
 
 def _repo_shorthand(value: str) -> str:
-    """Normalize a repo reference to ``org/repo`` for ``atlas``.
+    """Normalize a GitHub repo reference to ``org/repo`` shorthand.
 
-    ``translations_repo`` is stored in the manifest as a full GitHub URL (the
-    same convention as ``platform_repo``/``theme_repo``, which feed ``git
-    clone`` and need a clone-able URL), but ``atlas``/``pull_*_translations``
-    take bare ``org/repo``. Already-shorthand values pass through unchanged.
+    Manifest fields like ``platform_repo``/``theme_repo``/``translations_repo``
+    are all stored as full GitHub URLs — the form ``git clone`` needs. Some
+    consumers instead want bare ``org/repo`` (``translations_repo`` feeds
+    ``atlas``/``pull_*_translations``, which take that form, not a URL); this
+    is the shared normalizer for any such site. Already-shorthand values pass
+    through unchanged.
     """
     return value.removeprefix("https://github.com/").rstrip("/").removesuffix(".git")
 
