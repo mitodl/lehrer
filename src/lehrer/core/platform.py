@@ -166,6 +166,19 @@ def _resolve_field(
     return default
 
 
+def _repo_shorthand(value: str) -> str:
+    """Normalize a GitHub repo reference to ``org/repo`` shorthand.
+
+    Manifest fields like ``platform_repo``/``theme_repo``/``translations_repo``
+    are all stored as full GitHub URLs — the form ``git clone`` needs. Some
+    consumers instead want bare ``org/repo`` (``translations_repo`` feeds
+    ``atlas``/``pull_*_translations``, which take that form, not a URL); this
+    is the shared normalizer for any such site. Already-shorthand values pass
+    through unchanged.
+    """
+    return value.removeprefix("https://github.com/").rstrip("/").removesuffix(".git")
+
+
 # Curated smoke subset for `test` — the edx-platform suites most likely to
 # regress on a plugin/settings change, cheap enough to gate a PR. `student` and
 # `third_party_auth` live under common/djangoapps; `courseware` under
@@ -1336,12 +1349,14 @@ class OpenedxPlatform:
         platform_branch = _resolve_field(
             platform_branch, cell, manifest, "platform_branch", "master"
         )
-        translations_repo = _resolve_field(
-            translations_repo,
-            cell,
-            manifest,
-            "translations_repo",
-            "openedx/openedx-translations",
+        translations_repo = _repo_shorthand(
+            _resolve_field(
+                translations_repo,
+                cell,
+                manifest,
+                "translations_repo",
+                "openedx/openedx-translations",
+            )
         )
         translations_branch = _resolve_field(
             translations_branch, cell, manifest, "translations_branch", "main"
