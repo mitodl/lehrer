@@ -14,10 +14,9 @@ name: Plugin Compatibility Matrix
 #   * On the weekly schedule (and manual dispatch with `all`), run every cell,
 #     to catch drift in cells no recent PR touched.
 #
-# build_manifest.yaml is the source of truth (see plans/06); the legacy
-# pip_package_lists/*.txt trees are kept transiently and a fast-checks
-# faithfulness test enforces manifest == .txt, so testing the manifest pins is
-# equivalent to testing the changed requirement lines.
+# build_manifest.yaml is the source of truth (see plans/06) — each cell's
+# `packages`/`overrides` lines are the direct input this matrix tests, so a
+# manifest edit here is tested exactly as-is, not via a separate proxy file.
 on:
   pull_request:
   schedule:

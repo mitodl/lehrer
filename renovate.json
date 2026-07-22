@@ -3,12 +3,6 @@
   "extends": [
     "local>mitodl/.github:renovate-config"
   ],
-  "pip_requirements": {
-    "managerFilePatterns": [
-      "/pip_package_lists/.*?/.*.txt/",
-      "/pip_package_overrides/.*?/.*.txt/"
-    ]
-  },
   "customManagers": [
     {
       "customType": "regex",
@@ -29,7 +23,7 @@
     {
       "matchDepNames": ["setuptools", "pip", "wheel"],
       "enabled": false,
-      "description": "setuptools is deliberately pinned <82 for pkg_resources (see pip_package_lists comments); pip/wheel are managed manually. Renovate must not bump these in build_manifest.yaml."
+      "description": "setuptools is deliberately pinned <82 for pkg_resources; pip/wheel are managed manually. Renovate must not bump these in build_manifest.yaml."
     }
   ]
 }
