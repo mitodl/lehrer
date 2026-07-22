@@ -39,6 +39,10 @@ permissions:
 
 jobs:
   enumerate:
+    # Named explicitly: plugin-compat.yml has jobs with these same ids, and an
+    # unnamed job's check takes the id verbatim — two 'enumerate' rows in the
+    # check bar with no way to tell which workflow each belongs to.
+    name: enumerate settings cells
     runs-on: ubuntu-latest
     outputs:
       any: ${{ steps.matrix.outputs.any }}
@@ -92,7 +96,11 @@ jobs:
       fail-fast: false
       matrix:
         cell: ${{ fromJSON(needs.enumerate.outputs.cells) }}
-    name: ${{ matrix.cell.group }}/${{ matrix.cell.release }}/${{ matrix.cell.deployment
+    # Prefixed: plugin-compat.yml names its matrix jobs with the bare cell
+    # coordinate, so without this both workflows post identically-named checks
+    # and the check bar can't tell a settings failure from a requirements one —
+    # nor can branch protection require them separately.
+    name: settings ${{ matrix.cell.group }}/${{ matrix.cell.release }}/${{ matrix.cell.deployment
       }}
     steps:
     - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -128,6 +136,7 @@ jobs:
   # job is skipped on PRs that touch no settings, and a skipped-but-required
   # job wedges every unrelated PR.
   gate:
+    name: settings-gate
     needs: [enumerate, verify]
     if: always()
     runs-on: ubuntu-latest
