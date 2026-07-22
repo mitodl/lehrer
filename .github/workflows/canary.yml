@@ -31,6 +31,13 @@ on:
         description: <group>/<release>/<deployment> to build (single cell).
         type: string
         default: mit-ol/master/mitxonline
+      strict_translations:
+        description: >-
+          Fail on a translation step that errors (default). Turn off for a
+          diagnostic run when a translations break is already known, so the
+          rest of the build still gets exercised.
+        type: boolean
+        default: true
 
 # Don't stack equivalent canary builds: a run can take the better part of an
 # hour, and a newer run of the *same kind* supersedes an in-flight one. The key
@@ -98,6 +105,10 @@ jobs:
     - name: build-platform
       env:
         CELL: ${{ matrix.cell }}
+        # Empty on a schedule (no inputs), 'true'/'false' on dispatch. Defaulted
+        # in the shell rather than with `x && y || z`, which silently yields the
+        # fallback when the input is legitimately false.
+        STRICT_INPUT: ${{ inputs.strict_translations }}
         # Scoped to this step only (not the job) so neither `checkout` nor the
         # curl|sudo -E installer above can read it — least privilege. If set,
         # Dagger streams to Dagger Cloud and reuses its layer cache across runs,
@@ -106,6 +117,7 @@ jobs:
         DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
       run: |
         set -euo pipefail
+        STRICT_TRANSLATIONS="${STRICT_INPUT:-true}"
         IFS=/ read -r group release deployment <<< "$CELL"
         if [ -z "$group" ] || [ -z "$release" ] || [ -z "$deployment" ]; then
           echo "::error::cell must be <group>/<release>/<deployment>, got '$CELL'"
@@ -114,11 +126,20 @@ jobs:
         # Returns a Container; `dagger call` evaluates it, which runs the whole
         # build pipeline (deps, plugins, asset compilation). No publish — the
         # point is that it *builds*, not that we ship the result.
+        # --strict-translations: fail on a translation pull/compile step that
+        # errors, instead of warning and carrying on. Off by default in
+        # build_platform because a missing plugin translation is normal and
+        # must not break a release build; on here because the canary's whole
+        # job is to notice upstream drift, and a step that silently stopped
+        # working (renamed management command, moved atlas path, bad revision)
+        # is exactly that. This is the tier where an unexplained miss IS the
+        # signal.
         dagger call platform build-platform \
           --build-manifest "deployments/$group/build_manifest.yaml" \
           --release-name "$release" \
           --deployment-name "$deployment" \
-          --custom-settings "deployments/$group/settings"
+          --custom-settings "deployments/$group/settings" \
+          --strict-translations="$STRICT_TRANSLATIONS"
 
   # Turn a scheduled failure into a durable, de-duplicated GitHub issue so
   # upstream drift is caught before a release-day scramble. Runs only when a
