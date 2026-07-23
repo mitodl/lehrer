@@ -22,11 +22,11 @@ config.define_string(
 )
 config.define_string(
     "release-name",
-    usage="Open edX release name matching pip_package_lists subdirectory (default: master)",
+    usage="Open edX release name matching a build_manifest.yaml cell (default: master)",
 )
 config.define_string(
     "deployment-name",
-    usage="Deployment name matching pip_package_lists filename (default: generic)",
+    usage="Deployment name matching a build_manifest.yaml cell (default: generic)",
 )
 config.define_string(
     "settings-namespace",

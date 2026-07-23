@@ -119,7 +119,38 @@ class BuildManifest(BaseModel):
     version: int
     defaults: CellDefaults = Field(default_factory=CellDefaults)
     release_python: dict[str, str] = Field(default_factory=dict)
+    settings_model_release: str | None = Field(
+        default=None,
+        description=(
+            "Release whose edx-platform source the group's committed "
+            "settings/*/models/aqueduct.py was generated from. One settings "
+            "tree serves every cell in the group, but the generated model is "
+            "edx-platform-version-specific, so only this release's cells can "
+            "be checked for model drift. Unset disables the drift gate."
+        ),
+    )
     cells: list[Cell] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _settings_model_release_is_a_real_release(self) -> BuildManifest:
+        """Reject a ``settings_model_release`` no cell actually declares.
+
+        The failure this prevents is silent: a typo or a stale release name
+        parses fine, but then matches no cell, so every cell is enumerated with
+        ``drift=False`` and the drift gate the field exists to enable is turned
+        off with no error anywhere. A gate that quietly stops gating is worse
+        than no gate, so this has to fail at manifest-load time.
+        """
+        if self.settings_model_release is None:
+            return self
+        releases = {cell.release for cell in self.cells}
+        if self.settings_model_release not in releases:
+            msg = (
+                f"settings_model_release={self.settings_model_release!r} matches "
+                f"no cell — available releases: {', '.join(sorted(releases))}"
+            )
+            raise ValueError(msg)
+        return self
 
     @model_validator(mode="after")
     def _no_duplicate_cells(self) -> BuildManifest:

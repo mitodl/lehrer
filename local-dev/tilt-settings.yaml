@@ -5,7 +5,8 @@
 # All values here can also be overridden via CLI args:
 #   tilt up -- --deployment-config ../deployments/mit-ol
 #
-# Deployment name must match the filename in pip_package_lists/<release_name>/<deployment_name>.txt
+# Deployment name and release name together must match a cell in the
+# deployment's build_manifest.yaml (release/deployment coordinates).
 deployment_name: "generic"
 
 # Release name (edx-platform branch): "master", "teak", etc.

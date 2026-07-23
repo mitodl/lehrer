@@ -19,8 +19,6 @@ MIT_OL_CELLS = [
     ("master", "mitxonline"),
     ("master", "mitx"),
     ("master", "mitx-staging"),
-    ("ulmo", "mitx"),
-    ("ulmo", "mitx-staging"),
     ("ulmo", "xpro"),
     ("verawood", "mitx"),
     ("verawood", "mitx-staging"),
@@ -52,18 +50,6 @@ def effective_lines(text: str) -> list[str]:
     return out
 
 
-def _committed_lines(kind: str, release: str, deployment: str) -> list[str]:
-    path = (
-        REPO_ROOT
-        / "deployments"
-        / "mit-ol"
-        / f"pip_package_{kind}"
-        / release
-        / f"{deployment}.txt"
-    )
-    return effective_lines(path.read_text())
-
-
 @pytest.fixture(scope="module")
 def mit_ol_manifest() -> BuildManifest:
     return load_manifest(REPO_ROOT / "deployments" / "mit-ol" / "build_manifest.yaml")
@@ -72,43 +58,6 @@ def mit_ol_manifest() -> BuildManifest:
 @pytest.fixture(scope="module")
 def generic_manifest() -> BuildManifest:
     return load_manifest(REPO_ROOT / "deployments" / "generic" / "build_manifest.yaml")
-
-
-class TestFaithfulnessAgainstCommittedTxt:
-    """Render↔.txt equality — the behavior-preservation proof for PR 1."""
-
-    @pytest.mark.parametrize(("release", "deployment"), MIT_OL_CELLS)
-    def test_packages_match_committed_txt(
-        self, mit_ol_manifest: BuildManifest, release: str, deployment: str
-    ) -> None:
-        cell = mit_ol_manifest.resolve_cell(release, deployment)
-        rendered = effective_lines(cell.render_packages())
-        committed = _committed_lines("lists", release, deployment)
-        assert rendered == committed
-
-    @pytest.mark.parametrize(("release", "deployment"), MIT_OL_CELLS)
-    def test_overrides_match_committed_txt(
-        self, mit_ol_manifest: BuildManifest, release: str, deployment: str
-    ) -> None:
-        cell = mit_ol_manifest.resolve_cell(release, deployment)
-        rendered = effective_lines(cell.render_overrides())
-        committed = _committed_lines("overrides", release, deployment)
-        assert rendered == committed
-
-    def test_generic_packages_match_committed_txt(
-        self, generic_manifest: BuildManifest
-    ) -> None:
-        cell = generic_manifest.resolve_cell("master", "generic")
-        rendered = effective_lines(cell.render_packages())
-        path = (
-            REPO_ROOT
-            / "deployments"
-            / "generic"
-            / "pip_package_lists"
-            / "master"
-            / "generic.txt"
-        )
-        assert rendered == effective_lines(path.read_text())
 
 
 class TestResolvedFieldsWellFormed:
@@ -287,3 +236,28 @@ class TestNodeVersionValidation:
             Cell(
                 release="master", deployment="x", packages=["a==1"], node_version=value
             )
+
+
+def test_settings_model_release_must_match_a_cell() -> None:
+    # A typo here would otherwise parse fine and silently mark every cell
+    # drift=False, disabling the gate the field exists to enable.
+    manifest = {
+        "version": 1,
+        "settings_model_release": "mastr",
+        "cells": [
+            {"release": "master", "deployment": "mitx", "packages": ["a==1"]},
+        ],
+    }
+    with pytest.raises(ValidationError, match="settings_model_release"):
+        BuildManifest.model_validate(manifest)
+
+
+def test_settings_model_release_matching_a_cell_is_accepted() -> None:
+    manifest = {
+        "version": 1,
+        "settings_model_release": "master",
+        "cells": [
+            {"release": "master", "deployment": "mitx", "packages": ["a==1"]},
+        ],
+    }
+    assert BuildManifest.model_validate(manifest).settings_model_release == "master"

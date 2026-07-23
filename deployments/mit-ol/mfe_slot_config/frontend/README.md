@@ -96,8 +96,8 @@ The Canvas and Rapid Responses tabs and their data come entirely from the LMS:
 | Canvas task status (`list_canvas_tasks`), rapid-response runs (`rapid_response_runs`) | endpoints in those same plugins |
 | Tab href routing | the filters emit `/apps/instructor-dashboard/<course>/<tab>` to match the `wrapWithAppsPath` routing |
 
-These live in **mitodl/open-edx-plugins** and are pinned in
-`deployments/mit-ol/pip_package_lists/*/{mitx,mitx-staging,mitxonline}.txt`:
+These live in **mitodl/open-edx-plugins** and are pinned in the `mitx`/`mitx-staging`/
+`mitxonline` cells' `packages` in `deployments/mit-ol/build_manifest.yaml`:
 `ol-openedx-canvas-integration==0.8.0` and `ol-openedx-rapid-response-reports==0.5.0`
 are the first releases that carry this work. With older versions the tabs simply do
 not appear and the data endpoints 404. (Canvas/Rapid Responses are installed only
