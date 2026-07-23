@@ -5,6 +5,8 @@ import shlex
 import dagger
 from dagger import dag, function, object_type
 
+from lehrer.core.pip_compile_bridge import python_deps_install_script
+
 
 @object_type
 class OpenedxCodejail:
@@ -147,10 +149,12 @@ class OpenedxCodejail:
             .with_exec(["chown", "-R", "sandbox:sandbox", "/sandbox/venv"])
         )
 
-        # Update PATH to use virtualenv
+        # Update PATH to use virtualenv. VIRTUAL_ENV is also needed by any
+        # `uv sync --active` call below (python_deps_install_script's
+        # uv.lock path) -- it targets that env var, not just PATH.
         container = container.with_env_variable(
             "PATH", "/sandbox/venv/bin:/usr/local/bin:/usr/bin:/bin"
-        )
+        ).with_env_variable("VIRTUAL_ENV", "/sandbox/venv")
 
         # Clone codejail service
         container = container.with_workdir("/codejail").with_exec(
@@ -170,9 +174,21 @@ class OpenedxCodejail:
         sudoers_file = codejail_config.file("01-sandbox")
         container = container.with_file("/etc/sudoers.d/01-sandbox", sudoers_file)
 
-        # Install dependencies
+        # Install dependencies. codejailservice has no uv.lock today (plain
+        # pip-compile requirements/), but sourcing it through the same
+        # uv.lock-vs-legacy bridge as every other Python build here means
+        # this keeps working with no lehrer change if that ever changes --
+        # see python_deps_install_script.
         container = container.with_exec(
-            ["pip", "install", "--no-cache-dir", "-r", "requirements/base.txt"]
+            [
+                "sh",
+                "-c",
+                python_deps_install_script(
+                    workdir="/codejail",
+                    legacy_requirements=["requirements/base.txt"],
+                    ensure_uv=True,
+                ),
+            ]
         ).with_exec(["pip", "install", "--no-cache-dir", "gunicorn"])
 
         # Install edx-platform sandbox requirements in virtualenv.

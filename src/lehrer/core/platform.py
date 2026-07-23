@@ -18,6 +18,7 @@ import yaml
 from dagger import dag, function, object_type
 
 from lehrer.core.build_manifest import BuildManifest, Cell
+from lehrer.core.pip_compile_bridge import python_deps_install_script
 from lehrer.core.plugin_imports import plugin_distributions
 from lehrer.core.plugin_tests import (
     combined_pytest_script,
@@ -460,72 +461,49 @@ def _derive_test_settings(service: str) -> str:
 def _edx_base_deps_script(*, include_dev: bool = False) -> str:
     """Shell script that installs edx-platform's base + assets (+ dev) deps.
 
-    openedx-platform is mid-migration from pip-compile (``requirements/edx/
-    {base,assets,development}.txt``) to ``pyproject.toml``/``uv.lock`` as the
-    source of truth; the ``.txt`` compat exports are slated for removal once
-    known consumers move off them (openedx/public-engineering#552). Named
-    releases haven't picked up the migration and won't grow a ``uv.lock``
-    until they do, so branching on ``uv.lock``'s presence -- rather than
-    hardcoding ``release_name == "master"`` -- keeps both tracks working, and
-    picks up master's migration automatically without a lehrer change once it
+    Delegates to :func:`python_deps_install_script` -- see its docstring for
+    the ``uv.lock``-presence branch and ``--inexact`` rationale, and
+    openedx/public-engineering#552 for openedx-platform's own migration.
+    Named releases haven't picked up the migration and won't grow a
+    ``uv.lock`` until they do, so this keeps both tracks working, and picks
+    up master's migration automatically without a lehrer change once it
     lands.
-
-    ``--inexact`` on the ``uv sync`` path is load-bearing: callers layer their
-    own editable installs (e.g. a local django-aqueduct checkout) and the
-    deployment's own pinned package list on top of this, before or after —
-    a plain ``uv sync`` prunes anything not in edx-platform's own lock
-    resolution, which would strip those back out.
 
     ``include_dev`` pulls in openedx-platform's ``dev`` dependency group
     (mypy, tox, django-debug-toolbar, ...) — or, pre-migration,
     ``requirements/edx/development.txt`` — for local-dev builds; production
     builds leave it out (the default).
 
-    Must run with cwd (or an explicit ``cd``) at the edx-platform checkout,
-    and with ``VIRTUAL_ENV`` set to the target environment.
+    Must run with ``VIRTUAL_ENV`` set to the target environment.
     """
-    sync_groups = "--group assets" + (" --group dev" if include_dev else "")
-    legacy_cp = (
-        "cp requirements/edx/base.txt /tmp/edx_base.txt\n"
-        "  cp requirements/edx/assets.txt /tmp/edx_assets.txt\n"
-    )
-    legacy_files = "/tmp/edx_base.txt /tmp/edx_assets.txt"
+    legacy_requirements = [
+        "requirements/edx/base.txt",
+        "requirements/edx/assets.txt",
+    ]
+    sync_groups = ["assets"]
     if include_dev:
-        legacy_cp += "  cp requirements/edx/development.txt /tmp/edx_development.txt\n"
-        legacy_files += " /tmp/edx_development.txt"
-    legacy_install = " ".join(f"-r {path}" for path in legacy_files.split())
-    return (
-        "set -eu\n"
-        "cd /openedx/edx-platform\n"
-        "if [ -f uv.lock ]; then\n"
-        "  uv sync --locked --active --no-install-project --inexact"
-        f" --no-default-groups {sync_groups}\n"
-        "else\n"
-        f"  {legacy_cp}"
-        f"  uv pip install {legacy_install}\n"
-        "fi\n"
+        legacy_requirements.append("requirements/edx/development.txt")
+        sync_groups.append("dev")
+    return python_deps_install_script(
+        workdir="/openedx/edx-platform",
+        legacy_requirements=legacy_requirements,
+        sync_groups=sync_groups,
+        legacy_installer=["uv", "pip", "install"],
     )
 
 
 def _edx_testing_deps_script() -> str:
     """Shell script that installs edx-platform's test-suite deps.
 
-    Same ``uv.lock``-presence branch and ``--inexact`` rationale as
-    ``_edx_base_deps_script`` — see its docstring and
-    openedx/public-engineering#552. Runs after ``install_deps`` has already
-    layered the deployment's own packages into the environment, so pruning
-    those back out on sync is not an option.
+    Runs after ``install_deps`` has already layered the deployment's own
+    packages into the environment, so ``python_deps_install_script``'s
+    ``--inexact`` sync is what keeps those from being pruned back out.
     """
-    return (
-        "set -eu\n"
-        "cd /openedx/edx-platform\n"
-        "if [ -f uv.lock ]; then\n"
-        "  uv sync --locked --active --no-install-project --inexact"
-        " --no-default-groups --group testing\n"
-        "else\n"
-        "  cp requirements/edx/testing.txt /tmp/edx_testing.txt\n"
-        "  uv pip install -r /tmp/edx_testing.txt\n"
-        "fi\n"
+    return python_deps_install_script(
+        workdir="/openedx/edx-platform",
+        legacy_requirements=["requirements/edx/testing.txt"],
+        sync_groups=["testing"],
+        legacy_installer=["uv", "pip", "install"],
     )
 
 

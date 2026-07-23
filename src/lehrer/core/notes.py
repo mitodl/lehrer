@@ -3,6 +3,8 @@
 import dagger
 from dagger import dag, function, object_type
 
+from lehrer.core.pip_compile_bridge import python_deps_install_script
+
 
 @object_type
 class OpenedxNotes:
@@ -106,9 +108,18 @@ class OpenedxNotes:
             ]
         )
 
-        # Set working directory and PATH
-        container = container.with_workdir("/app/edx-notes-api").with_env_variable(
-            "PATH", "/app/.local/bin:/usr/local/bin:/usr/bin:/bin"
+        # Set working directory and PATH. /opt/notes-venv holds the app's own
+        # deps -- a real venv (not just system site-packages) is what
+        # `uv sync --active` needs a target for, should edx-notes-api's own
+        # requirements ever migrate to uv.lock. See python_deps_install_script.
+        container = (
+            container.with_workdir("/app/edx-notes-api")
+            .with_exec(["python3", "-m", "venv", "/opt/notes-venv"])
+            .with_env_variable(
+                "PATH",
+                "/opt/notes-venv/bin:/app/.local/bin:/usr/local/bin:/usr/bin:/bin",
+            )
+            .with_env_variable("VIRTUAL_ENV", "/opt/notes-venv")
         )
 
         # Get edx-notes-api source from local directory or Git
@@ -130,12 +141,22 @@ class OpenedxNotes:
         else:
             raise ValueError("Must provide either notes_code or notes_repo")
 
-        # Install Python dependencies as root (system site-packages), then fix ownership
+        # Install Python dependencies (uv sync against a uv.lock, or the
+        # legacy pip-compile requirements/base.txt, whichever the checkout
+        # has -- see python_deps_install_script), then fix ownership.
         container = (
             container.with_exec(
-                ["pip", "install", "--no-cache-dir", "-r", "requirements/base.txt"]
+                [
+                    "sh",
+                    "-c",
+                    python_deps_install_script(
+                        workdir="/app/edx-notes-api",
+                        legacy_requirements=["requirements/base.txt"],
+                        ensure_uv=True,
+                    ),
+                ]
             )
-            .with_exec(["chown", "-R", "app:app", "/app"])
+            .with_exec(["chown", "-R", "app:app", "/app", "/opt/notes-venv"])
             .with_user("1000")
         )
 

@@ -58,9 +58,10 @@ def test_edx_base_deps_script_branches_on_uv_lock() -> None:
     # uv.lock branch: a direct sync, no intermediate requirements file.
     assert "uv sync --locked --active --no-install-project" in script
     # legacy branch: same base+assets requirements the pre-migration path used.
-    assert "cp requirements/edx/base.txt /tmp/edx_base.txt" in script
-    assert "cp requirements/edx/assets.txt /tmp/edx_assets.txt" in script
-    assert "uv pip install -r /tmp/edx_base.txt -r /tmp/edx_assets.txt" in script
+    assert (
+        "uv pip install -r requirements/edx/base.txt"
+        " -r requirements/edx/assets.txt" in script
+    )
 
 
 def test_edx_base_deps_script_sync_is_inexact() -> None:
@@ -84,8 +85,7 @@ def test_edx_base_deps_script_include_dev() -> None:
     assert "--group assets" in script
     assert "--group dev" in script
     # legacy branch also needs the pre-migration development.txt equivalent.
-    assert "cp requirements/edx/development.txt /tmp/edx_development.txt" in script
-    assert "-r /tmp/edx_development.txt" in script
+    assert "-r requirements/edx/development.txt" in script
 
 
 def test_edx_testing_deps_script() -> None:
@@ -95,5 +95,4 @@ def test_edx_testing_deps_script() -> None:
     assert "--inexact" in script
     assert "--group testing" in script
     # legacy branch: same testing.txt the pre-migration path installed.
-    assert "cp requirements/edx/testing.txt /tmp/edx_testing.txt" in script
-    assert "uv pip install -r /tmp/edx_testing.txt" in script
+    assert "uv pip install -r requirements/edx/testing.txt" in script
