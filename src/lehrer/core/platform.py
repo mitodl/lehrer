@@ -457,6 +457,53 @@ def _derive_test_settings(service: str) -> str:
     )
 
 
+def _edx_base_requirements_script(*, base_dest: str, assets_dest: str) -> str:
+    """Shell script that sources edx-platform's base + assets requirements.
+
+    openedx-platform is mid-migration from pip-compile (``requirements/edx/
+    {base,assets}.txt``) to ``pyproject.toml``/``uv.lock`` as the source of
+    truth; the ``.txt`` compat exports are slated for removal once known
+    consumers move off them (openedx/public-engineering#552). Named releases
+    haven't picked up the migration and won't grow a ``uv.lock`` until they
+    do, so branching on ``uv.lock``'s presence -- rather than hardcoding
+    ``release_name == "master"`` -- keeps both tracks working, and picks up
+    master's migration automatically without a lehrer change once it lands.
+
+    Must run with cwd (or an explicit ``cd``) at the edx-platform checkout.
+    """
+    return (
+        "set -eu\n"
+        "cd /openedx/edx-platform\n"
+        "if [ -f uv.lock ]; then\n"
+        "  uv export --frozen --no-hashes --no-emit-project"
+        f" --no-default-groups -o {base_dest}\n"
+        "  uv export --frozen --no-hashes --no-emit-project"
+        f" --no-default-groups --only-group assets -o {assets_dest}\n"
+        "else\n"
+        f"  cp requirements/edx/base.txt {base_dest}\n"
+        f"  cp requirements/edx/assets.txt {assets_dest}\n"
+        "fi\n"
+    )
+
+
+def _edx_testing_requirements_script(dest: str) -> str:
+    """Shell script that sources edx-platform's test-suite requirements.
+
+    Same uv.lock-presence branch as ``_edx_base_requirements_script`` — see
+    its docstring and openedx/public-engineering#552.
+    """
+    return (
+        "set -eu\n"
+        "cd /openedx/edx-platform\n"
+        "if [ -f uv.lock ]; then\n"
+        "  uv export --frozen --no-hashes --no-emit-project"
+        f" --no-default-groups --only-group testing -o {dest}\n"
+        "else\n"
+        f"  cp requirements/edx/testing.txt {dest}\n"
+        "fi\n"
+    )
+
+
 @object_type
 class OpenedxPlatform:
     """Generic edx-platform build pipeline.
@@ -723,19 +770,16 @@ class OpenedxPlatform:
             .with_mounted_directory(
                 "/root/pip_package_overrides", pip_package_overrides
             )
-            # Copy base requirements from edx-platform
+            # Source base + assets requirements from edx-platform (uv.lock
+            # export or legacy pip-compile .txt, whichever the checkout has).
             .with_exec(
                 [
                     "sh",
                     "-c",
-                    "cp /openedx/edx-platform/requirements/edx/base.txt /root/pip_package_lists/edx_base.txt",
-                ]
-            )
-            .with_exec(
-                [
-                    "sh",
-                    "-c",
-                    "cp /openedx/edx-platform/requirements/edx/assets.txt /root/pip_package_lists/edx_assets.txt",
+                    _edx_base_requirements_script(
+                        base_dest="/root/pip_package_lists/edx_base.txt",
+                        assets_dest="/root/pip_package_lists/edx_assets.txt",
+                    ),
                 ]
             )
             # Install base Python dependencies using uv (much faster than pip)
@@ -1585,10 +1629,10 @@ class OpenedxPlatform:
                 [
                     "sh",
                     "-c",
-                    "cp /openedx/edx-platform/requirements/edx/base.txt"
-                    " /root/pip_package_lists/edx_base.txt"
-                    " && cp /openedx/edx-platform/requirements/edx/assets.txt"
-                    " /root/pip_package_lists/edx_assets.txt",
+                    _edx_base_requirements_script(
+                        base_dest="/root/pip_package_lists/edx_base.txt",
+                        assets_dest="/root/pip_package_lists/edx_assets.txt",
+                    ),
                 ]
             )
         )
@@ -2294,7 +2338,14 @@ class OpenedxPlatform:
         container = (
             container.with_workdir("/openedx/edx-platform")
             .with_exec(["uv", "pip", "install", "-e", "."])
-            .with_exec(["uv", "pip", "install", "-r", "requirements/edx/testing.txt"])
+            .with_exec(
+                [
+                    "sh",
+                    "-c",
+                    _edx_testing_requirements_script("/tmp/edx_testing.txt")
+                    + "uv pip install -r /tmp/edx_testing.txt\n",
+                ]
+            )
         )
 
         # When folding the plugins' own suites into this run, derive the plugin

@@ -1,5 +1,7 @@
 """Generic codejail service build for Open edX operators."""
 
+import shlex
+
 import dagger
 from dagger import dag, function, object_type
 
@@ -95,6 +97,7 @@ class OpenedxCodejail:
                     "-y",
                     "--no-install-recommends",
                     "build-essential",
+                    "curl",
                     "python3-virtualenv",
                     "python3-pip",
                     "git",
@@ -172,22 +175,53 @@ class OpenedxCodejail:
             ["pip", "install", "--no-cache-dir", "-r", "requirements/base.txt"]
         ).with_exec(["pip", "install", "--no-cache-dir", "gunicorn"])
 
-        # Install edx-platform sandbox requirements in virtualenv
-        # The URL pattern differs based on whether it's a release or master
-        sandbox_req_url = (
-            f"https://raw.githubusercontent.com/openedx/edx-platform/master/requirements/edx-sandbox/releases/{release_name}.txt"
-            if release_name != "master"
-            else "https://raw.githubusercontent.com/openedx/edx-platform/master/requirements/edx-sandbox/base.txt"
-        )
-
-        import shlex
+        # Install edx-platform sandbox requirements in virtualenv.
+        #
+        # Named releases haven't picked up the pip-compile -> uv migration
+        # and keep publishing a per-release export; read it directly as
+        # before. master's sandbox is now its own standalone uv project
+        # (requirements/edx-sandbox/{pyproject.toml,uv.lock}), with
+        # requirements/edx-sandbox/base.txt kept only as a temporary
+        # machine-generated compat export slated for removal once known
+        # consumers (including this one) stop reading it -- see
+        # openedx/public-engineering#552. Try the compat export first (fast,
+        # no uv needed) and fall back to a uv export of the sub-project once
+        # it's gone, so this keeps working across that removal without a
+        # lehrer change.
+        if release_name != "master":
+            sandbox_req_url = (
+                "https://raw.githubusercontent.com/openedx/edx-platform/master/"
+                f"requirements/edx-sandbox/releases/{release_name}.txt"
+            )
+            install_sandbox_reqs = (
+                f"pip install --no-cache-dir -r {shlex.quote(sandbox_req_url)}"
+            )
+        else:
+            sandbox_base_url = (
+                "https://raw.githubusercontent.com/openedx/edx-platform/master/"
+                "requirements/edx-sandbox"
+            )
+            install_sandbox_reqs = (
+                "set -eu && "
+                "if curl -fsSL -o /tmp/edx_sandbox.txt "
+                f"{shlex.quote(sandbox_base_url + '/base.txt')}; then :; else "
+                "mkdir -p /tmp/edx-sandbox-uv && cd /tmp/edx-sandbox-uv && "
+                "curl -fsSL -o pyproject.toml "
+                f"{shlex.quote(sandbox_base_url + '/pyproject.toml')} && "
+                f"curl -fsSL -o uv.lock {shlex.quote(sandbox_base_url + '/uv.lock')} && "
+                "pip install --quiet uv && "
+                "uv export --frozen --no-hashes --no-emit-project "
+                "-o /tmp/edx_sandbox.txt; "
+                "fi && "
+                "pip install --no-cache-dir -r /tmp/edx_sandbox.txt"
+            )
 
         container = container.with_exec(
             [
                 "bash",
                 "-c",
                 f"source /sandbox/venv/bin/activate && "
-                f"pip install --no-cache-dir -r {shlex.quote(sandbox_req_url)} && "
+                f"{install_sandbox_reqs} && "
                 f"deactivate",
             ]
         )
