@@ -187,7 +187,11 @@ class OpenedxCodejail:
         # openedx/public-engineering#552. Try the compat export first (fast,
         # no uv needed) and fall back to a uv sync of the sub-project once
         # it's gone, so this keeps working across that removal without a
-        # lehrer change.
+        # lehrer change. --inexact on that sync is required: codejailservice's
+        # own requirements/base.txt and gunicorn (installed above, into this
+        # same /sandbox/venv) aren't part of the sandbox project's uv.lock, and
+        # a plain sync would prune them back out, leaving the image without
+        # its gunicorn entrypoint.
         if release_name != "master":
             sandbox_req_url = (
                 "https://raw.githubusercontent.com/openedx/edx-platform/master/"
@@ -212,7 +216,7 @@ class OpenedxCodejail:
                 f"{shlex.quote(sandbox_base_url + '/pyproject.toml')} && "
                 f"curl -fsSL -o uv.lock {shlex.quote(sandbox_base_url + '/uv.lock')} && "
                 "pip install --quiet uv && "
-                "uv sync --locked --active --no-install-project; "
+                "uv sync --locked --active --no-install-project --inexact; "
                 "fi"
             )
 
