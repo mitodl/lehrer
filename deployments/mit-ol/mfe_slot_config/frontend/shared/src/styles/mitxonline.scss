@@ -17,8 +17,15 @@
   .user-dropdown .btn {
     height: 40px !important;
   }
-  .container-xl, .container-mw-xl {
+  // Match the legacy learning-header row height (72px). The intended 16px
+  // vertical padding loses to the `.py-2` utility on the container (it sets
+  // padding-top/bottom !important from an unlayered utility that our layered
+  // site rule can't outrank), so we also pin `min-height` — which no utility
+  // sets, so it always wins — and the row's `align-items-center` keeps the
+  // content vertically centred. 72px = 40px content + 16px×2.
+  .container-xl, .container-mw-xl, .container-fluid {
     padding: 16px 8px !important;
+    min-height: 72px !important;
   }
 
   .dropdown-toggle::after{

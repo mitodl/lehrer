@@ -6,7 +6,7 @@ import {
 	Slot,
 } from "@openedx/frontend-base";
 import type { App, SlotOperation } from "@openedx/frontend-base";
-import { Container, Dropdown, Hyperlink, Image } from "@openedx/paragon";
+import { Dropdown, Hyperlink, Image } from "@openedx/paragon";
 import { isLearnCourse, isMITxOnlineCourse } from "../utils/courseContext";
 
 // ---------------------------------------------------------------------------
@@ -135,18 +135,19 @@ const MITxOnlineAuthenticatedMenu: FC<{ className?: string }> = ({
 // ---------------------------------------------------------------------------
 
 const AlwaysDesktopLayout: FC = () => (
-	<Container
-		fluid
-		size="xl"
-		className="align-items-center justify-content-between d-flex"
-	>
+	// Match the legacy header container exactly: a plain `.container-xl py-2` flex
+	// row. Paragon's <Container> can't emit `.container-xl` (its `fluid` prop is
+	// boolean-only, and `size="xl"` produces the wider `.container-mw-xl`), so we
+	// use a plain div — the same element the legacy header uses. `.container-xl`
+	// also lines up with the instructor-dashboard body (`#main-content.container-xl`).
+	<div className="container-xl py-2 align-items-center justify-content-between d-flex">
 		<div className="d-flex flex-grow-1 align-items-center">
 			<Slot id={SLOT.desktopLeft} />
 		</div>
 		<div className="d-flex align-items-center">
 			<Slot id={SLOT.desktopRight} />
 		</div>
-	</Container>
+	</div>
 );
 
 const NoMobileLayout: FC = () => null;
@@ -164,7 +165,10 @@ const MITxOnlineLogo: FC = () => {
 		: `${marketingSiteBaseUrl ?? lmsBaseUrl}/dashboard/`;
 	const { headerLogoImageUrl } = useSiteConfig();
 	return (
-		<Hyperlink destination={destinationUrl} className="p-0">
+		// `logo` class mirrors the legacy learning-header logo anchor so the
+		// mitxonline.scss `.logo img { height: 24px }` rule applies (matching the
+		// legacy 24px logo instead of the frontend-base default 2rem/32px).
+		<Hyperlink destination={destinationUrl} className="logo p-0">
 			<Image
 				src={headerLogoImageUrl ?? "https://edx-cdn.org/v3/default/logo.svg"}
 				style={{ maxHeight: "2rem" }}
