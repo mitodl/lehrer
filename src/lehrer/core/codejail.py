@@ -185,7 +185,7 @@ class OpenedxCodejail:
         # machine-generated compat export slated for removal once known
         # consumers (including this one) stop reading it -- see
         # openedx/public-engineering#552. Try the compat export first (fast,
-        # no uv needed) and fall back to a uv export of the sub-project once
+        # no uv needed) and fall back to a uv sync of the sub-project once
         # it's gone, so this keeps working across that removal without a
         # lehrer change.
         if release_name != "master":
@@ -204,16 +204,16 @@ class OpenedxCodejail:
             install_sandbox_reqs = (
                 "set -eu && "
                 "if curl -fsSL -o /tmp/edx_sandbox.txt "
-                f"{shlex.quote(sandbox_base_url + '/base.txt')}; then :; else "
+                f"{shlex.quote(sandbox_base_url + '/base.txt')}; then "
+                "pip install --no-cache-dir -r /tmp/edx_sandbox.txt; "
+                "else "
                 "mkdir -p /tmp/edx-sandbox-uv && cd /tmp/edx-sandbox-uv && "
                 "curl -fsSL -o pyproject.toml "
                 f"{shlex.quote(sandbox_base_url + '/pyproject.toml')} && "
                 f"curl -fsSL -o uv.lock {shlex.quote(sandbox_base_url + '/uv.lock')} && "
                 "pip install --quiet uv && "
-                "uv export --frozen --no-hashes --no-emit-project "
-                "-o /tmp/edx_sandbox.txt; "
-                "fi && "
-                "pip install --no-cache-dir -r /tmp/edx_sandbox.txt"
+                "uv sync --locked --active --no-install-project; "
+                "fi"
             )
 
         container = container.with_exec(
