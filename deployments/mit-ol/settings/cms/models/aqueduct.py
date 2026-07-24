@@ -154,6 +154,10 @@ class AqueductSettings(BaseSettings):
         default=False,
         description=".. toggle_name: DISABLE_DEPRECATED_SIGNUP_URL\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Toggle for removing the deprecated /signup url.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2019-12-02\n.. toggle_target_removal_date: 2020-06-01\n.. toggle_warning: This url can be removed once it no longer has any real traffic.\n.. toggle_tickets: ARCH-1253",  # noqa: E501
     )
+    DISABLE_LIBRARY_CREATION: Any = Field(
+        default=None,
+        description='.. setting_name: DISABLE_LIBRARY_CREATION\n.. setting_default: None\n.. setting_description: If set to True, disables library creation for users without a staff role and hides the\n"New Library" button in Studio. If set to False, enables library creation independently of DISABLE_COURSE_CREATION.\nIf None (the default), DISABLE_COURSE_CREATION is used to decide whether library creation is disabled.',  # noqa: E501
+    )  # TODO: refine type
     DISCUSSIONS_INCONTEXT_FEEDBACK_URL: str = Field(
         default="",
         description="Feedback link in upgraded discussion notification alert",
