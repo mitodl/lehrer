@@ -20,6 +20,8 @@ from dagger import dag, function, object_type
 from lehrer.core.build_manifest import BuildManifest, Cell
 from lehrer.core.plugin_imports import plugin_distributions
 from lehrer.core.plugin_tests import (
+    REPORT_TOOL_DIR,
+    REPORTS_DIR,
     combined_pytest_script,
     maintained_test_extra_specs,
     normalize_dist,
@@ -169,6 +171,20 @@ class _ResolvedCell:
     node_version: str
     packages_to_remove: list[str] = field(default_factory=list)
     extra_npm_packages: list[str] = field(default_factory=list)
+
+
+@dataclass
+class _PreparedTestRun:
+    """A test run built but not executed: the container and its pytest command.
+
+    ``test`` and ``test_report`` execute the *same* run and differ only in what
+    they keep — stdout with the exit code as the gate, or the report directory
+    regardless of the exit code.  Handing both the identical prepared run is
+    what guarantees the artifact describes what the gate ran.
+    """
+
+    container: dagger.Container
+    args: list[str]
 
 
 def _resolve_field(
@@ -2207,74 +2223,221 @@ class OpenedxPlatform:
                 the plugin set alone is the compatibility signal.
 
         Returns:
-            The pytest stdout (only reached when the suite passes; a failing
-            suite exits non-zero and fails the calling ``dagger call``).
+            The pytest stdout, ending with the per-target summary table (only
+            reached when the suite passes; a failing suite exits non-zero and
+            fails the calling ``dagger call``).  Use ``test-report`` when you
+            need the report as a retrievable artifact, pass or fail.
+        """
+        prepared = await self._prepare_test_run(
+            caller="test",
+            deployment_name=deployment_name,
+            release_name=release_name,
+            custom_settings=custom_settings,
+            build_manifest=build_manifest,
+            pip_package_lists=pip_package_lists,
+            pip_package_overrides=pip_package_overrides,
+            platform_repo=platform_repo,
+            platform_branch=platform_branch,
+            python_version=python_version,
+            node_version=node_version,
+            packages_to_remove=packages_to_remove,
+            extra_npm_packages=extra_npm_packages,
+            service=service,
+            test_paths=test_paths,
+            markers=markers,
+            full=full,
+            include_plugins=include_plugins,
+            install_test_extras=install_test_extras,
+            settings_module=settings_module,
+            install_node=install_node,
+            mongo_image=mongo_image,
+            config_sources=config_sources,
+        )
+        # No `expect=` override: a non-zero pytest run must fail the call. That
+        # exit-code-as-gate ergonomic is the whole difference between this and
+        # `test_report`, which swallows the code to keep the artifact reachable.
+        return await prepared.container.with_exec(prepared.args).stdout()
+
+    @function
+    async def test_report(  # noqa: PLR0913
+        self,
+        deployment_name: str,
+        release_name: str,
+        custom_settings: dagger.Directory,
+        build_manifest: dagger.File | None = None,
+        pip_package_lists: dagger.Directory | None = None,
+        pip_package_overrides: dagger.Directory | None = None,
+        platform_repo: str | None = None,
+        platform_branch: str | None = None,
+        python_version: str | None = None,
+        node_version: str | None = None,
+        packages_to_remove: list[str] | None = None,
+        extra_npm_packages: list[str] | None = None,
+        service: str = "lms",
+        test_paths: list[str] | None = None,
+        markers: str | None = None,
+        full: bool = False,  # noqa: FBT001, FBT002
+        include_plugins: bool = True,  # noqa: FBT001, FBT002
+        install_test_extras: bool = True,  # noqa: FBT001, FBT002
+        settings_module: str | None = None,
+        install_node: bool = False,  # noqa: FBT001, FBT002
+        mongo_image: str = "mongo:7",
+        config_sources: dagger.Directory | None = None,
+    ) -> dagger.Directory:
+        """Run :meth:`test` and return its report directory instead of stdout.
+
+        Identical run, different contract.  :meth:`test` is the *gate*: it
+        returns stdout and a failing suite fails the ``dagger call``, which is
+        what a CI step wants.  This returns the run's report **directory**, so
+        the artifact is retrievable — and it is retrievable precisely in the
+        case that matters, a failing suite, which is why the pytest exec here
+        runs with ``expect=ANY``.  A caller that wants both should run the gate
+        and export the report as separate steps.
+
+        The directory contains:
+
+        * ``report.xml`` — pytest's JUnit XML for the whole run.
+        * ``summary.json`` — per-target counts (edx-platform and each plugin
+          package), plus ``contributing_plugins``/``silent_plugins``.  This is
+          how you tell "the plugin's suite passed" from "the plugin shipped no
+          suite", which the exit code alone cannot express.
+        * ``summary.md`` — the same, rendered for a CI step summary.
+
+        Export it with ``dagger call platform test-report ... export --path
+        ./reports``.
+
+        Args:
+            deployment_name: See :meth:`test`.
+            release_name: See :meth:`test`.
+            custom_settings: See :meth:`test`.
+            build_manifest: See :meth:`test`.
+            pip_package_lists: See :meth:`test`.
+            pip_package_overrides: See :meth:`test`.
+            platform_repo: See :meth:`test`.
+            platform_branch: See :meth:`test`.
+            python_version: See :meth:`test`.
+            node_version: See :meth:`test`.
+            packages_to_remove: See :meth:`test`.
+            extra_npm_packages: See :meth:`test`.
+            service: See :meth:`test`.
+            test_paths: See :meth:`test`.
+            markers: See :meth:`test`.
+            full: See :meth:`test`.
+            include_plugins: See :meth:`test`.
+            install_test_extras: See :meth:`test`.
+            settings_module: See :meth:`test`.
+            install_node: See :meth:`test`.
+            mongo_image: See :meth:`test`.
+            config_sources: See :meth:`test`.
+
+        Returns:
+            The run's report directory, whether or not the suite passed.
+        """
+        prepared = await self._prepare_test_run(
+            caller="test-report",
+            deployment_name=deployment_name,
+            release_name=release_name,
+            custom_settings=custom_settings,
+            build_manifest=build_manifest,
+            pip_package_lists=pip_package_lists,
+            pip_package_overrides=pip_package_overrides,
+            platform_repo=platform_repo,
+            platform_branch=platform_branch,
+            python_version=python_version,
+            node_version=node_version,
+            packages_to_remove=packages_to_remove,
+            extra_npm_packages=extra_npm_packages,
+            service=service,
+            test_paths=test_paths,
+            markers=markers,
+            full=full,
+            include_plugins=include_plugins,
+            install_test_extras=install_test_extras,
+            settings_module=settings_module,
+            install_node=install_node,
+            mongo_image=mongo_image,
+            config_sources=config_sources,
+        )
+        # ReturnType.ANY: a failing suite must still yield the directory — a
+        # report you can only retrieve when everything passed is useless.
+        return prepared.container.with_exec(
+            prepared.args, expect=dagger.ReturnType.ANY
+        ).directory(REPORTS_DIR)
+
+    async def _prepare_test_run(  # noqa: PLR0913
+        self,
+        *,
+        caller: str,
+        deployment_name: str,
+        release_name: str,
+        custom_settings: dagger.Directory,
+        build_manifest: dagger.File | None,
+        pip_package_lists: dagger.Directory | None,
+        pip_package_overrides: dagger.Directory | None,
+        platform_repo: str | None,
+        platform_branch: str | None,
+        python_version: str | None,
+        node_version: str | None,
+        packages_to_remove: list[str] | None,
+        extra_npm_packages: list[str] | None,
+        service: str,
+        test_paths: list[str] | None,
+        markers: str | None,
+        full: bool,
+        include_plugins: bool,
+        install_test_extras: bool,
+        settings_module: str | None,
+        install_node: bool,
+        mongo_image: str,
+        config_sources: dagger.Directory | None,
+    ) -> _PreparedTestRun:
+        """Build the container and pytest command for a test run.
+
+        Shared by :meth:`test` and :meth:`test_report` so the two differ only in
+        what they do with the result — a divergence here would mean the report
+        describes a different run than the gate executed.  See :meth:`test` for
+        what every argument means; ``caller`` names the Dagger function in the
+        "requires a manifest or both requirement directories" error.
+
+        Returns:
+            The prepared container plus the exec args, unexecuted.
+
+        Raises:
+            ValueError: ``service`` is not a service with a known test suite.
         """
         if service not in _SMOKE_PATHS:
             msg = f"service must be one of {sorted(_SMOKE_PATHS)}, got {service!r}"
             raise ValueError(msg)
 
-        manifest: BuildManifest | None = None
-        cell: Cell | None = None
-        if build_manifest is not None:
-            manifest, cell = await self._resolve_manifest_cell(
-                build_manifest, release_name, deployment_name
-            )
-            manifest_lists, manifest_overrides = self._materialize_cell_requirements(
-                release_name, deployment_name, cell
-            )
-            if pip_package_lists is None:
-                pip_package_lists = manifest_lists
-            if pip_package_overrides is None:
-                pip_package_overrides = manifest_overrides
-
-        if pip_package_lists is None or pip_package_overrides is None:
-            msg = (
-                "test requires either --build-manifest, or both "
-                "--pip-package-lists and --pip-package-overrides"
-            )
-            raise ValueError(msg)
-
-        platform_repo = _resolve_field(
-            platform_repo,
-            cell,
-            manifest,
-            "platform_repo",
-            "https://github.com/openedx/edx-platform",
+        # The same resolution the build and the other verification entry points
+        # use, so the suite runs against the cell a build would produce.
+        resolved = await self._resolve_cell(
+            caller=caller,
+            deployment_name=deployment_name,
+            release_name=release_name,
+            build_manifest=build_manifest,
+            pip_package_lists=pip_package_lists,
+            pip_package_overrides=pip_package_overrides,
+            platform_repo=platform_repo,
+            platform_branch=platform_branch,
+            python_version=python_version,
+            node_version=node_version,
+            packages_to_remove=packages_to_remove,
+            extra_npm_packages=extra_npm_packages,
         )
-        platform_branch = _resolve_field(
-            platform_branch, cell, manifest, "platform_branch", "master"
-        )
-        node_version = _resolve_field(
-            node_version, cell, manifest, "node_version", "20.18.0"
-        )
-        if packages_to_remove is None:
-            packages_to_remove = []
-            if cell is not None and manifest is not None:
-                resolved_removals = cell.resolved("packages_to_remove", manifest)
-                if resolved_removals is not None:
-                    packages_to_remove = cast("list[str]", resolved_removals)
-        if extra_npm_packages is None:
-            extra_npm_packages = []
-            if cell is not None and manifest is not None:
-                resolved_npm = cell.resolved("extra_npm_packages", manifest)
-                if resolved_npm is not None:
-                    extra_npm_packages = cast("list[str]", resolved_npm)
-        if python_version is None:
-            resolved_python_version = None
-            if cell is not None and manifest is not None:
-                resolved_python_version = cell.resolved("python_version", manifest)
-            python_version = cast("str | None", resolved_python_version) or (
-                "3.12" if release_name == "master" else "3.11"
-            )
+        pip_package_lists = resolved.pip_package_lists
+        pip_package_overrides = resolved.pip_package_overrides
+        packages_to_remove = resolved.packages_to_remove
 
         # Same install path a production build uses, so the suite runs against
         # the real resolution — not a shell reimplementation that can diverge.
-        container: dagger.Container = self.apt_base(python_version=python_version)
+        container: dagger.Container = self.apt_base(
+            python_version=resolved.python_version
+        )
         container = self.get_code(
             container,
-            edx_platform_git_repo=platform_repo,
-            edx_platform_git_branch=platform_branch,
+            edx_platform_git_repo=resolved.platform_repo,
+            edx_platform_git_branch=resolved.platform_branch,
         )
         container = self.install_deps(
             container,
@@ -2282,9 +2445,9 @@ class OpenedxPlatform:
             release_name=release_name,
             pip_package_lists=pip_package_lists,
             pip_package_overrides=pip_package_overrides,
-            node_version=node_version,
+            node_version=resolved.node_version,
             packages_to_remove=packages_to_remove,
-            extra_npm_packages=extra_npm_packages,
+            extra_npm_packages=resolved.extra_npm_packages,
             install_node=install_node,
         )
 
@@ -2337,7 +2500,8 @@ class OpenedxPlatform:
         # runtime aqueduct.py entry point) — the derived settings import
         # AqueductSettings directly to lift its FEATURES.  base.py comes from
         # lehrer core, exactly as inject_aqueduct_settings wires it for a build.
-        lehrer_base = dag.current_module().source().file("src/lehrer/settings/base.py")
+        module_source = dag.current_module().source()
+        lehrer_base = module_source.file("src/lehrer/settings/base.py")
         container = (
             container.with_exec(["mkdir", "-p", f"./{service}/envs/models"])
             .with_file(f"./{service}/envs/models/base.py", lehrer_base)
@@ -2361,6 +2525,14 @@ class OpenedxPlatform:
                 "/openedx/config-sources", config_sources
             )
 
+        # The report summarizer runs next to pytest, so ship the very module the
+        # host-side unit tests cover rather than a second copy embedded in the
+        # driver string — one implementation, tested once.
+        container = container.with_file(
+            f"{REPORT_TOOL_DIR}/lehrer_junit_report.py",
+            module_source.file("src/lehrer/core/junit_report.py"),
+        )
+
         # MongoDB is the one backing service the stock test settings require.
         mongo = (
             dag.container()
@@ -2382,20 +2554,22 @@ class OpenedxPlatform:
             .with_env_variable("NO_PREREQ_INSTALL", "1")
         )
 
-        # --no-migrations (pytest-django): create the schema straight from the
-        # models instead of running every historical migration — the default
-        # for edx-platform's own runs and the difference between minutes and
-        # tens of minutes for a smoke subset.
-        if include_plugins:
-            # One pytest run over the edx-platform paths plus the installed
-            # plugin packages (resolved at runtime).
-            script = combined_pytest_script(paths, plugin_dists, ds, markers)
-            return await base.with_exec(["python", "-c", script]).stdout()
-
-        pytest_cmd = ["python", "-m", "pytest", f"--ds={ds}", "--no-migrations", *paths]
-        if markers:
-            pytest_cmd += ["-m", markers]
-        return await base.with_exec(pytest_cmd).stdout()
+        # One driver for both modes — with `--no-include-plugins`, plugin_dists
+        # is empty and the script degrades to a plain edx-platform run. Sharing
+        # it is what makes the JUnit report and its summary unconditional
+        # instead of a privilege of the plugin-inclusive path.
+        #
+        # `python -c` (not a script file) so sys.path[0] stays the empty string:
+        # pytest and edx-platform's conftests resolve imports relative to the
+        # /openedx/edx-platform workdir, and running a file would put the
+        # driver's own directory there instead.
+        #
+        # The script passes --no-migrations (pytest-django): create the schema
+        # straight from the models instead of running every historical
+        # migration — the default for edx-platform's own runs and the
+        # difference between minutes and tens of minutes for a smoke subset.
+        script = combined_pytest_script(paths, plugin_dists, ds, markers)
+        return _PreparedTestRun(container=base, args=["python", "-c", script])
 
     @function
     async def publish_platform(

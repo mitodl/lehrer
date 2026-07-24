@@ -32,6 +32,16 @@ from collections.abc import Iterable
 # upstream without breaking the run.
 _MAINTAINED_PREFIXES = ("ol-",)
 
+# Where the run drops its retrievable artifacts (JUnit XML + summaries).  A
+# directory, not a single file, so the report can grow siblings without
+# changing ``platform test-report``'s return type.
+REPORTS_DIR = "/openedx/reports"
+
+# Where ``lehrer.core.junit_report`` is injected so the driver can import it.  A
+# dedicated directory, not ``/openedx`` itself, so putting it on ``sys.path``
+# cannot shadow anything the platform imports.
+REPORT_TOOL_DIR = "/openedx/.lehrer-report"
+
 # An exact ``name==version`` requirement (comment already stripped). Extras,
 # ranges, wildcards (``==1.2.*``), markers and VCS/URL lines deliberately do not
 # match: none names a single version to reproduce, and the point is to add the
@@ -86,6 +96,8 @@ def combined_pytest_script(
     plugin_dists: list[str],
     settings_module: str,
     markers: str | None = None,
+    reports_dir: str = REPORTS_DIR,
+    tool_dir: str = REPORT_TOOL_DIR,
 ) -> str:
     """Build the in-container driver that runs edx-platform *and* plugin tests.
 
@@ -98,22 +110,46 @@ def combined_pytest_script(
     paths and the plugin packages as import names in the same call: ``--pyargs``
     only reinterprets args that are not existing paths.
 
-    Reporting reflects only what can be known before collection: a plugin
-    distribution that did not install is reported ``MISSING``; one installed
-    without an importable module is reported ``SKIP``; the rest are handed to
-    pytest, which then collects and runs whatever tests each ships (none today).
+    Pre-collection reporting covers only what can be known before pytest runs: a
+    plugin distribution that did not install is reported ``MISSING``; one
+    installed without an importable module is reported ``SKIP``; the rest are
+    handed to pytest.  What each of *those* actually contributed is knowable
+    only afterwards, so the run also writes a JUnit report to
+    ``{reports_dir}/report.xml`` and — via :mod:`lehrer.core.junit_report`,
+    injected at ``{tool_dir}`` — a ``summary.json``/``summary.md`` attributing
+    every test case to edx-platform or to the plugin package it came from.
+    ``platform test-report`` returns that directory; ``platform test`` produces
+    it too (the summary is echoed to stdout) and simply discards the files.
+
     The run's pass/fail is pytest's own exit code — edx-platform's suite is the
     load-bearing signal and the plugins are additive, so a plugin that ships no
-    tests simply collects nothing and never fails the run.
+    tests simply collects nothing and never fails the run.  Summary generation
+    is wrapped so a malformed report can never turn a passing suite red.
+
+    Args:
+        edx_paths: pytest target paths within the edx-platform tree.
+        plugin_dists: Normalized plugin distribution names to hand to pytest
+            (empty when the caller asked for the edx-platform suite alone).
+        settings_module: Django settings module for ``--ds``.
+        markers: Optional pytest ``-m`` marker expression.
+        reports_dir: Container directory to write ``report.xml``,
+            ``summary.json`` and ``summary.md`` into.
+        tool_dir: Container directory holding the injected
+            ``lehrer_junit_report`` module.
     """
     return "\n".join(
         [
+            "import os",
             "import sys",
             "import importlib.metadata as im",
             f"edx_paths = {edx_paths!r}",
             f"plugin_dists = {plugin_dists!r}",
             f"settings_module = {settings_module!r}",
             f"markers = {markers!r}",
+            f"reports_dir = {reports_dir!r}",
+            f"tool_dir = {tool_dir!r}",
+            "junit_path = os.path.join(reports_dir, 'report.xml')",
+            "os.makedirs(reports_dir, exist_ok=True)",
             "import re",
             "def _norm(name):",
             "    return re.sub(r'[-_.]+', '-', name).lower()",
@@ -144,7 +180,10 @@ def combined_pytest_script(
             "        f'PLUGIN TESTS:   handing {len(plugin_modules)} package(s) to '",
             "        f'pytest for collection: {plugin_modules}'",
             "    )",
-            "else:",
+            # Silent when the caller asked for the edx-platform suite alone
+            # (`--no-include-plugins` passes no dists); a plugin set that was
+            # requested but resolved to nothing importable still says so.
+            "elif plugin_dists:",
             "    print('PLUGIN TESTS:   no installed plugin packages to scan')",
             "import pytest",
             "args = list(edx_paths)",
@@ -157,9 +196,27 @@ def combined_pytest_script(
             "    '--no-migrations',",
             "    '-p', 'no:cacheprovider',",
             "    '-ra',",
+            "    f'--junitxml={junit_path}',",
             "]",
             "if markers:",
             "    args += ['-m', markers]",
-            "sys.exit(int(pytest.main(args)))",
+            "code = int(pytest.main(args))",
+            # Attribute the collected cases back to their target. Wrapped
+            # broadly on purpose: the suite's own verdict is `code`, and a
+            # reporting hiccup must never change it in either direction.
+            "try:",
+            "    sys.path.insert(0, tool_dir)",
+            "    import lehrer_junit_report as report",
+            "    with open(junit_path) as fh:",
+            "        summary = report.summarize_junit(fh.read(), plugin_modules)",
+            "    with open(os.path.join(reports_dir, 'summary.json'), 'w') as fh:",
+            "        fh.write(report.summary_json(summary))",
+            "    markdown = report.summary_markdown(summary)",
+            "    with open(os.path.join(reports_dir, 'summary.md'), 'w') as fh:",
+            "        fh.write(markdown)",
+            "    print(markdown)",
+            "except Exception as exc:",  # noqa: TRY400 - generated source
+            "    print(f'REPORT SUMMARY FAILED: {exc!r}')",
+            "sys.exit(code)",
         ]
     )

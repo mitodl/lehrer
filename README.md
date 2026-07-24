@@ -73,6 +73,7 @@ commands the way you reason about them:
 | `lehrer build check`         | `platform check-deployment` | Verify a cell's requirements install + import |
 | `lehrer build verify-settings` | `platform verify-settings` | Boot a cell's committed aqueduct settings + Django system checks |
 | `lehrer build test`          | `platform test`             | Run edx-platform + installed plugin tests in a built image |
+| `lehrer build test-report`   | `platform test-report`      | The same run, returning an exportable JUnit + per-plugin summary |
 | `lehrer build codejail-test` | `codejail test`             | Run the codejail test suite |
 | `lehrer build notes-test`    | `notes test`                | Run the edx-notes-api test suite |
 | `lehrer build cells`         | —                           | Print the `(release, deployment)` cells in a manifest |
