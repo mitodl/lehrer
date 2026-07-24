@@ -2,8 +2,10 @@
 
 import json
 
-from lehrer.core.test_report import (
+from lehrer.core.junit_report import (
     PLATFORM_TARGET,
+    RunSummary,
+    TargetSummary,
     summarize_junit,
     summary_json,
     summary_markdown,
@@ -33,8 +35,8 @@ JUNIT = """<?xml version="1.0" encoding="utf-8"?>
 """
 
 
-def _by_name(summary: object) -> dict:
-    return {t.name: t for t in summary.targets}  # type: ignore[attr-defined]
+def _by_name(summary: RunSummary) -> dict[str, TargetSummary]:
+    return {t.name: t for t in summary.targets}
 
 
 def test_platform_cases_are_attributed_to_edx_platform() -> None:

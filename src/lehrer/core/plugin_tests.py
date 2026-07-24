@@ -37,7 +37,7 @@ _MAINTAINED_PREFIXES = ("ol-",)
 # changing ``platform test-report``'s return type.
 REPORTS_DIR = "/openedx/reports"
 
-# Where ``lehrer.core.test_report`` is injected so the driver can import it.  A
+# Where ``lehrer.core.junit_report`` is injected so the driver can import it.  A
 # dedicated directory, not ``/openedx`` itself, so putting it on ``sys.path``
 # cannot shadow anything the platform imports.
 REPORT_TOOL_DIR = "/openedx/.lehrer-report"
@@ -115,7 +115,7 @@ def combined_pytest_script(
     installed without an importable module is reported ``SKIP``; the rest are
     handed to pytest.  What each of *those* actually contributed is knowable
     only afterwards, so the run also writes a JUnit report to
-    ``{reports_dir}/report.xml`` and — via :mod:`lehrer.core.test_report`,
+    ``{reports_dir}/report.xml`` and — via :mod:`lehrer.core.junit_report`,
     injected at ``{tool_dir}`` — a ``summary.json``/``summary.md`` attributing
     every test case to edx-platform or to the plugin package it came from.
     ``platform test-report`` returns that directory; ``platform test`` produces
@@ -135,7 +135,7 @@ def combined_pytest_script(
         reports_dir: Container directory to write ``report.xml``,
             ``summary.json`` and ``summary.md`` into.
         tool_dir: Container directory holding the injected
-            ``lehrer_test_report`` module.
+            ``lehrer_junit_report`` module.
     """
     return "\n".join(
         [
@@ -206,7 +206,7 @@ def combined_pytest_script(
             # reporting hiccup must never change it in either direction.
             "try:",
             "    sys.path.insert(0, tool_dir)",
-            "    import lehrer_test_report as report",
+            "    import lehrer_junit_report as report",
             "    with open(junit_path) as fh:",
             "        summary = report.summarize_junit(fh.read(), plugin_modules)",
             "    with open(os.path.join(reports_dir, 'summary.json'), 'w') as fh:",

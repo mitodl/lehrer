@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from lehrer.core import test_report
+from lehrer.core import junit_report
 from lehrer.core.plugin_tests import (
     combined_pytest_script,
     maintained_test_extra_specs,
@@ -122,7 +122,7 @@ def _run_driver(
     reports_dir = tmp_path / "reports"
     tool_dir = tmp_path / "tool"
     tool_dir.mkdir()
-    shutil.copy(Path(test_report.__file__), tool_dir / "lehrer_test_report.py")
+    shutil.copy(Path(junit_report.__file__), tool_dir / "lehrer_junit_report.py")
 
     stub_dir = tmp_path / "stub"
     stub_dir.mkdir()

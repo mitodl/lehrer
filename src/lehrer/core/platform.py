@@ -2529,8 +2529,8 @@ class OpenedxPlatform:
         # host-side unit tests cover rather than a second copy embedded in the
         # driver string — one implementation, tested once.
         container = container.with_file(
-            f"{REPORT_TOOL_DIR}/lehrer_test_report.py",
-            module_source.file("src/lehrer/core/test_report.py"),
+            f"{REPORT_TOOL_DIR}/lehrer_junit_report.py",
+            module_source.file("src/lehrer/core/junit_report.py"),
         )
 
         # MongoDB is the one backing service the stock test settings require.
