@@ -63,7 +63,7 @@ cells:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - git+https://github.com/verificient/edx-proctoring-proctortrack.git@31c6c9923a51c903ae83760ecbbac191363aa2a2#egg=edx_proctoring_proctortrack
-  - lxml==5.3.0
+  - lxml==6.1.0
   - xmlsec==1.3.14
   - openai==2.43.0
   - ol-openedx-course-translations==0.8.0
@@ -101,7 +101,7 @@ cells:
   overrides:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
-  - lxml==5.3.0
+  - lxml==6.1.0
   - xmlsec==1.3.14
 - release: master
   deployment: mitx-staging
@@ -135,7 +135,7 @@ cells:
   overrides:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
-  - lxml==5.3.0
+  - lxml==6.1.0
   - xmlsec==1.3.14
 - release: ulmo
   deployment: xpro
@@ -166,7 +166,7 @@ cells:
   - setuptools==81.0.0
   overrides:
   - openedx-forum==0.4.1
-  - lxml==5.3.0
+  - lxml==6.1.0
   - xmlsec==1.3.14
 - release: verawood
   deployment: mitx
@@ -200,7 +200,7 @@ cells:
   overrides:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
-  - lxml==5.3.0
+  - lxml==6.1.0
   - xmlsec==1.3.14
   - edx-sga==0.29.0
 - release: verawood
@@ -235,7 +235,7 @@ cells:
   overrides:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
-  - lxml==5.3.0
+  - lxml==6.1.0
   - xmlsec==1.3.14
   - edx-sga==0.29.0
 - release: verawood
@@ -267,5 +267,5 @@ cells:
   - django-extensions
   - setuptools==81.0.0
   overrides:
-  - lxml==5.3.0
+  - lxml==6.1.0
   - xmlsec==1.3.14
