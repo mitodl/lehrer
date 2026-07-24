@@ -260,6 +260,29 @@ green today and starts running real plugin suites the moment one is published.
 Pass `--no-include-plugins` for the edx-platform suite alone, or
 `--no-install-test-extras` to skip the extra install.
 
+**Getting the report out (`platform test-report`).** `test` returns stdout and
+its exit code is the gate — that is what a CI step wants, but it leaves nothing
+to archive. `test-report` runs the *same* thing and returns the run's report
+directory instead, whether the suite passed or failed:
+
+```bash
+lehrer build test-report --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings \
+  export --path ./reports
+```
+
+* `reports/report.xml` — pytest's JUnit XML for the whole run.
+* `reports/summary.json` — per-target counts (edx-platform and each plugin
+  package), plus `contributing_plugins` / `silent_plugins`.
+* `reports/summary.md` — the same as a table, ready for a CI step summary.
+
+The plugin split is the point: because a plugin that ships no tests collects
+nothing and never fails the run, "the plugin's suite passed" and "the plugin
+shipped no suite" look identical in the exit code. `silent_plugins` names the
+second case, so you can tell when a `[tests]` extra has actually landed. `test`
+echoes the same table at the end of its stdout; only `test-report` gives you the
+files.
+
 ### codejail (`codejail test`) and notes (`notes test`)
 
 Small suites — run wholesale in the build container.
