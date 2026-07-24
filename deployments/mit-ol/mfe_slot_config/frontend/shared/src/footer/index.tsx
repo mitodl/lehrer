@@ -1,10 +1,6 @@
-import {
-	useSiteConfig,
-	WidgetOperationTypes,
-	LayoutOperationTypes,
-} from "@openedx/frontend-base";
+import { Slot, useSiteConfig, WidgetOperationTypes } from "@openedx/frontend-base";
 import type { App, SlotOperation } from "@openedx/frontend-base";
-import { Hyperlink } from "@openedx/paragon";
+import { Hyperlink, Image } from "@openedx/paragon";
 
 /**
  * Shape of the MIT OL footer config expected in
@@ -19,6 +15,8 @@ export interface MITOLFooterConfig {
 	supportUrl?: string;
 	accessibilityUrl?: string;
 	copyrightText?: string;
+	footerLogoUrl?: string;
+	footerLogoDestination?: string;
 }
 
 function useMITOLFooterConfig(): MITOLFooterConfig {
@@ -29,46 +27,176 @@ function useMITOLFooterConfig(): MITOLFooterConfig {
 
 function CopyrightNotice() {
 	const { copyrightText } = useMITOLFooterConfig();
-	if (!copyrightText) return null;
-	return <div className="text-center x-small mt-1">{copyrightText}</div>;
-}
-
-function AboutLink() {
-	const { aboutUrl } = useMITOLFooterConfig();
-	if (!aboutUrl) return null;
-	return <Hyperlink destination={aboutUrl}>About Us</Hyperlink>;
-}
-
-function SupportLink() {
-	const { supportUrl } = useMITOLFooterConfig();
-	if (!supportUrl) return null;
-	return <Hyperlink destination={supportUrl}>Contact</Hyperlink>;
-}
-
-function AccessibilityLink() {
-	const { accessibilityUrl } = useMITOLFooterConfig();
-	if (!accessibilityUrl) return null;
-	return <Hyperlink destination={accessibilityUrl}>Accessibility</Hyperlink>;
-}
-
-function PrivacyPolicyLink() {
-	const { privacyPolicyUrl } = useMITOLFooterConfig();
-	if (!privacyPolicyUrl) return null;
-	return <Hyperlink destination={privacyPolicyUrl}>Privacy Policy</Hyperlink>;
-}
-
-function TermsOfServiceLink() {
-	const { termsOfServiceUrl } = useMITOLFooterConfig();
-	if (!termsOfServiceUrl) return null;
+	// Support a `{year}` placeholder in the configured copyright text so the year
+	// stays current without a code change (e.g. "© {year} MIT xPRO. All rights
+	// reserved."). Text without the placeholder is rendered verbatim.
+	const text = copyrightText?.replace(
+		"{year}",
+		String(new Date().getFullYear()),
+	);
 	return (
-		<Hyperlink destination={termsOfServiceUrl}>Terms of Service</Hyperlink>
+		<div className="d-flex flex-column justify-content-center">
+			{text && <div className="text-center x-small">{text}</div>}
+			<div className="text-center x-small">
+				edX and Open edX are registered trademarks of edX LLC.
+			</div>
+		</div>
 	);
 }
 
-function HonorCodeLink() {
-	const { honorCodeUrl } = useMITOLFooterConfig();
-	if (!honorCodeUrl) return null;
-	return <Hyperlink destination={honorCodeUrl}>Honor Code</Hyperlink>;
+/**
+ * Footer logo (left side). Reads footerLogoUrl from the runtime config;
+ * falls back to the shell's default (headerLogoImageUrl) if not set.
+ */
+function FooterLogo() {
+	const { footerLogoUrl, footerLogoDestination } = useMITOLFooterConfig();
+	const { headerLogoImageUrl, siteName } = useSiteConfig();
+	const src = footerLogoUrl || headerLogoImageUrl;
+	if (!src) return null;
+	const img = (
+		<Image
+			src={src}
+			alt={siteName ? `${siteName} logo` : "Logo"}
+			// Use a definite height (not max-height): the MIT footer logo SVG ships
+			// with only a viewBox and no width/height, so a max-height-only image has
+			// no intrinsic size to lay out and collapses. Width derives from the
+			// viewBox aspect ratio.
+			style={{ height: '2rem', width: 'auto' }}
+		/>
+	);
+	if (footerLogoDestination) {
+		return <Hyperlink destination={footerLogoDestination} className="p-0">{img}</Hyperlink>;
+	}
+	return img;
+}
+
+/** Recreation of the shell's PoweredBy widget (it is not exported from the root). */
+function PoweredBy() {
+	return (
+		<Hyperlink destination="https://openedx.org">
+			<Image
+				width="120px"
+				alt="Powered by Open edX"
+				src="https://logos.openedx.org/open-edx-logo-tag.png"
+			/>
+		</Hyperlink>
+	);
+}
+
+/**
+ * Custom desktop footer layout replacing the shell's DesktopFooterLayout so we
+ * match the legacy learning MFE at every width: a 3-part row of logo (left),
+ * centered links, and the "Powered by Open edX" logo (right), with the
+ * copyright/trademark notice on a full-width centered row below. The row is
+ * intentionally NOT collapsed to a vertical stack on mobile so the placement
+ * mirrors legacy (the links themselves still stack — see MITOLFooterLinks).
+ * The shell layout used `justify-content-between` (a paragon-layer `!important`
+ * utility we cannot override from our site layer), which forced a large gap
+ * between the links and copyright and pushed the "Powered by" logo to the bottom.
+ */
+function MITOLDesktopFooterLayout() {
+	return (
+		<footer className="d-flex flex-column align-items-stretch">
+			{/* Grid with equal, shrinkable side tracks (minmax(0, 1fr)) and an auto
+			    center track: the center links stay exactly page-centered — and thus
+			    aligned with the centered copyright row below — regardless of the
+			    logo / "Powered by" widths. (Equal flex columns don't achieve this
+			    because a flex item can't shrink below its content's min-width, so a
+			    wide logo pushes the center off-center.)
+
+			    NOTE: the grid MUST be declared via inline style, not the `d-grid` /
+			    `gap-*` Bootstrap utility classes — Paragon ships Bootstrap 4, which
+			    has no such classes (they are Bootstrap 5). With `d-grid` the element
+			    silently stays `display: block`, so the three cells stack vertically
+			    and the "Powered by" logo drops between the links and the copyright. */}
+			<div
+				className="pt-3 px-3"
+				style={{
+					display: "grid",
+					gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
+					columnGap: "1.5rem",
+					alignItems: "center",
+				}}
+			>
+				<div className="d-flex align-items-center">
+					<Slot id="org.openedx.frontend.slot.footer.desktopLeftLinks.v1" />
+				</div>
+				<div className="d-flex justify-content-center">
+					<Slot id="org.openedx.frontend.slot.footer.desktopCenterLinks.v1" />
+				</div>
+				<div className="d-flex justify-content-end align-items-center">
+					<PoweredBy />
+				</div>
+			</div>
+			<div className="pb-3 px-3 pt-2 d-flex justify-content-center">
+				<Slot id="org.openedx.frontend.slot.footer.desktopLegalNotices.v1" />
+			</div>
+		</footer>
+	);
+}
+
+/**
+ * Footer link types the MIT OL footer can render, each mapped to its display
+ * label and the runtime-config field holding its URL.
+ */
+export type FooterLinkKey =
+	| "about"
+	| "privacy"
+	| "honor"
+	| "tos"
+	| "accessibility"
+	| "help";
+
+const FOOTER_LINK_DEFS: Record<
+	FooterLinkKey,
+	{ label: string; field: keyof MITOLFooterConfig }
+> = {
+	about: { label: "About Us", field: "aboutUrl" },
+	privacy: { label: "Privacy Policy", field: "privacyPolicyUrl" },
+	honor: { label: "Honor Code", field: "honorCodeUrl" },
+	tos: { label: "Terms of Service", field: "termsOfServiceUrl" },
+	accessibility: { label: "Accessibility", field: "accessibilityUrl" },
+	help: { label: "Help", field: "supportUrl" },
+};
+
+/**
+ * Default footer link set/order — the legacy learning MFE footer used by mitx
+ * and mitxonline (About Us · Terms of Service · Accessibility · Help).
+ * Deployments needing a different set pass `linkOrder` to createMITOLFooterApp
+ * (e.g. xPRO adds Privacy Policy + Honor Code).
+ */
+const DEFAULT_FOOTER_LINK_ORDER: FooterLinkKey[] = [
+	"about",
+	"tos",
+	"accessibility",
+	"help",
+];
+
+/**
+ * Single centered horizontal row of footer links (no column labels), rendered
+ * in the given order. Each link is omitted if its URL is missing from the
+ * runtime config.
+ */
+function MITOLFooterLinks({ order }: { order: FooterLinkKey[] }) {
+	const config = useMITOLFooterConfig();
+	const links = order
+		.map((key) => ({
+			url: config[FOOTER_LINK_DEFS[key].field],
+			label: FOOTER_LINK_DEFS[key].label,
+		}))
+		.filter((link): link is { url: string; label: string } =>
+			Boolean(link.url),
+		);
+	if (links.length === 0) return null;
+	return (
+		<ul className="d-flex flex-column flex-md-row flex-wrap list-unstyled gap-2 gap-md-4 menu-links align-items-center justify-content-center mb-0">
+			{links.map((link) => (
+				<li key={link.label} className="mx-2">
+					<Hyperlink destination={link.url}>{link.label}</Hyperlink>
+				</li>
+			))}
+		</ul>
+	);
 }
 
 /**
@@ -77,61 +205,78 @@ function HonorCodeLink() {
  * populated via FRONTEND_SITE_CONFIG in the LMS Django settings. A widget renders
  * nothing if its URL is absent from the runtime config.
  */
-export function createMITOLFooterApp(): App {
+export function createMITOLFooterApp(options?: {
+	/** Ordered footer link keys to render. Defaults to the mitx/mitxonline set. */
+	linkOrder?: FooterLinkKey[];
+}): App {
+	const linkOrder = options?.linkOrder ?? DEFAULT_FOOTER_LINK_ORDER;
+	// Close over the resolved order so the slot widget (which the shell renders
+	// without props) shows this deployment's link set.
+	const FooterLinks = () => <MITOLFooterLinks order={linkOrder} />;
 	const slots: SlotOperation[] = [
+		// Replace the shell's desktop footer layout with our own so we control the
+		// link/copyright spacing and place "Powered by Open edX" at the top right.
+		{
+			slotId: "org.openedx.frontend.slot.footer.desktop.v1",
+			relatedId: "org.openedx.frontend.widget.footer.desktopLayout.v1",
+			id: "mitol.footer.desktopLayout",
+			op: WidgetOperationTypes.REPLACE,
+			component: MITOLDesktopFooterLayout,
+		},
+		// Remove the shell's default copyright line (e.g. "© 2026 MIT Learn (dev).")
+		// so only the MIT OL copyright + trademark notice remain, matching the
+		// legacy learning MFE footer.
+		{
+			slotId: "org.openedx.frontend.slot.footer.desktopLegalNotices.v1",
+			relatedId: "org.openedx.frontend.widget.footer.desktopCopyrightNotice.v1",
+			op: WidgetOperationTypes.REMOVE,
+		},
 		{
 			slotId: "org.openedx.frontend.slot.footer.desktopLegalNotices.v1",
 			id: "mitol.footer.copyright",
 			op: WidgetOperationTypes.APPEND,
 			component: CopyrightNotice,
 		},
-		// Column 1: Resources
+		// Replace the shell's default logo (which uses headerLogoImageUrl) with
+		// our FooterLogo component that reads footerLogoUrl from the config.
 		{
-			slotId: "org.openedx.frontend.slot.footer.desktopCenterLink1.v1",
-			op: LayoutOperationTypes.OPTIONS,
-			options: { label: "Resources" },
+			slotId: "org.openedx.frontend.slot.footer.desktopLeftLinks.v1",
+			relatedId: "org.openedx.frontend.widget.footer.desktopLeftLinksLogo.v1",
+			id: "mitol.footer.logo",
+			op: WidgetOperationTypes.REPLACE,
+			component: FooterLogo,
+		},
+		// Single centered horizontal row of links (no column labels) matching
+		// the legacy learning MFE footer. Append directly to the center-links
+		// container (CenterLinks layout) instead of a desktopCenterLinkN.v1 slot
+		// so the links are NOT wrapped in frontend-base's LabeledLinkColumn
+		// (which forces `small` font + a flex column). Remove the 4 default
+		// column slots so only our row renders.
+		{
+			slotId: "org.openedx.frontend.slot.footer.desktopCenterLinks.v1",
+			relatedId: "org.openedx.frontend.widget.footer.desktopCenterLink1.v1",
+			op: WidgetOperationTypes.REMOVE,
 		},
 		{
-			slotId: "org.openedx.frontend.slot.footer.desktopCenterLink1.v1",
-			id: "mitol.footer.col1.about",
+			slotId: "org.openedx.frontend.slot.footer.desktopCenterLinks.v1",
+			relatedId: "org.openedx.frontend.widget.footer.desktopCenterLink2.v1",
+			op: WidgetOperationTypes.REMOVE,
+		},
+		{
+			slotId: "org.openedx.frontend.slot.footer.desktopCenterLinks.v1",
+			relatedId: "org.openedx.frontend.widget.footer.desktopCenterLink3.v1",
+			op: WidgetOperationTypes.REMOVE,
+		},
+		{
+			slotId: "org.openedx.frontend.slot.footer.desktopCenterLinks.v1",
+			relatedId: "org.openedx.frontend.widget.footer.desktopCenterLink4.v1",
+			op: WidgetOperationTypes.REMOVE,
+		},
+		{
+			slotId: "org.openedx.frontend.slot.footer.desktopCenterLinks.v1",
+			id: "mitol.footer.links",
 			op: WidgetOperationTypes.APPEND,
-			component: AboutLink,
-		},
-		{
-			slotId: "org.openedx.frontend.slot.footer.desktopCenterLink1.v1",
-			id: "mitol.footer.col1.contact",
-			op: WidgetOperationTypes.APPEND,
-			component: SupportLink,
-		},
-		{
-			slotId: "org.openedx.frontend.slot.footer.desktopCenterLink1.v1",
-			id: "mitol.footer.col1.accessibility",
-			op: WidgetOperationTypes.APPEND,
-			component: AccessibilityLink,
-		},
-		// Column 2: Policies
-		{
-			slotId: "org.openedx.frontend.slot.footer.desktopCenterLink2.v1",
-			op: LayoutOperationTypes.OPTIONS,
-			options: { label: "Policies" },
-		},
-		{
-			slotId: "org.openedx.frontend.slot.footer.desktopCenterLink2.v1",
-			id: "mitol.footer.col2.privacy",
-			op: WidgetOperationTypes.APPEND,
-			component: PrivacyPolicyLink,
-		},
-		{
-			slotId: "org.openedx.frontend.slot.footer.desktopCenterLink2.v1",
-			id: "mitol.footer.col2.tos",
-			op: WidgetOperationTypes.APPEND,
-			component: TermsOfServiceLink,
-		},
-		{
-			slotId: "org.openedx.frontend.slot.footer.desktopCenterLink2.v1",
-			id: "mitol.footer.col2.honor-code",
-			op: WidgetOperationTypes.APPEND,
-			component: HonorCodeLink,
+			component: FooterLinks,
 		},
 	];
 

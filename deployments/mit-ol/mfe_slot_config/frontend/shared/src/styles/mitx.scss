@@ -6,3 +6,69 @@
       display: none;
     }
 }
+
+// Match the legacy MITx / xPRO header user menu, which shows just the username
+// (no avatar). mitx and xpro use the default frontend-base AvatarButton toggle;
+// hide its avatar image so only the username + caret remain. (mitxonline uses
+// its own custom toggle — styled in mitxonline.scss — and is unaffected.)
+header .pgn__avatar-button-avatar .pgn__avatar {
+  display: none !important;
+}
+
+// Match the legacy header logo size (28px). The default frontend-base logo
+// widget sets `max-height: 2rem` (32px) inline; override it. (The logo anchor
+// links to "/"; mitxonline uses a custom logo so it's unaffected.)
+header a[href="/"] img {
+  max-height: 1.75rem !important;
+}
+
+// Match the legacy header height: its user-menu dropdown button is 48px (the
+// tallest element in the row), while the frontend-base avatar button is ~44px.
+// Bumping it makes the whole header 64px like legacy.
+header .pgn__avatar-button-avatar {
+  min-height: 48px;
+}
+
+// The default frontend-base Help widget renders as a full-height (64px) nav-link
+// "tab" (height:64px + 18px vertical padding), which is taller than the 48px
+// user-menu button and pushes the whole header to 80px. Legacy renders Help as a
+// plain gray inline link (`text-gray-700`), not a tab. Reset the box to auto
+// height / no vertical padding so the 48px user menu stays the tallest element
+// and the header lands at 64px like legacy. The colour is already gray-700
+// (#454545), and the 16px right padding keeps the gap before the user menu.
+header .secondary-nav-links .nav-link {
+  height: auto !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 16px !important;
+}
+
+// mitx and xpro keep the desktop-style header at all widths (AlwaysDesktopLayout
+// in createMITxHeaderApp / createXProHeaderApp) to match the legacy header,
+// which never collapses to a hamburger. At narrow widths, ellipsis-truncate the
+// course number + title so the lockup stays one line each instead of wrapping
+// and blowing up the header height (mirrors the legacy truncation).
+@media (max-width: 768px) {
+  // Keep the always-desktop header on ONE row that fits the viewport. Let the
+  // left side (logo + course lockup) shrink (min-width:0 breaks the flex
+  // min-content floor) and ellipsis-truncate the course number + title to
+  // whatever space is left after the logo and right-side controls — otherwise
+  // the row overflows horizontally and opening the menu scrolls the logo off
+  // the left edge. The lockup is:
+  //   <div><span.small>{number}</span><span.course-title>{title}</span></div>
+  header .d-flex.flex-grow-1,
+  header .nav:has(.course-title),
+  header div:has(> .course-title) {
+    min-width: 0;
+  }
+  header .nav:has(.course-title) {
+    overflow: hidden;
+  }
+  header div:has(> .course-title) > span {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
