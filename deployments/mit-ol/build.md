@@ -262,8 +262,8 @@ Pass `--no-include-plugins` for the edx-platform suite alone, or
 
 **Getting the report out (`platform test-report`).** `test` returns stdout and
 its exit code is the gate — that is what a CI step wants, but it leaves nothing
-to archive. `test-report` runs the *same* thing and returns the run's report
-directory instead, whether the suite passed or failed:
+to archive. `test-report` returns that run's report directory instead, whether
+the suite passed or failed:
 
 ```bash
 lehrer build test-report --cell mit-ol/master/mitxonline \
@@ -282,6 +282,12 @@ shipped no suite" look identical in the exit code. `silent_plugins` names the
 second case, so you can tell when a `[tests]` extra has actually landed. `test`
 echoes the same table at the end of its stdout; only `test-report` gives you the
 files.
+
+Gating with `test` and then exporting with `test-report` does **not** run the
+suite twice: both build the same `expect=ANY` exec node, so the second call is
+served the first one's filesystem from the engine's cache. That is deliberate —
+against a flaky or stateful suite, a re-run could hand you an artifact that
+disagrees with the verdict the gate already gave.
 
 ### codejail (`codejail test`) and notes (`notes test`)
 

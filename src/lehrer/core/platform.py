@@ -173,18 +173,46 @@ class _ResolvedCell:
     extra_npm_packages: list[str] = field(default_factory=list)
 
 
-@dataclass
-class _PreparedTestRun:
-    """A test run built but not executed: the container and its pytest command.
+# How much of a failing run's output to quote back. Enough for the pytest
+# summary and a traceback or two; not so much that the error buries them.
+_FAILURE_OUTPUT_CHARS = 8000
 
-    ``test`` and ``test_report`` execute the *same* run and differ only in what
-    they keep — stdout with the exit code as the gate, or the report directory
-    regardless of the exit code.  Handing both the identical prepared run is
-    what guarantees the artifact describes what the gate ran.
+
+class _TestRunFailed(RuntimeError):
+    """Raised when the platform test suite exits non-zero.
+
+    Because the exec runs with ``expect=ANY`` (so ``test_report`` can read the
+    same execution), Dagger no longer treats a failing suite as a failed step
+    and no longer prints its output — so the output has to be carried here, or
+    a red run would report only "exited 1" with nothing to diagnose.
     """
 
-    container: dagger.Container
-    args: list[str]
+    def __init__(self, code: int, stdout: str, stderr: str) -> None:
+        parts = [f"platform test suite failed (pytest exited {code})."]
+        for name, text in (("stdout", stdout), ("stderr", stderr)):
+            tail = text[-_FAILURE_OUTPUT_CHARS:].strip()
+            if tail:
+                elided = "…(truncated)…\n" if len(text) > _FAILURE_OUTPUT_CHARS else ""
+                parts.append(f"--- {name} ---\n{elided}{tail}")
+        super().__init__("\n\n".join(parts))
+
+
+@dataclass
+class _PreparedTestRun:
+    """One executed test run, kept as a container both entry points can read.
+
+    ``test`` and ``test_report`` must not merely be *configured* the same — they
+    have to be the same execution, or a flaky or stateful suite can fail the
+    gate and then produce a disagreeing artifact on a second run.  So the exec
+    is applied here, once, with ``expect=ANY``, and both functions read that
+    single node: identical arguments *and* identical ``expect`` mean identical
+    DAG digest, so the engine's exec cache serves both from one run of pytest.
+    Gating is then ``test``'s own check of :meth:`dagger.Container.exit_code`
+    rather than a differing ``expect``, which would fork the digest and thereby
+    the execution.
+    """
+
+    executed: dagger.Container
 
 
 def _resolve_field(
@@ -2223,10 +2251,16 @@ class OpenedxPlatform:
                 the plugin set alone is the compatibility signal.
 
         Returns:
-            The pytest stdout, ending with the per-target summary table (only
-            reached when the suite passes; a failing suite exits non-zero and
-            fails the calling ``dagger call``).  Use ``test-report`` when you
-            need the report as a retrievable artifact, pass or fail.
+            The pytest stdout, ending with the per-target summary table.  Only
+            reached when the suite passes: a non-zero run raises, which fails
+            the calling ``dagger call``.  Use ``test-report`` when you need the
+            report as a retrievable artifact, pass or fail — it reads *this*
+            execution rather than starting another.
+
+        Raises:
+            _TestRunFailed: pytest exited non-zero.  Carries the run's output,
+                which Dagger no longer prints itself now that the exec is
+                ``expect=ANY`` (see :class:`_PreparedTestRun`).
         """
         prepared = await self._prepare_test_run(
             caller="test",
@@ -2253,10 +2287,16 @@ class OpenedxPlatform:
             mongo_image=mongo_image,
             config_sources=config_sources,
         )
-        # No `expect=` override: a non-zero pytest run must fail the call. That
-        # exit-code-as-gate ergonomic is the whole difference between this and
-        # `test_report`, which swallows the code to keep the artifact reachable.
-        return await prepared.container.with_exec(prepared.args).stdout()
+        # The gate. The exec itself ran with `expect=ANY` (see
+        # :class:`_PreparedTestRun`) so that `test_report` reads the *same*
+        # execution rather than a re-run, which means a non-zero suite has to
+        # be turned back into a failed call here, explicitly.
+        code = await prepared.executed.exit_code()
+        stdout = await prepared.executed.stdout()
+        if code != 0:
+            stderr = await prepared.executed.stderr()
+            raise _TestRunFailed(code, stdout, stderr)
+        return stdout
 
     @function
     async def test_report(  # noqa: PLR0913
@@ -2286,13 +2326,19 @@ class OpenedxPlatform:
     ) -> dagger.Directory:
         """Run :meth:`test` and return its report directory instead of stdout.
 
-        Identical run, different contract.  :meth:`test` is the *gate*: it
+        Same execution, different contract.  :meth:`test` is the *gate*: it
         returns stdout and a failing suite fails the ``dagger call``, which is
-        what a CI step wants.  This returns the run's report **directory**, so
+        what a CI step wants.  This returns that run's report **directory**, so
         the artifact is retrievable — and it is retrievable precisely in the
-        case that matters, a failing suite, which is why the pytest exec here
-        runs with ``expect=ANY``.  A caller that wants both should run the gate
-        and export the report as separate steps.
+        case that matters, a failing suite.
+
+        "Same execution" is literal, not a description of shared settings: both
+        functions build one ``expect=ANY`` exec node with the identical digest
+        (:class:`_PreparedTestRun`), so a CI step that gates with ``test`` and
+        then exports with ``test-report`` is served the first run's filesystem
+        instead of re-running pytest.  That matters for a flaky or stateful
+        suite, where a re-run could produce an artifact that disagrees with the
+        verdict the gate already gave.
 
         The directory contains:
 
@@ -2358,11 +2404,10 @@ class OpenedxPlatform:
             mongo_image=mongo_image,
             config_sources=config_sources,
         )
-        # ReturnType.ANY: a failing suite must still yield the directory — a
-        # report you can only retrieve when everything passed is useless.
-        return prepared.container.with_exec(
-            prepared.args, expect=dagger.ReturnType.ANY
-        ).directory(REPORTS_DIR)
+        # The exec already ran with `expect=ANY`, so a failing suite still has a
+        # readable filesystem here — a report you can only retrieve when
+        # everything passed is useless.
+        return prepared.executed.directory(REPORTS_DIR)
 
     async def _prepare_test_run(  # noqa: PLR0913
         self,
@@ -2391,16 +2436,18 @@ class OpenedxPlatform:
         mongo_image: str,
         config_sources: dagger.Directory | None,
     ) -> _PreparedTestRun:
-        """Build the container and pytest command for a test run.
+        """Build *and execute* a test run both entry points can read.
 
-        Shared by :meth:`test` and :meth:`test_report` so the two differ only in
-        what they do with the result — a divergence here would mean the report
-        describes a different run than the gate executed.  See :meth:`test` for
-        what every argument means; ``caller`` names the Dagger function in the
-        "requires a manifest or both requirement directories" error.
+        Shared by :meth:`test` and :meth:`test_report`, which differ only in
+        what they read off the result.  The exec is applied here rather than by
+        each caller so the two build the identical DAG node and the engine
+        serves both from one run of pytest — see :class:`_PreparedTestRun`.
+        See :meth:`test` for what every argument means; ``caller`` names the
+        Dagger function in the "requires a manifest or both requirement
+        directories" error.
 
         Returns:
-            The prepared container plus the exec args, unexecuted.
+            The executed run, for the caller to read a verdict or a report from.
 
         Raises:
             ValueError: ``service`` is not a service with a known test suite.
@@ -2569,7 +2616,13 @@ class OpenedxPlatform:
         # migration — the default for edx-platform's own runs and the
         # difference between minutes and tens of minutes for a smoke subset.
         script = combined_pytest_script(paths, plugin_dists, ds, markers)
-        return _PreparedTestRun(container=base, args=["python", "-c", script])
+        # `expect=ANY` here, not at the call sites: see :class:`_PreparedTestRun`
+        # for why the gate lives in `test` instead of in this exec's expectation.
+        return _PreparedTestRun(
+            executed=base.with_exec(
+                ["python", "-c", script], expect=dagger.ReturnType.ANY
+            )
+        )
 
     @function
     async def publish_platform(
