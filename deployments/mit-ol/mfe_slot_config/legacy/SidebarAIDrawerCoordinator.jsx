@@ -28,14 +28,14 @@ const useStickyDrawerHeight = (wrapperRef, active) => {
         }
 
         const INSET_PX = 16;
-        const mq = window.matchMedia('(min-width: 1025px)');
+        const desktopMediaQuery = window.matchMedia('(min-width: 1025px)');
 
-        let rafId = null;
+        let animationFrameId = null;
         let resizeObserver = null;
 
-        const update = () => {
-            rafId = null;
-            if (!mq.matches) {
+        const recalcHeight = () => {
+            animationFrameId = null;
+            if (!desktopMediaQuery.matches) {
                 wrapper.style.removeProperty('--ai-drawer-height');
                 return;
             }
@@ -44,54 +44,54 @@ const useStickyDrawerHeight = (wrapperRef, active) => {
             const parentRect = parent.getBoundingClientRect();
             const stickyTop = Math.max(parentRect.top, INSET_PX);
             const effectiveBottom = Math.min(window.innerHeight - INSET_PX, parentRect.bottom);
-            const available = effectiveBottom - stickyTop;
+            const availableHeight = effectiveBottom - stickyTop;
 
             wrapper.style.setProperty(
                 '--ai-drawer-height',
-                `${Math.max(0, available)}px`,
+                `${Math.max(0, availableHeight)}px`,
             );
         };
 
-        const schedule = () => {
-            if (rafId == null) {
-                rafId = window.requestAnimationFrame(update);
+        const scheduleRecalc = () => {
+            if (animationFrameId == null) {
+                animationFrameId = window.requestAnimationFrame(recalcHeight);
             }
         };
 
-        const detach = () => {
-            window.removeEventListener('scroll', schedule);
-            window.removeEventListener('resize', schedule);
+        const stopTracking = () => {
+            window.removeEventListener('scroll', scheduleRecalc);
+            window.removeEventListener('resize', scheduleRecalc);
             if (resizeObserver) {
                 resizeObserver.disconnect();
                 resizeObserver = null;
             }
-            if (rafId != null) {
-                window.cancelAnimationFrame(rafId);
-                rafId = null;
+            if (animationFrameId != null) {
+                window.cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
             }
             wrapper.style.removeProperty('--ai-drawer-height');
         };
 
-        const attach = () => {
-            if (mq.matches) {
-                window.addEventListener('scroll', schedule, { passive: true });
-                window.addEventListener('resize', schedule);
+        const startTracking = () => {
+            if (desktopMediaQuery.matches) {
+                window.addEventListener('scroll', scheduleRecalc, { passive: true });
+                window.addEventListener('resize', scheduleRecalc);
                 if (!resizeObserver && wrapper.parentElement && typeof ResizeObserver !== 'undefined') {
-                    resizeObserver = new ResizeObserver(schedule);
+                    resizeObserver = new ResizeObserver(scheduleRecalc);
                     resizeObserver.observe(wrapper.parentElement);
                 }
-                schedule();
+                scheduleRecalc();
             } else {
-                detach();
+                stopTracking();
             }
         };
 
-        mq.addEventListener('change', attach);
-        attach();
+        desktopMediaQuery.addEventListener('change', startTracking);
+        startTracking();
 
         return () => {
-            mq.removeEventListener('change', attach);
-            detach();
+            desktopMediaQuery.removeEventListener('change', startTracking);
+            stopTracking();
         };
     }, [wrapperRef, active]);
 };

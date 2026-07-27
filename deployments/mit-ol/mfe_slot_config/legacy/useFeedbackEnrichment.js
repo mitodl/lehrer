@@ -7,13 +7,13 @@ export default function useFeedbackEnrichment(courseId, unitId) {
   const course = useModel('courseHomeMeta', courseId);
   const unit = useModel('units', unitId);
 
-  const ref = useRef({});
-  ref.current = {
+  const valuesRef = useRef({});
+  valuesRef.current = {
     courseName: course?.title ?? '',
     unitTitle: unit?.title ?? '',
     url: window.location.href,
   };
 
-  const getterRef = useRef(() => ref.current);
+  const getterRef = useRef(() => valuesRef.current);
   return getterRef.current;
 }
