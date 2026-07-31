@@ -18,6 +18,7 @@ import yaml
 from dagger import dag, function, object_type
 
 from lehrer.core.build_manifest import BuildManifest, Cell
+from lehrer.core.pip_compile_bridge import python_deps_install_script
 from lehrer.core.plugin_imports import plugin_distributions
 from lehrer.core.plugin_tests import (
     combined_pytest_script,
@@ -457,6 +458,55 @@ def _derive_test_settings(service: str) -> str:
     )
 
 
+def _edx_base_deps_script(*, include_dev: bool = False) -> str:
+    """Shell script that installs edx-platform's base + assets (+ dev) deps.
+
+    Delegates to :func:`python_deps_install_script` -- see its docstring for
+    the ``uv.lock``-presence branch and ``--inexact`` rationale, and
+    openedx/public-engineering#552 for openedx-platform's own migration.
+    Named releases haven't picked up the migration and won't grow a
+    ``uv.lock`` until they do, so this keeps both tracks working, and picks
+    up master's migration automatically without a lehrer change once it
+    lands.
+
+    ``include_dev`` pulls in openedx-platform's ``dev`` dependency group
+    (mypy, tox, django-debug-toolbar, ...) — or, pre-migration,
+    ``requirements/edx/development.txt`` — for local-dev builds; production
+    builds leave it out (the default).
+
+    Must run with ``VIRTUAL_ENV`` set to the target environment.
+    """
+    legacy_requirements = [
+        "requirements/edx/base.txt",
+        "requirements/edx/assets.txt",
+    ]
+    sync_groups = ["assets"]
+    if include_dev:
+        legacy_requirements.append("requirements/edx/development.txt")
+        sync_groups.append("dev")
+    return python_deps_install_script(
+        workdir="/openedx/edx-platform",
+        legacy_requirements=legacy_requirements,
+        sync_groups=sync_groups,
+        legacy_installer=["uv", "pip", "install"],
+    )
+
+
+def _edx_testing_deps_script() -> str:
+    """Shell script that installs edx-platform's test-suite deps.
+
+    Runs after ``install_deps`` has already layered the deployment's own
+    packages into the environment, so ``python_deps_install_script``'s
+    ``--inexact`` sync is what keeps those from being pruned back out.
+    """
+    return python_deps_install_script(
+        workdir="/openedx/edx-platform",
+        legacy_requirements=["requirements/edx/testing.txt"],
+        sync_groups=["testing"],
+        legacy_installer=["uv", "pip", "install"],
+    )
+
+
 @object_type
 class OpenedxPlatform:
     """Generic edx-platform build pipeline.
@@ -684,6 +734,7 @@ class OpenedxPlatform:
         packages_to_remove: list[str] | None = None,
         extra_npm_packages: list[str] | None = None,
         install_node: bool = True,
+        include_dev_dependencies: bool = False,  # noqa: FBT001, FBT002
     ) -> dagger.Container:
         """Install Python and Node.js dependencies using uv
 
@@ -707,6 +758,11 @@ class OpenedxPlatform:
                 ``False`` for Python-only consumers (e.g. plugin import checks,
                 settings regeneration) that never build webpack assets — the
                 Python environment above is complete without it.
+            include_dev_dependencies: Also install edx-platform's ``dev``
+                dependency group (mypy, tox, django-debug-toolbar, ...) — or,
+                pre-migration, ``requirements/edx/development.txt``. Default
+                ``False`` for production builds; set ``True`` for local-dev
+                images.
 
         Returns:
             Container with all dependencies installed
@@ -723,32 +779,22 @@ class OpenedxPlatform:
             .with_mounted_directory(
                 "/root/pip_package_overrides", pip_package_overrides
             )
-            # Copy base requirements from edx-platform
+            # Install base + assets (+ dev) deps from edx-platform (uv sync
+            # against uv.lock, or the legacy pip-compile .txt, whichever the
+            # checkout has), then layer the deployment's own pinned package
+            # list on top.
             .with_exec(
                 [
                     "sh",
                     "-c",
-                    "cp /openedx/edx-platform/requirements/edx/base.txt /root/pip_package_lists/edx_base.txt",
+                    _edx_base_deps_script(include_dev=include_dev_dependencies),
                 ]
             )
-            .with_exec(
-                [
-                    "sh",
-                    "-c",
-                    "cp /openedx/edx-platform/requirements/edx/assets.txt /root/pip_package_lists/edx_assets.txt",
-                ]
-            )
-            # Install base Python dependencies using uv (much faster than pip)
-            # uv automatically uses the VIRTUAL_ENV set in apt_base
             .with_exec(
                 [
                     "uv",
                     "pip",
                     "install",
-                    "-r",
-                    "/root/pip_package_lists/edx_base.txt",
-                    "-r",
-                    "/root/pip_package_lists/edx_assets.txt",
                     "-r",
                     f"/root/pip_package_lists/{release_name}/{deployment_name}.txt",
                 ]
@@ -1574,39 +1620,28 @@ class OpenedxPlatform:
             edx_platform_git_repo=cell.platform_repo,
             edx_platform_git_branch=cell.platform_branch,
         )
-        container = (
-            container.with_mounted_directory(
-                "/root/pip_package_lists", cell.pip_package_lists
-            )
-            .with_mounted_directory(
-                "/root/pip_package_overrides", cell.pip_package_overrides
-            )
-            .with_exec(
-                [
-                    "sh",
-                    "-c",
-                    "cp /openedx/edx-platform/requirements/edx/base.txt"
-                    " /root/pip_package_lists/edx_base.txt"
-                    " && cp /openedx/edx-platform/requirements/edx/assets.txt"
-                    " /root/pip_package_lists/edx_assets.txt",
-                ]
-            )
+        container = container.with_mounted_directory(
+            "/root/pip_package_lists", cell.pip_package_lists
+        ).with_mounted_directory(
+            "/root/pip_package_overrides", cell.pip_package_overrides
         )
 
+        # Installed *before* the base deps sync/install below so its version
+        # satisfies the pinned django-aqueduct== constraint and uv skips the
+        # PyPI fetch. The base step's --inexact flag is what keeps this from
+        # being pruned back out.
         if aqueduct_source is not None:
             container = container.with_mounted_directory(
                 "/root/django-aqueduct", aqueduct_source
             ).with_exec(["uv", "pip", "install", "-e", "/root/django-aqueduct"])
 
         container = container.with_exec(
+            ["sh", "-c", _edx_base_deps_script()]
+        ).with_exec(
             [
                 "uv",
                 "pip",
                 "install",
-                "-r",
-                "/root/pip_package_lists/edx_base.txt",
-                "-r",
-                "/root/pip_package_lists/edx_assets.txt",
                 "-r",
                 f"/root/pip_package_lists/{release_name}/{deployment_name}.txt",
             ]
@@ -1668,6 +1703,7 @@ class OpenedxPlatform:
         extra_npm_packages: list[str] | None = None,
         verify_boot: bool = True,  # noqa: FBT001, FBT002
         strict_translations: bool = False,  # noqa: FBT001, FBT002
+        include_dev_dependencies: bool = False,  # noqa: FBT001, FBT002
     ) -> dagger.Container:
         """Build a complete openedx-platform image
 
@@ -1717,6 +1753,11 @@ class OpenedxPlatform:
                 pull/compile step fails, instead of warning (default: False —
                 a missing plugin translation is normal, so this is opt-in until
                 the per-step baseline is known).
+            include_dev_dependencies: Also install edx-platform's ``dev``
+                dependency group (mypy, tox, django-debug-toolbar, ...) — or,
+                pre-migration, ``requirements/edx/development.txt``. Default
+                ``False`` for production builds; set ``True`` to build a
+                local-dev image.
 
         Returns:
             Container ready to be deployed
@@ -1828,6 +1869,7 @@ class OpenedxPlatform:
             node_version=node_version,
             packages_to_remove=packages_to_remove,
             extra_npm_packages=extra_npm_packages,
+            include_dev_dependencies=include_dev_dependencies,
         )
 
         # ── Clean base ────────────────────────────────────────────────────────
@@ -2294,7 +2336,7 @@ class OpenedxPlatform:
         container = (
             container.with_workdir("/openedx/edx-platform")
             .with_exec(["uv", "pip", "install", "-e", "."])
-            .with_exec(["uv", "pip", "install", "-r", "requirements/edx/testing.txt"])
+            .with_exec(["sh", "-c", _edx_testing_deps_script()])
         )
 
         # When folding the plugins' own suites into this run, derive the plugin
