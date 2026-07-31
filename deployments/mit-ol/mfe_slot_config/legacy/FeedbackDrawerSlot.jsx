@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef } from 'react';
 import SidebarContext from './src/courseware/course/sidebar/SidebarContext';
 import {
   loadBundle, getMessageOrigin, SUBMIT_URL, CSRF_COOKIE_NAME, CSRF_HEADER_NAME, CSRF_PRIME_URL,
+  LOGIN_URL,
 } from './feedbackBundle';
 import useFeedbackEnrichment from './useFeedbackEnrichment';
 
@@ -28,6 +29,7 @@ const FeedbackDrawerSlot = () => {
             csrfCookieName: CSRF_COOKIE_NAME,
             csrfHeaderName: CSRF_HEADER_NAME,
             csrfPrimeUrl: CSRF_PRIME_URL,
+            loginUrl: LOGIN_URL,
             getEnrichment,
             variant: 'slot',
           },
