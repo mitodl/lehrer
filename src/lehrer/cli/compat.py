@@ -21,6 +21,11 @@ cell three ways:
 Every emitted cell is validated against its group's on-disk manifest, so the
 downstream ``dagger call platform check-deployment --build-manifest ...`` is
 always given a cell the manifest actually defines.
+
+``settings-matrix`` is the sibling command for the settings-verify workflow
+(``dagger call platform verify-settings``).  It answers a coarser question —
+which cells' *settings trees* need re-booting — so its attribution rules
+differ; see :func:`affected_settings_cells`.
 """
 
 from __future__ import annotations
@@ -34,7 +39,7 @@ from typing import Annotated
 import cyclopts
 
 from lehrer.cli import _paths
-from lehrer.core.build_manifest import BuildManifest, load_manifest
+from lehrer.core.build_manifest import BuildManifest, Cell, load_manifest
 
 app = cyclopts.App(
     name="compat",
@@ -157,6 +162,132 @@ def all_cells(repo_root: Path) -> list[dict[str, str]]:
     return _dedupe(cells)
 
 
+def _input_paths(changed_paths: list[str] | None) -> list[str]:
+    """Changed paths from argv, else from a piped stdin, else empty.
+
+    Guard on ``isatty`` so an interactive invocation returns an empty matrix
+    instead of blocking forever on a read that will never receive EOF.
+    """
+    if changed_paths:
+        return changed_paths
+    if not sys.stdin.isatty():
+        return sys.stdin.read().splitlines()
+    return []
+
+
+_SETTINGS_DIR = "settings"
+# Injected into every build's settings tree from lehrer core
+# (``inject_aqueduct_settings``), so a change here affects every cell in every
+# group — not just the group whose files were edited.
+_CORE_SETTINGS_PREFIX = "src/lehrer/settings/"
+# Distribution whose presence in a cell means that cell uses the aqueduct
+# settings mechanism at all (see _uses_aqueduct).
+_AQUEDUCT_DIST = "django-aqueduct"
+
+
+def _settings_cell(
+    repo_root: Path, group: str, release: str, deployment: str, *, drift: bool
+) -> dict[str, str | bool]:
+    cell = _cell(repo_root, group, release, deployment)
+    return {
+        **cell,
+        "settings": f"{_DEPLOYMENTS}/{group}/{_SETTINGS_DIR}",
+        "drift": drift,
+    }
+
+
+def _has_settings_tree(repo_root: Path, group: str) -> bool:
+    return (repo_root / _DEPLOYMENTS / group / _SETTINGS_DIR).is_dir()
+
+
+def _uses_aqueduct(cell: Cell) -> bool:
+    """Whether a cell installs django-aqueduct, i.e. uses the aqueduct settings.
+
+    Shipping a settings tree is a *group*-level fact, but using it is per-cell:
+    a group can have cells still on an older settings mechanism that never
+    install the framework.  Verifying those would import
+    ``<svc>.envs.aqueduct`` in a container where ``django_aqueduct`` does not
+    exist and fail with a ModuleNotFoundError that says nothing about the
+    deployment's actual health.  Deriving the predicate from the cell's own
+    requirement lines keeps it self-maintaining — a cell starts being verified
+    the moment it adopts the framework, with no second list to update.
+    """
+    return any(_AQUEDUCT_DIST in line for line in (*cell.packages, *cell.overrides))
+
+
+def _settings_cells_for_group(
+    repo_root: Path, group: str
+) -> list[dict[str, str | bool]]:
+    """Settings-verify cells for a group: those that ship *and* use a settings tree."""
+    manifest = _load_group_manifest(repo_root, group)
+    if manifest is None or not _has_settings_tree(repo_root, group):
+        return []
+    drift_release = manifest.settings_model_release
+    return [
+        _settings_cell(
+            repo_root,
+            group,
+            c.release,
+            c.deployment,
+            drift=drift_release is not None and c.release == drift_release,
+        )
+        for c in manifest.cells
+        if _uses_aqueduct(c)
+    ]
+
+
+def _all_settings_groups(repo_root: Path) -> list[str]:
+    groups: list[str] = []
+    for name in _MANIFEST_NAMES:
+        groups.extend(
+            path.parent.name for path in repo_root.glob(f"{_DEPLOYMENTS}/*/{name}")
+        )
+    return sorted(set(groups))
+
+
+def affected_settings_cells(
+    changed_paths: list[str], repo_root: Path
+) -> list[dict[str, str | bool]]:
+    """Map changed paths to the settings-verify cells they affect.
+
+    Attribution is deliberately coarse — a settings change is not attributable
+    to one cell from the path alone, and an under-broad matrix here means a
+    broken settings tree merges unverified:
+
+    * ``deployments/<group>/settings/**`` — every cell in that group.
+    * ``deployments/<group>/build_manifest.{yaml,yml}`` — every cell in that
+      group; a plugin bump changes the apps the settings overlay resolves over.
+    * ``src/lehrer/settings/**`` — every cell in every group, since
+      ``ProductionSettingsMixin`` is injected into all of them.
+    """
+    groups: set[str] = set()
+    all_groups = False
+    for raw in changed_paths:
+        path = raw.strip()
+        if path.startswith(_CORE_SETTINGS_PREFIX):
+            all_groups = True
+            continue
+        parts = PurePosixPath(path).parts
+        if len(parts) < 3 or parts[0] != _DEPLOYMENTS:  # noqa: PLR2004
+            continue
+        if parts[2] == _SETTINGS_DIR or parts[2] in _MANIFEST_NAMES:
+            groups.add(parts[1])
+
+    selected = _all_settings_groups(repo_root) if all_groups else sorted(groups)
+    cells: list[dict[str, str | bool]] = []
+    for group in selected:
+        cells.extend(_settings_cells_for_group(repo_root, group))
+    return cells
+
+
+def all_settings_cells(repo_root: Path) -> list[dict[str, str | bool]]:
+    """Every settings-verify cell across all groups that ship a settings tree."""
+    cells: list[dict[str, str | bool]] = []
+    for group in _all_settings_groups(repo_root):
+        cells.extend(_settings_cells_for_group(repo_root, group))
+    return cells
+
+
 @app.command
 def matrix(
     changed_paths: Annotated[
@@ -185,17 +316,49 @@ def matrix(
     matrix), and the job summary can log exactly which cells ran.
     """
     repo_root = _paths.repo_root()
-    if all_cells_flag:
-        cells = all_cells(repo_root)
-    else:
-        if changed_paths:
-            paths = changed_paths
-        elif not sys.stdin.isatty():
-            # No args and piped input: read paths from stdin. Guard on isatty so
-            # an interactive invocation returns an empty matrix instead of
-            # blocking forever on a read that will never receive EOF.
-            paths = sys.stdin.read().splitlines()
-        else:
-            paths = []
-        cells = affected_cells(paths, repo_root)
+    cells = (
+        all_cells(repo_root)
+        if all_cells_flag
+        else affected_cells(_input_paths(changed_paths), repo_root)
+    )
+    print(json.dumps({"any": bool(cells), "cells": cells}))  # noqa: T201
+
+
+@app.command
+def settings_matrix(
+    changed_paths: Annotated[
+        list[str] | None,
+        cyclopts.Parameter(
+            help=(
+                "Changed file paths (repo-relative). If omitted and --all is "
+                "not set, paths are read from a non-tty stdin, one per line."
+            )
+        ),
+    ] = None,
+    *,
+    all_cells_flag: Annotated[
+        bool,
+        cyclopts.Parameter(
+            name=["--all"],
+            help="Emit the full matrix (every cell) instead of diff-affected cells.",
+        ),
+    ] = False,
+) -> None:
+    """Print the settings-verify matrix as JSON for a GitHub Actions job.
+
+    Feeds ``dagger call platform verify-settings``, which boots each group's
+    committed aqueduct settings tree against a cell's pinned plugin set.
+
+    Output shape: ``{"any": <bool>, "cells": [{group, release, deployment,
+    manifest, settings, drift}, ...]}`` — ``settings`` is the group's settings
+    directory and ``drift`` says whether that cell's release matches the
+    manifest's ``settings_model_release`` (only then can the committed model be
+    compared against a fresh render).
+    """
+    repo_root = _paths.repo_root()
+    cells = (
+        all_settings_cells(repo_root)
+        if all_cells_flag
+        else affected_settings_cells(_input_paths(changed_paths), repo_root)
+    )
     print(json.dumps({"any": bool(cells), "cells": cells}))  # noqa: T201

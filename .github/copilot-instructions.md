@@ -22,18 +22,12 @@ The `sdk/` directory is a local editable install of the Dagger Python SDK — do
 # Run a single build step
 dagger call apt-base --python-version 3.11 stdout
 
-# Full platform build
+# Full platform build, driven by a build_manifest.yaml cell
 dagger call build-platform  \
 --deployment-name mitxonline  \
 --release-name master \
---pip-package-lists ./pip_package_lists \
---pip-package-overrides ./pip_package_overrides \
---custom-settings ./settings \
---platform-repo "https://github.com/openedx/edx-platform" \
---platform-branch master \
---theme-repo "https://github.com/mitodl/mitxonline-theme" \
---theme-branch main \
---python-version 3.12
+--build-manifest ./deployments/mit-ol/build_manifest.yaml \
+--custom-settings ./deployments/mit-ol/settings
 ```
 
 There are no automated tests in this repository.
@@ -68,7 +62,7 @@ Additional top-level functions: `build_codejail`, `build_notes`, `build_mfe`, `w
 - `notes_config/` — `env_config.py` settings for edx-notes
 - `mfe_slot_config/` — JSX slot configs and SCSS; per-deployment subdirs (`mitx/`, `mitxonline/`, `mitx-staging/`, `xpro/`) each contain `common-mfe-config.env.jsx`
 
-**pip_package_lists/** and **pip_package_overrides/**: Organized as `{release_name}/{deployment_name}.txt`. Releases: `master`, `teak`, `ulmo` (older: `sumac`, `redwood`). Deployments: `mitx`, `mitxonline`, `mitx-staging`.
+**build_manifest.yaml**: Per-deployment-group declarative source of truth (e.g. `deployments/mit-ol/build_manifest.yaml`) — one cell per `(release, deployment)` pair, each with its own `packages`/`overrides` pip requirement lines, platform/theme/translations repo+branch, and python/node version. Passed to `build-platform` via `--build-manifest`; see `src/lehrer/core/build_manifest.py`. Releases: `master`, `teak`, `ulmo` (older: `sumac`, `redwood`). Deployments: `mitx`, `mitxonline`, `mitx-staging`.
 
 **Python version logic**: `3.12` for `release_name == "master"`, `3.11` for all other releases. Applies to `build_platform`, `build_codejail`, and is a fixed `3.11` default for `build_notes`.
 

@@ -1,0 +1,117 @@
+---
+name: Dagger engine
+description: >
+  Install the Dagger CLI and start an engine configured to pull Docker Hub
+  images through a caching mirror.
+
+# Why a hand-started engine instead of Dagger's automatic provisioning:
+# a registry mirror can only be configured through /etc/dagger/engine.toml,
+# and Dagger does not mount that file for an auto-provisioned engine. Running
+# the container ourselves is the only supported way to supply it.
+#
+# Why a mirror at all: every base image in src/lehrer/core (python, node,
+# debian, mongo, elasticsearch) is a bare Docker Hub reference, and each
+# matrix cell runs on a fresh ephemeral runner with an empty layer store — so
+# every job pulls them again. Pulling that often from Docker Hub is both
+# rate-limit-prone and flaky; two runs of this repo's Dagger jobs have already
+# died within seconds on `connection reset by peer` mid-pull. Routing through
+# mirror.gcr.io (Google's pull-through cache of Docker Hub) takes Docker Hub
+# out of the hot path.
+#
+# This is safe in front of a required check because buildkit treats a mirror
+# as a *preferred* host, not the only one: when the mirror cannot serve, it
+# logs "trying next host" and falls back to Docker Hub. A mirror outage
+# degrades to the previous behaviour rather than breaking CI. Verified against
+# engine v0.21.3 by pointing `mirrors` at an unreachable host and confirming
+# both the attempt and the fallback in the engine log.
+#
+# Note this does not eliminate the fetch — runners are ephemeral, so a job
+# always downloads the image. It changes *where from*.
+
+inputs:
+  mirrors:
+    description: >
+      Comma-separated registry mirrors for docker.io, in preference order.
+      Set to an empty string to pull straight from Docker Hub.
+    required: false
+    default: mirror.gcr.io
+  container-name:
+    description: Name of the engine container.
+    required: false
+    default: dagger-engine-ci
+
+runs:
+  using: composite
+  steps:
+  - name: Resolve pinned Dagger version
+    id: version
+    shell: bash
+    run: |
+      set -euo pipefail
+      # dagger.json is the single source of truth for the engine version, so
+      # the CLI, the engine container, and the module can never disagree —
+      # they previously drifted independently across three workflows.
+      version="$(jq -r '.engineVersion' dagger.json)"
+      if [ -z "$version" ] || [ "$version" = "null" ]; then
+        echo "::error::dagger.json has no engineVersion"
+        exit 1
+      fi
+      echo "version=${version#v}" >> "$GITHUB_OUTPUT"
+      echo "Pinned Dagger version: $version"
+
+  - name: Install Dagger CLI
+    shell: bash
+    env:
+      DAGGER_VERSION: ${{ steps.version.outputs.version }}
+    run: |
+      set -euo pipefail
+      curl -fsSL https://dl.dagger.io/dagger/install.sh \
+        | BIN_DIR=/usr/local/bin sudo -E sh
+      dagger version
+
+  - name: Start engine with registry mirror
+    shell: bash
+    env:
+      DAGGER_VERSION: ${{ steps.version.outputs.version }}
+      MIRRORS: ${{ inputs.mirrors }}
+      CONTAINER_NAME: ${{ inputs.container-name }}
+    run: |
+      set -euo pipefail
+
+      if [ -z "$MIRRORS" ]; then
+        echo "No mirrors configured; using Dagger's automatic engine."
+        exit 0
+      fi
+
+      # Render mirrors as a TOML array: a,b -> ["a", "b"]
+      toml_list="$(printf '%s' "$MIRRORS" | jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$";""))')"
+      config="$RUNNER_TEMP/dagger-engine.toml"
+      {
+        echo '[registry."docker.io"]'
+        echo "mirrors = $toml_list"
+      } > "$config"
+      cat "$config"
+
+      docker run -d --rm \
+        -v /var/lib/dagger \
+        -v "$config:/etc/dagger/engine.toml:ro" \
+        --name "$CONTAINER_NAME" \
+        --privileged \
+        "registry.dagger.io/engine:v${DAGGER_VERSION}"
+
+      # Wait for the engine socket before handing back: `docker run -d` returns
+      # as soon as the container starts, and a CLI that connects before the
+      # listener is up fails the job for no real reason.
+      for _ in $(seq 1 30); do
+        if docker logs "$CONTAINER_NAME" 2>&1 | grep -q "running server on /run/dagger/engine.sock"; then
+          echo "Engine ready."
+          echo "_EXPERIMENTAL_DAGGER_RUNNER_HOST=docker-container://$CONTAINER_NAME" \
+            >> "$GITHUB_ENV"
+          exit 0
+        fi
+        sleep 2
+      done
+
+      echo "::error::Dagger engine did not become ready in 60s."
+      docker logs "$CONTAINER_NAME" 2>&1 | tail -50
+      exit 1

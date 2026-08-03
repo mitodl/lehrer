@@ -164,6 +164,20 @@ def check(cell: CellArg = None, *dagger_args: DaggerArgs) -> None:
     _platform_cell_command("check-deployment", cell, dagger_args)
 
 
+@app.command(name="verify-settings", group=_VERIFY)
+def verify_settings(cell: CellArg = None, *dagger_args: DaggerArgs) -> None:
+    """Boot a cell's committed aqueduct settings (``platform verify-settings``).
+
+    Imports the deployment's real ``lms/cms.envs.aqueduct`` entry modules on top
+    of the cell's installed plugins and runs Django's system checks, so a
+    settings tree that cannot start is caught before a build. Pass ``--drift``
+    to also fail when the committed model is stale against edx-platform (only
+    meaningful for the manifest's ``settings_model_release``).
+    Remember ``--custom-settings ./deployments/<group>/settings``.
+    """
+    _platform_cell_command("verify-settings", cell, dagger_args)
+
+
 @app.command(group=_VERIFY)
 def test(cell: CellArg = None, *dagger_args: DaggerArgs) -> None:
     """Run edx-platform + installed plugin tests in a built image (``platform test``).

@@ -178,6 +178,25 @@ cp generated/lms/models/aqueduct.py deployments/mit-ol/settings/lms/models/aqued
 cp generated/cms/models/aqueduct.py deployments/mit-ol/settings/cms/models/aqueduct.py
 ```
 
+This is no longer honour-system: the **Settings Verification** workflow
+(`.github/workflows/settings-verify.yml`) boots the committed settings tree on
+every PR that touches `deployments/*/settings/**`, `src/lehrer/settings/**`, or
+a manifest, and for the manifest's `settings_model_release` it also regenerates
+the model and fails on a diff. A stale model blocks the merge with the command
+above in the failure message.
+
+Reproduce a CI failure locally with the same function CI runs:
+
+```bash
+uv run lehrer build verify-settings --cell mit-ol/master/mitxonline \
+  --custom-settings ./deployments/mit-ol/settings --drift=true
+```
+
+`settings_model_release` in the manifest names the release the committed model
+was generated from. One settings tree serves every cell in the group, but the
+generated model is edx-platform-version-specific, so only that release's cells
+can be drift-checked; the others are still booted and system-checked.
+
 ---
 
 ## 9. Running test suites inside built images

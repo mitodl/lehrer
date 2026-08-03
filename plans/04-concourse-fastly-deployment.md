@@ -1,6 +1,43 @@
 # Plan 04 — Concourse Pipeline and Fastly Routing for Frontend-Base Site Projects
 
-## Status: In progress — Phase 1 infrastructure implemented
+## Status: Infrastructure complete and live-validated in CI, QA, and Production (2026-07-07)
+
+Phases 1–3 below are done and merged (ol-infrastructure PRs #4730, #4733, #4752,
+plus follow-ups `ad11e7fee`, `8d45ece31`, `b231f2f44`). Verified live via direct
+HTTP checks against all three deployments on 2026-07-07:
+
+| Deployment | CI | QA | Production |
+|---|---|---|---|
+| mitxonline | `/apps/mitxonline-site/index.html` 200, `/apps/instructor-dashboard/` 200 (rewrites correctly), `/api/frontend_site_config/v1/` returns correct per-deployment config | 200 / 200 | 200 / 200 |
+| mitx | 200 / 200 | not directly checked (config shows waffle flag deactivated) | not directly checked |
+| xpro | 200 / 200 | not directly checked (waffle flag still forces legacy) | not directly checked |
+
+The Fastly routing, S3 artifact promotion, and runtime config API all work
+end-to-end — this validates Phase 2 and Phase 3 (QA/Production promotion) are
+functionally complete, not just "configured."
+
+**What is NOT done**: the `instructor.legacy_instructor_dashboard` waffle flag
+(controls whether the LMS actually *links* users to `/apps/instructor-dashboard/`
+rather than just whether the URL resolves) is still `--create --everyone`
+(forcing the legacy dashboard) in:
+- `xpro.QA`
+- `mitx.Production`, `mitxonline.Production`, `xpro.Production`, `mitx-staging.Production`
+
+It is already `--deactivate` in `mitxonline.{CI,QA}`, `mitx.{CI,QA}`,
+`xpro.CI`, `mitx-staging.{CI,QA}`.
+
+Flipping the flag in the remaining QA/Production stacks is a live user-facing
+rollout decision (it changes what real instructors see), not an infrastructure
+task — deliberately left for a human to trigger. Tracked as a new task, see
+below.
+
+Phase 4 (legacy Concourse job decommission) remains deferred per the original
+plan — legacy `build_legacy` must stay functional indefinitely for operators
+not yet on frontend-base.
+
+---
+
+## Original Phase 1 status (superseded by the summary above)
 
 ## Context
 

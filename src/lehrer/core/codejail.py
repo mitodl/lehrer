@@ -1,7 +1,11 @@
 """Generic codejail service build for Open edX operators."""
 
+import shlex
+
 import dagger
 from dagger import dag, function, object_type
+
+from lehrer.core.pip_compile_bridge import python_deps_install_script
 
 
 @object_type
@@ -95,6 +99,7 @@ class OpenedxCodejail:
                     "-y",
                     "--no-install-recommends",
                     "build-essential",
+                    "curl",
                     "python3-virtualenv",
                     "python3-pip",
                     "git",
@@ -144,10 +149,12 @@ class OpenedxCodejail:
             .with_exec(["chown", "-R", "sandbox:sandbox", "/sandbox/venv"])
         )
 
-        # Update PATH to use virtualenv
+        # Update PATH to use virtualenv. VIRTUAL_ENV is also needed by any
+        # `uv sync --active` call below (python_deps_install_script's
+        # uv.lock path) -- it targets that env var, not just PATH.
         container = container.with_env_variable(
             "PATH", "/sandbox/venv/bin:/usr/local/bin:/usr/bin:/bin"
-        )
+        ).with_env_variable("VIRTUAL_ENV", "/sandbox/venv")
 
         # Clone codejail service
         container = container.with_workdir("/codejail").with_exec(
@@ -167,27 +174,74 @@ class OpenedxCodejail:
         sudoers_file = codejail_config.file("01-sandbox")
         container = container.with_file("/etc/sudoers.d/01-sandbox", sudoers_file)
 
-        # Install dependencies
+        # Install dependencies. codejailservice has no uv.lock today (plain
+        # pip-compile requirements/), but sourcing it through the same
+        # uv.lock-vs-legacy bridge as every other Python build here means
+        # this keeps working with no lehrer change if that ever changes --
+        # see python_deps_install_script.
         container = container.with_exec(
-            ["pip", "install", "--no-cache-dir", "-r", "requirements/base.txt"]
+            [
+                "sh",
+                "-c",
+                python_deps_install_script(
+                    workdir="/codejail",
+                    legacy_requirements=["requirements/base.txt"],
+                    ensure_uv=True,
+                ),
+            ]
         ).with_exec(["pip", "install", "--no-cache-dir", "gunicorn"])
 
-        # Install edx-platform sandbox requirements in virtualenv
-        # The URL pattern differs based on whether it's a release or master
-        sandbox_req_url = (
-            f"https://raw.githubusercontent.com/openedx/edx-platform/master/requirements/edx-sandbox/releases/{release_name}.txt"
-            if release_name != "master"
-            else "https://raw.githubusercontent.com/openedx/edx-platform/master/requirements/edx-sandbox/base.txt"
-        )
-
-        import shlex
+        # Install edx-platform sandbox requirements in virtualenv.
+        #
+        # Named releases haven't picked up the pip-compile -> uv migration
+        # and keep publishing a per-release export; read it directly as
+        # before. master's sandbox is now its own standalone uv project
+        # (requirements/edx-sandbox/{pyproject.toml,uv.lock}), with
+        # requirements/edx-sandbox/base.txt kept only as a temporary
+        # machine-generated compat export slated for removal once known
+        # consumers (including this one) stop reading it -- see
+        # openedx/public-engineering#552. Try the compat export first (fast,
+        # no uv needed) and fall back to a uv sync of the sub-project once
+        # it's gone, so this keeps working across that removal without a
+        # lehrer change. --inexact on that sync is required: codejailservice's
+        # own requirements/base.txt and gunicorn (installed above, into this
+        # same /sandbox/venv) aren't part of the sandbox project's uv.lock, and
+        # a plain sync would prune them back out, leaving the image without
+        # its gunicorn entrypoint.
+        if release_name != "master":
+            sandbox_req_url = (
+                "https://raw.githubusercontent.com/openedx/edx-platform/master/"
+                f"requirements/edx-sandbox/releases/{release_name}.txt"
+            )
+            install_sandbox_reqs = (
+                f"pip install --no-cache-dir -r {shlex.quote(sandbox_req_url)}"
+            )
+        else:
+            sandbox_base_url = (
+                "https://raw.githubusercontent.com/openedx/edx-platform/master/"
+                "requirements/edx-sandbox"
+            )
+            install_sandbox_reqs = (
+                "set -eu && "
+                "if curl -fsSL -o /tmp/edx_sandbox.txt "
+                f"{shlex.quote(sandbox_base_url + '/base.txt')}; then "
+                "pip install --no-cache-dir -r /tmp/edx_sandbox.txt; "
+                "else "
+                "mkdir -p /tmp/edx-sandbox-uv && cd /tmp/edx-sandbox-uv && "
+                "curl -fsSL -o pyproject.toml "
+                f"{shlex.quote(sandbox_base_url + '/pyproject.toml')} && "
+                f"curl -fsSL -o uv.lock {shlex.quote(sandbox_base_url + '/uv.lock')} && "
+                "pip install --quiet uv && "
+                "uv sync --locked --active --no-install-project --inexact; "
+                "fi"
+            )
 
         container = container.with_exec(
             [
                 "bash",
                 "-c",
                 f"source /sandbox/venv/bin/activate && "
-                f"pip install --no-cache-dir -r {shlex.quote(sandbox_req_url)} && "
+                f"{install_sandbox_reqs} && "
                 f"deactivate",
             ]
         )

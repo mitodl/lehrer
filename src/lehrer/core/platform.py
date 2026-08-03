@@ -8,7 +8,9 @@ hosts, package overrides, and translations repository.
 
 import json
 import re
+import shlex
 import urllib.request
+from dataclasses import dataclass, field
 from typing import TypeVar, cast
 
 import dagger
@@ -16,6 +18,7 @@ import yaml
 from dagger import dag, function, object_type
 
 from lehrer.core.build_manifest import BuildManifest, Cell
+from lehrer.core.pip_compile_bridge import python_deps_install_script
 from lehrer.core.plugin_imports import plugin_distributions
 from lehrer.core.plugin_tests import (
     combined_pytest_script,
@@ -24,6 +27,11 @@ from lehrer.core.plugin_tests import (
 )
 
 _T = TypeVar("_T")
+
+# ruff version used to format generated aqueduct models inside the regeneration
+# container. Keep in sync with the ``ruff==`` pin in pyproject.toml so the
+# committed model matches what CI's ``ruff format --check`` expects.
+_RUFF_VERSION = "0.15.20"
 
 # Where the full list of released Node versions lives. Each entry is
 # ``{"version": "v24.18.0", ...}``; the file is authoritative for which
@@ -143,6 +151,27 @@ def _plugin_import_script(plugin_dists: list[str]) -> str:
     )
 
 
+@dataclass
+class _ResolvedCell:
+    """Every build parameter for one ``(release, deployment)`` cell, resolved.
+
+    Precedence per field is explicit argument > manifest cell/defaults >
+    hardcoded default.  Extracted so the verification entry points
+    (``check_deployment``, ``verify_settings``, ``regenerate_aqueduct_settings``)
+    all resolve a cell the *same* way — a divergence here would mean CI verifies
+    a different dependency set than the build produces.
+    """
+
+    pip_package_lists: dagger.Directory
+    pip_package_overrides: dagger.Directory
+    platform_repo: str
+    platform_branch: str
+    python_version: str
+    node_version: str
+    packages_to_remove: list[str] = field(default_factory=list)
+    extra_npm_packages: list[str] = field(default_factory=list)
+
+
 def _resolve_field(
     explicit: _T | None,
     cell: Cell | None,
@@ -158,6 +187,175 @@ def _resolve_field(
         if value is not None:
             return cast("_T", value)
     return default
+
+
+# Throwaway Django settings module used by the aqueduct management commands and
+# the boot self-test.  It does NOT drive generation (codegen v2 discovers
+# settings by static AST analysis of lms/cms.envs.common's *source*); it exists
+# only so `python -m django` can load a command at all.
+_GEN_SETTINGS_MODULE = "lehrer_gen_settings"
+_GEN_SETTINGS_SOURCE = (
+    "# Throwaway settings — lets `python -m django` load the\n"
+    "# generate_aqueduct_settings command.  It does NOT drive generation:\n"
+    "# static AST discovery reads lms/cms.envs.common source directly.\n"
+    'SECRET_KEY = "lehrer-aqueduct-generation"  # noqa: S105\n'  # pragma: allowlist secret
+    'INSTALLED_APPS = ["django_aqueduct"]\n'
+    "DATABASES: dict = {}\n"
+    "USE_TZ = True\n"
+)
+
+# [tool.aqueduct] policy block (deliberate, documented choices):
+#   extra="allow"       — edx-platform + openedx plugins inject many settings the
+#                         static common.py snapshot does not model;
+#                         "forbid"/"ignore" would reject/drop them.
+#   enrich_url_types=false — 0.9.0 made str→AnyUrl promotion opt-in after it
+#                         broke on Django's many relative-URL settings.
+# (--modules/--output vary per service and stay on the CLI.)
+_AQUEDUCT_TOML = (
+    "\n[tool.aqueduct]\n"
+    'class_name = "AqueductSettings"\n'
+    'extra = "allow"\n'
+    "enrich_url_types = false\n"
+)
+
+
+def _boot_self_test_script() -> str:
+    """Python source asserting ``<svc>.envs.aqueduct`` boots without dropping apps.
+
+    Imports each service's aqueduct entry module — which runs
+    ``configure_django_settings(..., base="<svc>.envs.common")`` — then compares
+    the resulting ``INSTALLED_APPS`` against the *live* ``common.py`` value.
+    ``common.py`` runs openedx's ``add_plugins()`` on import, so its list is
+    plugin-complete while the statically generated model's is not; the overlay
+    (django-aqueduct >= 0.10.0) must defer to the live base rather than
+    overwrite it.  A dropped app means a plugin silently vanished from the
+    running platform — exactly the class of breakage this gate exists to catch.
+    """
+    return "\n".join(
+        [
+            "import importlib",
+            "failures = []",
+            "for svc in ('lms', 'cms'):",
+            "    entry = importlib.import_module(f'{svc}.envs.aqueduct')",
+            "    common = importlib.import_module(f'{svc}.envs.common')",
+            "    base_apps = set(getattr(common, 'INSTALLED_APPS', []) or [])",
+            "    final_apps = getattr(entry, 'INSTALLED_APPS', None)",
+            "    if not final_apps:",
+            "        failures.append(f'{svc}: INSTALLED_APPS empty/missing ({final_apps!r})')",  # noqa: E501
+            "        continue",
+            "    dropped = base_apps - set(final_apps)",
+            "    if dropped:",
+            "        failures.append(",
+            "            f'{svc}: overlay dropped {len(dropped)} base/plugin apps '",
+            "            f'e.g. {sorted(dropped)[:5]}'",
+            "        )",
+            "        continue",
+            "    print(",
+            "        f'  self-test OK: {svc}.envs.aqueduct boots, {len(final_apps)} '",
+            "        f'INSTALLED_APPS (live base {len(base_apps)}, none dropped)'",
+            "    )",
+            "if failures:",
+            "    raise SystemExit('SELF-TEST FAILED:\\n' + '\\n'.join(failures))",
+        ]
+    )
+
+
+def _aqueduct_gen_setup(container: dagger.Container) -> dagger.Container:
+    """Install the throwaway settings module and ``[tool.aqueduct]`` policy block.
+
+    Both the generation path and the verification path need edx-platform's
+    checkout prepared this way: a loadable ``DJANGO_SETTINGS_MODULE`` so the
+    aqueduct management commands can run at all, the shared policy block so
+    generation is reproducible from config rather than CLI flags, and the
+    ``envs/models`` package directories the models live in.
+    """
+    return (
+        container.with_new_file(
+            f"/openedx/edx-platform/{_GEN_SETTINGS_MODULE}.py",
+            contents=_GEN_SETTINGS_SOURCE,
+        )
+        .with_exec(
+            [
+                "sh",
+                "-c",
+                "printf '%s' "
+                + shlex.quote(_AQUEDUCT_TOML)
+                + " >> /openedx/edx-platform/pyproject.toml",
+            ]
+        )
+        .with_exec(["mkdir", "-p", "./lms/envs/models", "./cms/envs/models"])
+    )
+
+
+def _tolerant(command: str, label: str, *, strict: bool) -> str:
+    """Wrap a translations step so a failure is loud rather than invisible.
+
+    Several ``fetch_translations`` steps are legitimately allowed to fail — not
+    every plugin or release has translations published in the target atlas
+    repository, and a missing one must not fail the build.  The original
+    ``|| true`` achieved that but discarded the distinction entirely: a genuine
+    regression (a renamed command, a bad revision, an unreachable repo) looked
+    exactly like the expected miss, so builds silently shipped with no
+    translations at all.
+
+    Non-strict mode keeps the build going but prints a labelled warning to
+    stderr, so the miss is visible in the build log.  Strict mode lets the
+    failure through, for a caller that treats any miss as a regression; it is
+    off everywhere by default until the current per-step baseline is known —
+    turning it on blind would make an already-failing step a hard build break.
+    """
+    if strict:
+        return command
+    return (
+        f"{command} || echo "
+        + shlex.quote(f"WARNING: translations step failed (non-fatal): {label}")
+        + " >&2"
+    )
+
+
+_LEHRER_RUFF_CONFIG = "/root/lehrer-ruff/pyproject.toml"
+
+
+def _ruff_format(container: dagger.Container, paths: list[str]) -> dagger.Container:
+    """Format generated model files with *lehrer's* ruff config.
+
+    The committed models have to satisfy this repo's own ``ruff format --check
+    .``, so the in-container formatting must use this repo's settings.  Ruff
+    resolves configuration by walking up from the file *and* falling back to the
+    working directory — which here is ``/openedx/edx-platform``, whose
+    ``pyproject.toml`` sets a different line length.  Formatting under that
+    config produces a file this repo's CI would immediately reformat, which made
+    regeneration non-idempotent and made the drift gate report pure line-wrap
+    noise as staleness.  Pinning ``--config`` to lehrer's own ``pyproject.toml``
+    is what makes both sides of the comparison mean the same thing.
+
+    ``uv tool run``, not ``uvx``: ``apt_base`` copies only the ``uv`` binary out
+    of the astral image, so ``uvx`` does not exist in this container at all.
+    """
+    return container.with_file(
+        _LEHRER_RUFF_CONFIG,
+        dag.current_module().source().file("pyproject.toml"),
+    ).with_exec(
+        [
+            "sh",
+            "-c",
+            f"uv tool run ruff@{_RUFF_VERSION} format "
+            f"--config {_LEHRER_RUFF_CONFIG} {' '.join(paths)}",
+        ]
+    )
+
+
+def _repo_shorthand(value: str) -> str:
+    """Normalize a GitHub repo reference to ``org/repo`` shorthand.
+
+    Manifest fields like ``platform_repo``/``theme_repo``/``translations_repo``
+    are all stored as full GitHub URLs — the form ``git clone`` needs. Some
+    consumers instead want bare ``org/repo`` (``translations_repo`` feeds
+    ``atlas``/``pull_*_translations``, which take that form, not a URL); this
+    is the shared normalizer for any such site. Already-shorthand values pass
+    through unchanged.
+    """
+    return value.removeprefix("https://github.com/").rstrip("/").removesuffix(".git")
 
 
 # Curated smoke subset for `test` — the edx-platform suites most likely to
@@ -257,6 +455,55 @@ def _derive_test_settings(service: str) -> str:
             "            FEATURES[_flag] = _value  # noqa: F405",
             "",
         ]
+    )
+
+
+def _edx_base_deps_script(*, include_dev: bool = False) -> str:
+    """Shell script that installs edx-platform's base + assets (+ dev) deps.
+
+    Delegates to :func:`python_deps_install_script` -- see its docstring for
+    the ``uv.lock``-presence branch and ``--inexact`` rationale, and
+    openedx/public-engineering#552 for openedx-platform's own migration.
+    Named releases haven't picked up the migration and won't grow a
+    ``uv.lock`` until they do, so this keeps both tracks working, and picks
+    up master's migration automatically without a lehrer change once it
+    lands.
+
+    ``include_dev`` pulls in openedx-platform's ``dev`` dependency group
+    (mypy, tox, django-debug-toolbar, ...) — or, pre-migration,
+    ``requirements/edx/development.txt`` — for local-dev builds; production
+    builds leave it out (the default).
+
+    Must run with ``VIRTUAL_ENV`` set to the target environment.
+    """
+    legacy_requirements = [
+        "requirements/edx/base.txt",
+        "requirements/edx/assets.txt",
+    ]
+    sync_groups = ["assets"]
+    if include_dev:
+        legacy_requirements.append("requirements/edx/development.txt")
+        sync_groups.append("dev")
+    return python_deps_install_script(
+        workdir="/openedx/edx-platform",
+        legacy_requirements=legacy_requirements,
+        sync_groups=sync_groups,
+        legacy_installer=["uv", "pip", "install"],
+    )
+
+
+def _edx_testing_deps_script() -> str:
+    """Shell script that installs edx-platform's test-suite deps.
+
+    Runs after ``install_deps`` has already layered the deployment's own
+    packages into the environment, so ``python_deps_install_script``'s
+    ``--inexact`` sync is what keeps those from being pruned back out.
+    """
+    return python_deps_install_script(
+        workdir="/openedx/edx-platform",
+        legacy_requirements=["requirements/edx/testing.txt"],
+        sync_groups=["testing"],
+        legacy_installer=["uv", "pip", "install"],
     )
 
 
@@ -487,6 +734,7 @@ class OpenedxPlatform:
         packages_to_remove: list[str] | None = None,
         extra_npm_packages: list[str] | None = None,
         install_node: bool = True,
+        include_dev_dependencies: bool = False,  # noqa: FBT001, FBT002
     ) -> dagger.Container:
         """Install Python and Node.js dependencies using uv
 
@@ -510,6 +758,11 @@ class OpenedxPlatform:
                 ``False`` for Python-only consumers (e.g. plugin import checks,
                 settings regeneration) that never build webpack assets — the
                 Python environment above is complete without it.
+            include_dev_dependencies: Also install edx-platform's ``dev``
+                dependency group (mypy, tox, django-debug-toolbar, ...) — or,
+                pre-migration, ``requirements/edx/development.txt``. Default
+                ``False`` for production builds; set ``True`` for local-dev
+                images.
 
         Returns:
             Container with all dependencies installed
@@ -526,32 +779,22 @@ class OpenedxPlatform:
             .with_mounted_directory(
                 "/root/pip_package_overrides", pip_package_overrides
             )
-            # Copy base requirements from edx-platform
+            # Install base + assets (+ dev) deps from edx-platform (uv sync
+            # against uv.lock, or the legacy pip-compile .txt, whichever the
+            # checkout has), then layer the deployment's own pinned package
+            # list on top.
             .with_exec(
                 [
                     "sh",
                     "-c",
-                    "cp /openedx/edx-platform/requirements/edx/base.txt /root/pip_package_lists/edx_base.txt",
+                    _edx_base_deps_script(include_dev=include_dev_dependencies),
                 ]
             )
-            .with_exec(
-                [
-                    "sh",
-                    "-c",
-                    "cp /openedx/edx-platform/requirements/edx/assets.txt /root/pip_package_lists/edx_assets.txt",
-                ]
-            )
-            # Install base Python dependencies using uv (much faster than pip)
-            # uv automatically uses the VIRTUAL_ENV set in apt_base
             .with_exec(
                 [
                     "uv",
                     "pip",
                     "install",
-                    "-r",
-                    "/root/pip_package_lists/edx_base.txt",
-                    "-r",
-                    "/root/pip_package_lists/edx_assets.txt",
                     "-r",
                     f"/root/pip_package_lists/{release_name}/{deployment_name}.txt",
                 ]
@@ -894,8 +1137,11 @@ class OpenedxPlatform:
             # django-aqueduct settings:
             # models/base.py    → ProductionSettingsMixin from lehrer core
             # models/__init__.py → makes models/ a package for relative imports
-            # models/aqueduct.py → generated AqueductSettings(ProductionSettingsMixin)
-            # aqueduct.py       → DJANGO_SETTINGS_MODULE entry point
+            # models/aqueduct.py → pure generated AqueductSettings(BaseSettings)
+            # aqueduct.py       → entry point; composes
+            #                     <Svc>ProductionSettings(ProductionSettingsMixin,
+            #                     AqueductSettings) then configure_django_settings
+            #                     (DJANGO_SETTINGS_MODULE=<svc>.envs.aqueduct)
             .with_file(
                 "/openedx/edx-platform/lms/envs/models/base.py",
                 lehrer_base,
@@ -948,6 +1194,7 @@ class OpenedxPlatform:
         translations_repository: str,
         settings_namespace: str = "production",
         translations_branch: str = "main",
+        strict: bool = False,  # noqa: FBT001, FBT002
     ) -> dagger.Container:
         """Fetch and compile translations using atlas
 
@@ -962,12 +1209,13 @@ class OpenedxPlatform:
                 ``cms.envs.{settings_namespace}.i18n``).  Must match the
                 value passed to ``collected()``.  Default: ``"production"``.
             translations_branch: Branch for translations (default: main)
+            strict: Fail the build when an optional pull/compile step fails
+                instead of warning and continuing (default: False).  See
+                :func:`_tolerant` for why these steps are tolerant by default.
 
         Returns:
             Container with compiled translations
         """
-        import shlex
-
         safe_repo = shlex.quote(translations_repository)
         safe_branch = shlex.quote(translations_branch)
         atlas_options = f"--repository {safe_repo} --revision {safe_branch}"
@@ -977,34 +1225,41 @@ class OpenedxPlatform:
             "DJANGO_SETTINGS_MODULE", f"lms.envs.{settings_namespace}.i18n"
         ).with_workdir("/openedx/edx-platform")
 
+        def _step(command: str, label: str) -> list[str]:
+            return ["sh", "-c", _tolerant(command, label, strict=strict)]
+
         # Pull and compile LMS translations
         container = (
             container.with_exec(
-                [
-                    "sh",
-                    "-c",
-                    f"python manage.py lms pull_plugin_translations {atlas_options} || true",
-                ]
+                _step(
+                    f"python manage.py lms pull_plugin_translations {atlas_options}",
+                    "lms pull_plugin_translations",
+                )
             )
             .with_exec(
-                ["sh", "-c", "python manage.py lms compile_plugin_translations || true"]
+                _step(
+                    "python manage.py lms compile_plugin_translations",
+                    "lms compile_plugin_translations",
+                )
             )
             .with_exec(
-                [
-                    "sh",
-                    "-c",
-                    f"python manage.py lms pull_xblock_translations {atlas_options} || true",
-                ]
+                _step(
+                    f"python manage.py lms pull_xblock_translations {atlas_options}",
+                    "lms pull_xblock_translations",
+                )
             )
             .with_exec(
-                ["sh", "-c", "python manage.py lms compile_xblock_translations || true"]
+                _step(
+                    "python manage.py lms compile_xblock_translations",
+                    "lms compile_xblock_translations",
+                )
             )
             .with_exec(
-                [
-                    "sh",
-                    "-c",
-                    f"atlas pull {atlas_options} translations/edx-platform/conf/locale:conf/locale || true",
-                ]
+                _step(
+                    f"atlas pull {atlas_options} "
+                    "translations/edx-platform/conf/locale:conf/locale",
+                    "atlas pull edx-platform locale",
+                )
             )
             .with_exec(["python", "manage.py", "lms", "compilemessages"])
             .with_exec(["python", "manage.py", "lms", "compilejsi18n"])
@@ -1016,14 +1271,17 @@ class OpenedxPlatform:
                 "DJANGO_SETTINGS_MODULE", f"cms.envs.{settings_namespace}.i18n"
             )
             .with_exec(
-                ["sh", "-c", "python manage.py cms compile_xblock_translations || true"]
+                _step(
+                    "python manage.py cms compile_xblock_translations",
+                    "cms compile_xblock_translations",
+                )
             )
             .with_exec(
-                [
-                    "sh",
-                    "-c",
-                    f"atlas pull {atlas_options} translations/studio-frontend/src/i18n/messages:conf/plugins-locale/studio-frontend || true",
-                ]
+                _step(
+                    f"atlas pull {atlas_options} translations/studio-frontend/src/"
+                    "i18n/messages:conf/plugins-locale/studio-frontend",
+                    "atlas pull studio-frontend messages",
+                )
             )
             .with_exec(["python", "manage.py", "cms", "compilejsi18n"])
         )
@@ -1225,6 +1483,199 @@ class OpenedxPlatform:
         )
         return lists, overrides
 
+    async def _resolve_cell(  # noqa: PLR0913
+        self,
+        *,
+        caller: str,
+        deployment_name: str,
+        release_name: str,
+        build_manifest: dagger.File | None,
+        pip_package_lists: dagger.Directory | None,
+        pip_package_overrides: dagger.Directory | None,
+        platform_repo: str | None = None,
+        platform_branch: str | None = None,
+        python_version: str | None = None,
+        node_version: str | None = None,
+        packages_to_remove: list[str] | None = None,
+        extra_npm_packages: list[str] | None = None,
+    ) -> _ResolvedCell:
+        """Resolve every build parameter for one cell (see :class:`_ResolvedCell`).
+
+        Args:
+            caller: Dagger function name, used only in the error message when
+                neither a manifest nor both requirement directories are given.
+            deployment_name: Deployment name.
+            release_name: edx-platform release / branch name.
+            build_manifest: Optional ``build_manifest.yaml``; when given, its
+                matching cell supplies requirements and any parameter the caller
+                left unset.
+            pip_package_lists: Requirements directory. Required without a manifest.
+            pip_package_overrides: Overrides directory. Required without a manifest.
+            platform_repo: Git repository URL for edx-platform.
+            platform_branch: Git branch to check out.
+            python_version: Python version. Defaults to 3.12 for master, else 3.11.
+            node_version: Node.js version.
+            packages_to_remove: Packages to uninstall after the base install.
+            extra_npm_packages: Additional npm packages to install.
+
+        Returns:
+            The fully resolved cell parameters.
+
+        Raises:
+            ValueError: Neither ``build_manifest`` nor both requirement
+                directories were supplied.
+        """
+        manifest: BuildManifest | None = None
+        cell: Cell | None = None
+        if build_manifest is not None:
+            manifest, cell = await self._resolve_manifest_cell(
+                build_manifest, release_name, deployment_name
+            )
+            manifest_lists, manifest_overrides = self._materialize_cell_requirements(
+                release_name, deployment_name, cell
+            )
+            if pip_package_lists is None:
+                pip_package_lists = manifest_lists
+            if pip_package_overrides is None:
+                pip_package_overrides = manifest_overrides
+
+        if pip_package_lists is None or pip_package_overrides is None:
+            msg = (
+                f"{caller} requires either --build-manifest, or both "
+                "--pip-package-lists and --pip-package-overrides"
+            )
+            raise ValueError(msg)
+
+        def _list_field(explicit: list[str] | None, name: str) -> list[str]:
+            if explicit is not None:
+                return explicit
+            if cell is not None and manifest is not None:
+                resolved = cell.resolved(name, manifest)
+                if resolved is not None:
+                    return cast("list[str]", resolved)
+            return []
+
+        if python_version is None:
+            resolved_python = None
+            if cell is not None and manifest is not None:
+                resolved_python = cell.resolved("python_version", manifest)
+            # master tracks edx-platform's own 3.12 floor; named releases are
+            # still on 3.11 until they cut over.
+            python_version = cast("str | None", resolved_python) or (
+                "3.12" if release_name == "master" else "3.11"
+            )
+
+        return _ResolvedCell(
+            pip_package_lists=pip_package_lists,
+            pip_package_overrides=pip_package_overrides,
+            platform_repo=_resolve_field(
+                platform_repo,
+                cell,
+                manifest,
+                "platform_repo",
+                "https://github.com/openedx/edx-platform",
+            ),
+            platform_branch=_resolve_field(
+                platform_branch, cell, manifest, "platform_branch", "master"
+            ),
+            python_version=python_version,
+            node_version=_resolve_field(
+                node_version, cell, manifest, "node_version", "20.18.0"
+            ),
+            packages_to_remove=_list_field(packages_to_remove, "packages_to_remove"),
+            extra_npm_packages=_list_field(extra_npm_packages, "extra_npm_packages"),
+        )
+
+    def _python_only_env(
+        self,
+        cell: _ResolvedCell,
+        deployment_name: str,
+        release_name: str,
+        aqueduct_source: dagger.Directory | None = None,
+    ) -> dagger.Container:
+        """edx-platform checkout with the cell's Python deps installed, no Node.
+
+        Shared by the settings-verification entry points (``verify_settings``,
+        ``regenerate_aqueduct_settings``).  Both need a working ``lms.envs.*``
+        import — which needs the plugins installed — but neither compiles
+        frontend assets, and installing Node (a nodeenv tarball download) would
+        add a pure failure surface to a check that never uses it.
+
+        Args:
+            cell: Resolved build parameters for the target cell.
+            deployment_name: Deployment name (names the requirements file).
+            release_name: Release name (names the requirements sub-directory).
+            aqueduct_source: Optional local django-aqueduct checkout, installed
+                editable *before* the deployment requirements so its version
+                satisfies the pinned ``django-aqueduct==`` constraint and uv
+                skips the PyPI fetch.  Lets a verification run pick up
+                unreleased framework fixes.
+
+        Returns:
+            A container with the workdir set to ``/openedx/edx-platform``.
+        """
+        container: dagger.Container = self.apt_base(python_version=cell.python_version)
+        container = self.get_code(
+            container,
+            edx_platform_git_repo=cell.platform_repo,
+            edx_platform_git_branch=cell.platform_branch,
+        )
+        container = container.with_mounted_directory(
+            "/root/pip_package_lists", cell.pip_package_lists
+        ).with_mounted_directory(
+            "/root/pip_package_overrides", cell.pip_package_overrides
+        )
+
+        # Installed *before* the base deps sync/install below so its version
+        # satisfies the pinned django-aqueduct== constraint and uv skips the
+        # PyPI fetch. The base step's --inexact flag is what keeps this from
+        # being pruned back out.
+        if aqueduct_source is not None:
+            container = container.with_mounted_directory(
+                "/root/django-aqueduct", aqueduct_source
+            ).with_exec(["uv", "pip", "install", "-e", "/root/django-aqueduct"])
+
+        container = container.with_exec(
+            ["sh", "-c", _edx_base_deps_script()]
+        ).with_exec(
+            [
+                "uv",
+                "pip",
+                "install",
+                "-r",
+                f"/root/pip_package_lists/{release_name}/{deployment_name}.txt",
+            ]
+        )
+
+        for pkg in cell.packages_to_remove:
+            container = container.with_exec(["uv", "pip", "uninstall", pkg])
+
+        # Reinstall lxml/xmlsec from source. They are passed as explicit install
+        # targets (not only --no-binary args) so they always come back after the
+        # uninstall, even when the deployment overrides file does not list them.
+        container = container.with_exec(
+            ["uv", "pip", "uninstall", "lxml", "xmlsec"]
+        ).with_exec(
+            [
+                "uv",
+                "pip",
+                "install",
+                "--no-cache-dir",
+                "--no-binary",
+                "lxml",
+                "--no-binary",
+                "xmlsec",
+                "lxml",
+                "xmlsec",
+                "-r",
+                f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt",
+            ]
+        )
+
+        return container.with_workdir("/openedx/edx-platform").with_exec(
+            ["uv", "pip", "install", "-e", "."]
+        )
+
     @function
     async def build_platform(
         self,
@@ -1250,6 +1701,9 @@ class OpenedxPlatform:
         extra_ssh_hosts: list[str] | None = None,
         packages_to_remove: list[str] | None = None,
         extra_npm_packages: list[str] | None = None,
+        verify_boot: bool = True,  # noqa: FBT001, FBT002
+        strict_translations: bool = False,  # noqa: FBT001, FBT002
+        include_dev_dependencies: bool = False,  # noqa: FBT001, FBT002
     ) -> dagger.Container:
         """Build a complete openedx-platform image
 
@@ -1292,6 +1746,18 @@ class OpenedxPlatform:
                 (default: empty list).
             extra_npm_packages: Additional npm packages to install after
                 ``npm clean-install`` (default: empty list).
+            verify_boot: Run Django's system checks against the finished image
+                for both services, failing the build if it cannot start
+                (default: True).
+            strict_translations: Fail the build when an optional translation
+                pull/compile step fails, instead of warning (default: False —
+                a missing plugin translation is normal, so this is opt-in until
+                the per-step baseline is known).
+            include_dev_dependencies: Also install edx-platform's ``dev``
+                dependency group (mypy, tox, django-debug-toolbar, ...) — or,
+                pre-migration, ``requirements/edx/development.txt``. Default
+                ``False`` for production builds; set ``True`` to build a
+                local-dev image.
 
         Returns:
             Container ready to be deployed
@@ -1327,12 +1793,14 @@ class OpenedxPlatform:
         platform_branch = _resolve_field(
             platform_branch, cell, manifest, "platform_branch", "master"
         )
-        translations_repo = _resolve_field(
-            translations_repo,
-            cell,
-            manifest,
-            "translations_repo",
-            "openedx/openedx-translations",
+        translations_repo = _repo_shorthand(
+            _resolve_field(
+                translations_repo,
+                cell,
+                manifest,
+                "translations_repo",
+                "openedx/openedx-translations",
+            )
         )
         translations_branch = _resolve_field(
             translations_branch, cell, manifest, "translations_branch", "main"
@@ -1401,6 +1869,7 @@ class OpenedxPlatform:
             node_version=node_version,
             packages_to_remove=packages_to_remove,
             extra_npm_packages=extra_npm_packages,
+            include_dev_dependencies=include_dev_dependencies,
         )
 
         # ── Clean base ────────────────────────────────────────────────────────
@@ -1456,6 +1925,7 @@ class OpenedxPlatform:
             translations_repository=translations_repo,
             settings_namespace=settings_namespace,
             translations_branch=translations_branch,
+            strict=strict_translations,
         )
         container = self.build_static_assets(
             container,
@@ -1476,6 +1946,56 @@ class OpenedxPlatform:
             extra_ssh_hosts=extra_ssh_hosts,
         )
 
+        # Phase 3: prove the image we just built can actually start. Everything
+        # up to here can succeed while producing an image whose LMS refuses to
+        # boot — a plugin whose app module raises on import, or a settings
+        # regression, surfaces only at `django.setup()`. Running the system
+        # checks here makes that a build failure instead of a deploy failure.
+        # Opt-out (`--verify-boot=false`) exists for iterating on the earlier
+        # stages, not for shipping.
+        if verify_boot:
+            container = self._verify_boot(container)
+
+        return container
+
+    def _verify_boot(self, container: dagger.Container) -> dagger.Container:
+        """Run Django's system checks for both services against a built image.
+
+        ``manage.py <svc> check --settings=aqueduct`` performs a full
+        ``django.setup()``: it resolves the settings module and then imports
+        every app in ``INSTALLED_APPS``.  That import is what the earlier build
+        stages never exercise — asset compilation runs under ``assets.py``, not
+        the production settings — so this is the first point where a plugin that
+        installs cleanly but raises on import, or a settings regression that
+        only bites at app-registry load, becomes visible.
+
+        Runs against the finished image so it verifies what ships, and stays
+        inside the Dagger chain so a failure fails the build.  Note this needs
+        no database: system checks are static, which is what makes them usable
+        as an unconditional build gate.
+
+        ``--settings=aqueduct`` names the entry module ``inject_aqueduct_settings``
+        writes (``<svc>/envs/aqueduct.py``), which is fixed regardless of the
+        deployment's ``settings_namespace``.
+
+        Args:
+            container: The finished image from :meth:`docker_image`.
+
+        Returns:
+            The same container with the check executions appended.  The image's
+            own workdir/entrypoint are left untouched — the ``cd`` happens
+            inside the check shell, not as container metadata.
+        """
+        for svc in ("lms", "cms"):
+            container = container.with_exec(
+                [
+                    "sh",
+                    "-c",
+                    f"echo 'boot check: {svc}' && cd /openedx/edx-platform && "
+                    f"SERVICE_VARIANT={svc} python manage.py {svc} check "
+                    "--settings=aqueduct",
+                ]
+            )
         return container
 
     @function
@@ -1542,67 +2062,32 @@ class OpenedxPlatform:
         Returns:
             The combined stdout of the checks (only reached when all pass).
         """
-        manifest: BuildManifest | None = None
-        cell: Cell | None = None
-        if build_manifest is not None:
-            manifest, cell = await self._resolve_manifest_cell(
-                build_manifest, release_name, deployment_name
-            )
-            manifest_lists, manifest_overrides = self._materialize_cell_requirements(
-                release_name, deployment_name, cell
-            )
-            if pip_package_lists is None:
-                pip_package_lists = manifest_lists
-            if pip_package_overrides is None:
-                pip_package_overrides = manifest_overrides
-
-        if pip_package_lists is None or pip_package_overrides is None:
-            msg = (
-                "check_deployment requires either --build-manifest, or both "
-                "--pip-package-lists and --pip-package-overrides"
-            )
-            raise ValueError(msg)
-
-        platform_repo = _resolve_field(
-            platform_repo,
-            cell,
-            manifest,
-            "platform_repo",
-            "https://github.com/openedx/edx-platform",
+        resolved = await self._resolve_cell(
+            caller="check_deployment",
+            deployment_name=deployment_name,
+            release_name=release_name,
+            build_manifest=build_manifest,
+            pip_package_lists=pip_package_lists,
+            pip_package_overrides=pip_package_overrides,
+            platform_repo=platform_repo,
+            platform_branch=platform_branch,
+            python_version=python_version,
+            node_version=node_version,
+            packages_to_remove=packages_to_remove,
+            extra_npm_packages=extra_npm_packages,
         )
-        platform_branch = _resolve_field(
-            platform_branch, cell, manifest, "platform_branch", "master"
-        )
-        node_version = _resolve_field(
-            node_version, cell, manifest, "node_version", "20.18.0"
-        )
-        if packages_to_remove is None:
-            packages_to_remove = []
-            if cell is not None and manifest is not None:
-                resolved_removals = cell.resolved("packages_to_remove", manifest)
-                if resolved_removals is not None:
-                    packages_to_remove = cast("list[str]", resolved_removals)
-        if extra_npm_packages is None:
-            extra_npm_packages = []
-            if cell is not None and manifest is not None:
-                resolved_npm = cell.resolved("extra_npm_packages", manifest)
-                if resolved_npm is not None:
-                    extra_npm_packages = cast("list[str]", resolved_npm)
-        if python_version is None:
-            resolved_python_version = None
-            if cell is not None and manifest is not None:
-                resolved_python_version = cell.resolved("python_version", manifest)
-            python_version = cast("str | None", resolved_python_version) or (
-                "3.12" if release_name == "master" else "3.11"
-            )
+        pip_package_lists = resolved.pip_package_lists
+        pip_package_overrides = resolved.pip_package_overrides
 
         # Same install path a production build uses, so this gate verifies the
         # real resolution — not a shell reimplementation that can diverge.
-        container: dagger.Container = self.apt_base(python_version=python_version)
+        container: dagger.Container = self.apt_base(
+            python_version=resolved.python_version
+        )
         container = self.get_code(
             container,
-            edx_platform_git_repo=platform_repo,
-            edx_platform_git_branch=platform_branch,
+            edx_platform_git_repo=resolved.platform_repo,
+            edx_platform_git_branch=resolved.platform_branch,
         )
         container = self.install_deps(
             container,
@@ -1610,9 +2095,9 @@ class OpenedxPlatform:
             release_name=release_name,
             pip_package_lists=pip_package_lists,
             pip_package_overrides=pip_package_overrides,
-            node_version=node_version,
-            packages_to_remove=packages_to_remove,
-            extra_npm_packages=extra_npm_packages,
+            node_version=resolved.node_version,
+            packages_to_remove=resolved.packages_to_remove,
+            extra_npm_packages=resolved.extra_npm_packages,
             # Plugin import compat needs only the Python env; Node/webpack are
             # irrelevant here and installing them (nodeenv download) is a
             # needless failure surface for a check that never builds assets.
@@ -1851,7 +2336,7 @@ class OpenedxPlatform:
         container = (
             container.with_workdir("/openedx/edx-platform")
             .with_exec(["uv", "pip", "install", "-e", "."])
-            .with_exec(["uv", "pip", "install", "-r", "requirements/edx/testing.txt"])
+            .with_exec(["sh", "-c", _edx_testing_deps_script()])
         )
 
         # When folding the plugins' own suites into this run, derive the plugin
@@ -2000,23 +2485,31 @@ class OpenedxPlatform:
     ) -> dagger.Directory:
         """Regenerate the AqueductSettings pydantic models for LMS and CMS.
 
-        Installs the Python dependencies (no Node/webpack), injects minimal
-        generation shims that do ``from <service>.envs.common import *;
-        derive_settings()``, then calls ``ModuleInspector`` and
-        ``SettingsModelGenerator`` from django-aqueduct directly — no
-        management command needed, no INSTALLED_APPS dependency.
+        Installs the Python dependencies (no Node/webpack), then runs
+        django-aqueduct's ``generate_aqueduct_settings`` management command
+        (codegen v2), which discovers settings by *static AST analysis* of
+        ``<service>.envs.common`` — the module is never imported, so there are
+        no shims, no ``derive_settings``, no plugin booting, and no regex
+        post-processing of the rendered model.  Policy (``extra="allow"``,
+        ``class_name``, ``enrich_url_types=false``) comes from an injected
+        ``[tool.aqueduct]`` block; ``--modules``/``--output`` are per service.
 
-        Because the shims only import common.py and derive settings (exactly
-        as the upstream ``generate_aqueduct_settings`` workflow works), all
-        settings contributed by custom plugins via ``add_plugins()`` are
-        captured automatically.
+        Because static discovery reads only common.py's *source*, the generated
+        ``INSTALLED_APPS`` (and the other settings openedx's ``add_plugins()``
+        augments at runtime) is a *plugin-incomplete* snapshot.  That is by
+        design: at runtime ``configure_django_settings(base="…envs.common")``
+        defers those un-overridden settings to the live, plugin-complete base
+        (django-aqueduct >= 0.10.0 overlay semantics).  The boot self-test below
+        exercises that overlay path and asserts no base/plugin app is dropped.
 
         Returns a directory containing:
-          lms/models/aqueduct.py  — AqueductSettings(ProductionSettingsMixin)
-          cms/models/aqueduct.py  — AqueductSettings(ProductionSettingsMixin)
+          lms/models/aqueduct.py  — AqueductSettings(BaseSettings)
+          cms/models/aqueduct.py  — AqueductSettings(BaseSettings)
 
-        The generated class already inherits ``ProductionSettingsMixin`` so
-        regeneration cannot accidentally lose the mixin.
+        The generated model is pure codegen output (subclasses ``BaseSettings``);
+        ``ProductionSettingsMixin`` is composed by each service's entry module
+        (``class <Svc>ProductionSettings(ProductionSettingsMixin, AqueductSettings)``),
+        never by the generated file.
 
         Usage::
 
@@ -2055,279 +2548,99 @@ class OpenedxPlatform:
                 fixes.  Installed before the deployment requirements so its
                 version satisfies the pinned ``django-aqueduct==`` constraint.
         """
-        manifest: BuildManifest | None = None
-        cell: Cell | None = None
-        if build_manifest is not None:
-            manifest, cell = await self._resolve_manifest_cell(
-                build_manifest, release_name, deployment_name
-            )
-            manifest_lists, manifest_overrides = self._materialize_cell_requirements(
-                release_name, deployment_name, cell
-            )
-            if pip_package_lists is None:
-                pip_package_lists = manifest_lists
-            if pip_package_overrides is None:
-                pip_package_overrides = manifest_overrides
-
-        if pip_package_lists is None or pip_package_overrides is None:
-            msg = (
-                "regenerate_aqueduct_settings requires either --build-manifest, "
-                "or both --pip-package-lists and --pip-package-overrides"
-            )
-            raise ValueError(msg)
-
-        platform_repo = _resolve_field(
-            platform_repo,
-            cell,
-            manifest,
-            "platform_repo",
-            "https://github.com/openedx/edx-platform",
+        resolved = await self._resolve_cell(
+            caller="regenerate_aqueduct_settings",
+            deployment_name=deployment_name,
+            release_name=release_name,
+            build_manifest=build_manifest,
+            pip_package_lists=pip_package_lists,
+            pip_package_overrides=pip_package_overrides,
+            platform_repo=platform_repo,
+            platform_branch=platform_branch,
+            python_version=python_version,
+            packages_to_remove=packages_to_remove,
         )
-        platform_branch = _resolve_field(
-            platform_branch, cell, manifest, "platform_branch", "master"
+        container = self._python_only_env(
+            resolved, deployment_name, release_name, aqueduct_source
         )
 
-        if packages_to_remove is None:
-            packages_to_remove = []
-            if cell is not None and manifest is not None:
-                resolved_removals = cell.resolved("packages_to_remove", manifest)
-                if resolved_removals is not None:
-                    packages_to_remove = cast("list[str]", resolved_removals)
+        # ── codegen v2 generation setup ───────────────────────────────────────
+        # django-aqueduct >= 0.7.0 discovers settings by *static AST analysis* of
+        # the source module — it never imports common.py, so no shims, no
+        # derive_settings, no plugin booting, and no regex post-processing of the
+        # rendered model are needed.  The management command needs Django set up
+        # only enough to be discovered, so we hand it a throwaway settings module
+        # whose sole INSTALLED_APPS entry is django_aqueduct itself.
+        container = _aqueduct_gen_setup(container)
 
-        if python_version is None:
-            resolved_python_version = None
-            if cell is not None and manifest is not None:
-                resolved_python_version = cell.resolved("python_version", manifest)
-            python_version = cast("str | None", resolved_python_version) or (
-                "3.12" if release_name == "master" else "3.11"
-            )
-
-        # ── Base system + code ────────────────────────────────────────────────
-        container: dagger.Container = self.apt_base(python_version=python_version)
-        container = self.get_code(
-            container,
-            edx_platform_git_repo=platform_repo,
-            edx_platform_git_branch=platform_branch,
-        )
-
-        # ── Python-only dependency install (skip Node/webpack) ────────────────
-        container = (
-            container.with_mounted_directory(
-                "/root/pip_package_lists", pip_package_lists
-            )
-            .with_mounted_directory(
-                "/root/pip_package_overrides", pip_package_overrides
-            )
-            .with_exec(
+        # ── Generate the models (static AST, one management command per service) ─
+        for svc in ("lms", "cms"):
+            container = container.with_exec(
                 [
                     "sh",
                     "-c",
-                    "cp /openedx/edx-platform/requirements/edx/base.txt"
-                    " /root/pip_package_lists/edx_base.txt"
-                    " && cp /openedx/edx-platform/requirements/edx/assets.txt"
-                    " /root/pip_package_lists/edx_assets.txt",
+                    "DJANGO_SETTINGS_MODULE=lehrer_gen_settings "
+                    "python -m django generate_aqueduct_settings "
+                    f"--modules {svc}.envs.common "
+                    f"--output {svc}/envs/models/aqueduct.py --reset",
                 ]
             )
+
+        # ── ruff-format the generated models ──────────────────────────────────
+        # django-aqueduct's renderer emits verbatim EXPR-default source segments
+        # (e.g. multi-line dicts/tuple concatenations copied straight from
+        # common.py), which keep the platform's own single-quote/indentation
+        # style — so the raw output is not `ruff format`-stable for a settings
+        # module as complex as edx-platform's.  Format here (pinned to lehrer's
+        # ruff version) so the committed model passes CI's `ruff format --check`
+        # and regeneration is idempotent.  Managed-region markers are comments
+        # and survive formatting.  (Renderer-side wrapping is tracked upstream in
+        # tk-codegen-v2-renderer-residual-line-wrap-gaps.)
+        container = _ruff_format(
+            container, ["lms/envs/models/aqueduct.py", "cms/envs/models/aqueduct.py"]
         )
 
-        # Install a local django-aqueduct checkout as an editable dev override.
-        # Done before the deployment requirements so its version satisfies the
-        # pinned ``django-aqueduct==`` constraint and uv skips the PyPI fetch —
-        # letting regeneration pick up unreleased generator fixes.
-        if aqueduct_source is not None:
-            container = container.with_mounted_directory(
-                "/root/django-aqueduct", aqueduct_source
-            ).with_exec(["uv", "pip", "install", "-e", "/root/django-aqueduct"])
-
+        # ── Boot self-test (the real runtime overlay path) ────────────────────
+        # Inject ProductionSettingsMixin (models/base.py) and a *synthetic*
+        # minimal entry per service, then import the entry — which runs
+        # configure_django_settings(base="<svc>.envs.common").  We compose the
+        # same class hierarchy the real deployment entries use
+        # (<Svc>ProductionSettings(ProductionSettingsMixin, AqueductSettings)) but
+        # skip operator-specific validators/post_configure: this test targets the
+        # framework overlay, which is operator-independent, so it stays valid for
+        # any deployment cell (deployment_name here names a requirements cell, not
+        # an operator; the operator's real entry modules live under its own
+        # settings tree and are exercised end-to-end by the plugin-compat build).
+        #
+        # The generated AqueductSettings carries only the plugin-INCOMPLETE static
+        # snapshot of INSTALLED_APPS; the overlay must defer it to the live,
+        # plugin-complete common.py value (common.py runs add_plugins on import).
+        # The self-test asserts exactly that: the final INSTALLED_APPS is a
+        # superset of the live base, i.e. no plugin/base app was dropped.
+        lehrer_base = dag.current_module().source().file("src/lehrer/settings/base.py")
+        container = container.with_file(
+            "./lms/envs/models/base.py", lehrer_base
+        ).with_file("./cms/envs/models/base.py", lehrer_base)
+        for svc in ("lms", "cms"):
+            entry = (
+                "from django_aqueduct import configure_django_settings\n"
+                "from .models.aqueduct import AqueductSettings\n"
+                "from .models.base import ProductionSettingsMixin\n\n\n"
+                "class _SelfTestSettings(ProductionSettingsMixin, AqueductSettings):\n"
+                "    pass\n\n\n"
+                f'configure_django_settings(_SelfTestSettings, base="{svc}.envs.common")\n'
+            )
+            container = container.with_new_file(
+                f"./{svc}/envs/models/__init__.py", contents=""
+            ).with_new_file(f"./{svc}/envs/aqueduct.py", contents=entry)
+        self_test = _boot_self_test_script()
         container = container.with_exec(
             [
-                "uv",
-                "pip",
-                "install",
-                "-r",
-                "/root/pip_package_lists/edx_base.txt",
-                "-r",
-                "/root/pip_package_lists/edx_assets.txt",
-                "-r",
-                f"/root/pip_package_lists/{release_name}/{deployment_name}.txt",
+                "sh",
+                "-c",
+                f"DJANGO_SETTINGS_MODULE=lehrer_gen_settings python -c {shlex.quote(self_test)}",
             ]
         )
-
-        # Remove any deployment-specific packages that conflict with the build
-        for pkg in packages_to_remove:
-            container = container.with_exec(["uv", "pip", "uninstall", pkg])
-
-        # Reinstall lxml/xmlsec from source. They are passed as explicit install
-        # targets (not only --no-binary args) so they always come back after the
-        # uninstall, even when the deployment overrides file does not list them.
-        container = container.with_exec(
-            ["uv", "pip", "uninstall", "lxml", "xmlsec"]
-        ).with_exec(
-            [
-                "uv",
-                "pip",
-                "install",
-                "--no-cache-dir",
-                "--no-binary",
-                "lxml",
-                "--no-binary",
-                "xmlsec",
-                "lxml",
-                "xmlsec",
-                "-r",
-                f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt",
-            ]
-        )
-
-        # ── Install edx-platform in editable mode ─────────────────────────────
-        container = container.with_workdir("/openedx/edx-platform").with_exec(
-            ["uv", "pip", "install", "-e", "."]
-        )
-
-        # ── Inject minimal generation shims ───────────────────────────────────
-        # These shims do exactly what the upstream generate_aqueduct_settings
-        # workflow recommends: import common.py (which calls add_plugins so all
-        # plugin settings are included) then resolve Derived values.  We write
-        # them to throw-away module names so we never conflict with anything in
-        # the platform source tree.
-        lms_shim = (
-            "# Temporary generation shim — not committed to the platform.\n"
-            "from lms.envs.common import *  # noqa: F401,F403\n"
-            "from openedx.core.lib.derived import derive_settings\n"
-            "derive_settings(__name__)\n"
-        )
-        cms_shim = (
-            "# Temporary generation shim — not committed to the platform.\n"
-            "from cms.envs.common import *  # noqa: F401,F403\n"
-            "# LMS_ROOT_URL may be a Derived sentinel; provide a concrete default\n"
-            "# so derive_settings can resolve dependents.\n"
-            "if not isinstance(LMS_ROOT_URL, str):  # noqa: F821\n"
-            "    LMS_ROOT_URL = 'http://localhost:18000'  # noqa: F821\n"
-            "from openedx.core.lib.derived import derive_settings\n"
-            "derive_settings(__name__)\n"
-        )
-        container = (
-            container.with_new_file("./lehrer_lms_shim.py", contents=lms_shim)
-            .with_new_file("./lehrer_cms_shim.py", contents=cms_shim)
-            .with_exec(["mkdir", "-p", "./lms/envs/models", "./cms/envs/models"])
-            # Inject ProductionSettingsMixin so generated files can import it
-            # and the self-test can instantiate AqueductSettings(ProductionSettingsMixin).
-            .with_file(
-                "./lms/envs/models/base.py",
-                dag.current_module().source().file("src/lehrer/settings/base.py"),
-            )
-            .with_file(
-                "./cms/envs/models/base.py",
-                dag.current_module().source().file("src/lehrer/settings/base.py"),
-            )
-            .with_new_file("./lms/envs/models/__init__.py", contents="")
-            .with_new_file("./cms/envs/models/__init__.py", contents="")
-        )
-
-        # ── Generate the models ───────────────────────────────────────────────
-        # Call ModuleInspector + SettingsModelGenerator directly — no
-        # management command required, no django_aqueduct in INSTALLED_APPS
-        # required.  The shim modules import common.py into their own globals
-        # so every UPPERCASE name (including plugin settings) is discovered.
-        generate_script = "\n".join(
-            [
-                "import sys, os, re, importlib",
-                "os.chdir('/openedx/edx-platform')",
-                "sys.path.insert(0, '/openedx/edx-platform')",
-                "from django_aqueduct.discovery.module import ModuleInspector",
-                "from django_aqueduct.codegen.generator import SettingsModelGenerator",
-                "def _add_imports(code):",
-                "    # Add stdlib/third-party imports the generator references but omits.",
-                "    # (Optional-widening of None-default fields is handled by the",
-                "    # django-aqueduct generator itself as of 0.4.0.)",
-                "    # Note: pathlib is now always emitted by django-aqueduct >= 0.5.0;",
-                "    # 'from path import Path' is only needed for bare Path() calls that",
-                "    # are NOT preceded by 'pathlib.' (i.e. legacy path.py usage).",
-                "    extra = []",
-                "    if re.search(r'(?<!pathlib\\.)(?<!\\.)Path\\(', code) and 'from path import' not in code:",
-                "        extra.append('from path import Path')",
-                "    if 'datetime.' in code and 'import datetime' not in code:",
-                "        extra.append('import datetime')",
-                "    if extra:",
-                "        lines = code.splitlines()",
-                '        last_import = max((i for i, l in enumerate(lines) if re.match(r"^(from|import)\\s", l)), default=0)',
-                "        lines = lines[:last_import+1] + extra + lines[last_import+1:]",
-                "        code = '\\n'.join(lines) + '\\n'",
-                "    return code",
-                "def _rewrite_base_class(code):",
-                "    # Replace the generator's BaseSettings inheritance with ProductionSettingsMixin.",
-                "    # ProductionSettingsMixin already inherits BaseSettings and owns model_config,",
-                "    # so the generated class no longer needs to redeclare them.",
-                "    #",
-                "    # 1. Drop the BaseSettings / SettingsConfigDict pydantic-settings import.",
-                "    code = re.sub(",
-                "        r'from pydantic_settings import BaseSettings, SettingsConfigDict\\n',",
-                "        '',",
-                "        code,",
-                "    )",
-                "    # 2. Remove the generated model_config (inherited from the mixin).",
-                "    code = re.sub(",
-                r"        r'\\n    model_config = SettingsConfigDict\\([^)]+\\)\\n',",
-                "        '\\n',",
-                "        code,",
-                "    )",
-                "    # 3. Swap the base class.",
-                "    code = code.replace(",
-                "        'class AqueductSettings(BaseSettings):',",
-                "        'class AqueductSettings(ProductionSettingsMixin):',",
-                "    )",
-                "    # 4. Add the mixin import after the last pydantic import line.",
-                "    lines = code.splitlines()",
-                "    last_pydantic = max(",
-                "        (i for i, l in enumerate(lines) if re.match(r'^from pydantic', l)),",
-                "        default=0,",
-                "    )",
-                "    lines.insert(last_pydantic + 1, 'from .base import ProductionSettingsMixin')",
-                "    return '\\n'.join(lines) + '\\n'",
-                "def _fix_str_path_annotations(code):",
-                "    # Fix fields where the annotation is 'str' but the default is",
-                "    # pathlib.Path(...).  This arises when edx-platform settings define",
-                "    # a path as str(PROJECT_ROOT / ...) at generation time but supply a",
-                "    # PosixPath at runtime via the aqueduct overlay source.  Pydantic",
-                "    # does not coerce PosixPath → str, so the model would fail to",
-                "    # instantiate.  django-aqueduct >= 0.5.0 detects PathLike defaults",
-                "    # and emits pathlib.Path annotations correctly; this step is a",
-                "    # belt-and-braces guard for any field the generator still misses.",
-                "    return re.sub(",
-                "        r'(\\b\\w+): str = (Field\\(\\s*\\n\\s*default=pathlib\\.Path\\b)',",
-                "        r'\\1: pathlib.Path = \\2',",
-                "        code,",
-                "    )",
-                "for shim, out in [",
-                "    ('lehrer_lms_shim', 'lms/envs/models/aqueduct.py'),",
-                "    ('lehrer_cms_shim', 'cms/envs/models/aqueduct.py'),",
-                "]:",
-                "    print(f'Generating {out} from {shim} ...')",
-                "    fields = ModuleInspector(shim).discover()",
-                "    code = _add_imports(SettingsModelGenerator(fields).render())",
-                "    code = _rewrite_base_class(code)",
-                "    code = _fix_str_path_annotations(code)",
-                "    open(out, 'w').write(code)",
-                "    print(f'  {len(fields)} fields written to {out}')",
-                "# ── Boot self-test ──────────────────────────────────────────",
-                "# Fail generation (not pod boot) if a model cannot instantiate or is",
-                "# missing INSTALLED_APPS.  Load via proper package import so relative",
-                "# imports (from .base import ProductionSettingsMixin) resolve correctly.",
-                "for pkg in ['lms.envs.models.aqueduct', 'cms.envs.models.aqueduct']:",
-                "    # Force fresh import — remove any stale cached module.",
-                "    sys.modules.pop(pkg, None)",
-                "    _saved = dict(os.environ); os.environ.clear()",
-                "    try:",
-                "        _m = importlib.import_module(pkg)",
-                "        inst = _m.AqueductSettings()",
-                "    finally:",
-                "        os.environ.clear(); os.environ.update(_saved)",
-                "    apps = getattr(inst, 'INSTALLED_APPS', None)",
-                "    assert apps, f'{pkg}: INSTALLED_APPS empty/missing ({apps!r})'",
-                "    print(f'  self-test OK: {pkg} instantiates, {len(apps)} INSTALLED_APPS')",
-            ]
-        )
-        container = container.with_exec(["python", "-c", generate_script])
 
         # ── Return the two generated model files ──────────────────────────────
         return (
@@ -2341,3 +2654,203 @@ class OpenedxPlatform:
                 container.file("cms/envs/models/aqueduct.py"),
             )
         )
+
+    @function
+    async def verify_settings(  # noqa: PLR0913
+        self,
+        deployment_name: str,
+        release_name: str,
+        custom_settings: dagger.Directory,
+        build_manifest: dagger.File | None = None,
+        pip_package_lists: dagger.Directory | None = None,
+        pip_package_overrides: dagger.Directory | None = None,
+        platform_repo: str | None = None,
+        platform_branch: str | None = None,
+        python_version: str | None = None,
+        packages_to_remove: list[str] | None = None,
+        django_check: bool = True,  # noqa: FBT001, FBT002
+        drift: bool = False,  # noqa: FBT001, FBT002
+        aqueduct_source: dagger.Directory | None = None,
+    ) -> str:
+        """Verify an operator's *committed* aqueduct settings against a build cell.
+
+        This is the settings tier of the verification pyramid, and the only gate
+        that exercises the settings a deployment actually ships.  Where
+        :meth:`check_deployment` proves the cell's plugins *install and import*,
+        this proves the operator's committed settings tree still
+        *resolves into a working Django configuration* on top of them.  It runs
+        the same Python-only environment (:meth:`_python_only_env`) and the same
+        injection used by a production build (:meth:`inject_aqueduct_settings`),
+        so what it verifies is what gets shipped — not a parallel approximation.
+
+        Checks, cheapest first:
+
+        1. **Boot self-test** — import ``lms.envs.aqueduct`` and
+           ``cms.envs.aqueduct`` (the operator's real entry modules, composing
+           its real validators and ``post_configure`` hooks) with no
+           ``OL_SETTINGS_DIR`` present, then assert the resulting
+           ``INSTALLED_APPS`` is a superset of the live, plugin-complete
+           ``<svc>.envs.common`` value.  Catches both a settings module that
+           cannot be imported at all and the subtler overlay regression where a
+           model default silently overwrites a plugin-injected list.
+        2. **Django system checks** (``django_check``, default on) — run
+           ``manage.py <svc> check`` under the entry module, which performs a
+           full ``django.setup()``: every app in ``INSTALLED_APPS`` is imported
+           and every registered system check runs.  This is what turns "the
+           settings parse" into "the platform would actually start".
+        3. **Model drift** (``drift``, opt-in) — regenerate the model from this
+           cell's edx-platform source through the identical pipeline
+           :meth:`regenerate_aqueduct_settings` uses (static AST generation then
+           ``ruff format``) and diff it against the committed
+           ``models/aqueduct.py``.  A non-empty diff means the committed model
+           is stale relative to the pinned edx-platform, and the fix is to
+           re-run regeneration and commit the result.
+
+           Why not django-aqueduct's own ``generate_aqueduct_settings
+           --check``: that compares the on-disk file's managed regions against a
+           *raw* render, but lehrer's committed models are ``ruff format``-ed
+           after generation (the renderer emits verbatim source segments from
+           edx-platform's own style, so its output is not format-stable).  The
+           raw comparison would therefore report formatting as drift on a model
+           that is perfectly in sync.  Diffing after the same formatting step
+           the generator applies compares like with like.
+
+           Drift is opt-in because one committed model serves every release in a
+           group, while the generated model is edx-platform-version-specific —
+           so it can only be in sync with the release regeneration was run
+           against — the manifest's ``settings_model_release``.  Enable it
+           for that release's cells only.
+
+        Args:
+            deployment_name: Deployment name.
+            release_name: edx-platform release / branch name (e.g. master).
+            custom_settings: The operator's settings directory, containing
+                ``lms/aqueduct.py``,
+                ``lms/models/aqueduct.py`` (and the cms equivalents) plus the
+                runtime helper scripts.
+            build_manifest: Optional ``build_manifest.yaml``.  When given, the
+                cell matching ``(release_name, deployment_name)`` supplies the
+                requirements and every build parameter the caller did not pass.
+            pip_package_lists: Requirements directory.  Required unless
+                ``build_manifest`` is given.
+            pip_package_overrides: Overrides directory.  Required unless
+                ``build_manifest`` is given.
+            platform_repo: Git repository URL for edx-platform.
+            platform_branch: Git branch to check out.
+            python_version: Python version. Defaults to 3.12 for master, else 3.11.
+            packages_to_remove: Python packages to uninstall after base install.
+            django_check: Run ``manage.py check`` per service (default: true).
+            drift: Also regenerate the model and fail on a diff against the
+                committed one (default: false — see above).
+            aqueduct_source: Optional local django-aqueduct checkout to install
+                editable instead of the PyPI-pinned version, for verifying
+                against an unreleased framework fix.
+
+        Returns:
+            The combined stdout of the checks (only reached when all pass).
+        """
+        resolved = await self._resolve_cell(
+            caller="verify_settings",
+            deployment_name=deployment_name,
+            release_name=release_name,
+            build_manifest=build_manifest,
+            pip_package_lists=pip_package_lists,
+            pip_package_overrides=pip_package_overrides,
+            platform_repo=platform_repo,
+            platform_branch=platform_branch,
+            python_version=python_version,
+            packages_to_remove=packages_to_remove,
+        )
+        container = self._python_only_env(
+            resolved, deployment_name, release_name, aqueduct_source
+        )
+        container = _aqueduct_gen_setup(container)
+
+        # The operator's committed settings, placed exactly where a production
+        # build places them — so a path or import assumption that only holds in
+        # the build is caught here rather than at deploy time.
+        container = self.inject_aqueduct_settings(container, custom_settings)
+
+        # ── 1. Boot self-test ─────────────────────────────────────────────────
+        # No OL_SETTINGS_DIR: the entry modules must resolve from field defaults
+        # alone, which is what makes this runnable in CI with no secrets. A
+        # setting that is genuinely required at runtime should carry a default
+        # here and be supplied by the cluster's YAML/env, not make the module
+        # unimportable.
+        container = container.with_env_variable(
+            "DJANGO_SETTINGS_MODULE", _GEN_SETTINGS_MODULE
+        ).with_exec(
+            [
+                "sh",
+                "-c",
+                f"python -c {shlex.quote(_boot_self_test_script())}",
+            ]
+        )
+
+        # ── 2. Django system checks ───────────────────────────────────────────
+        # `manage.py <svc> check` maps --settings=aqueduct to <svc>.envs.aqueduct
+        # and runs django.setup(), importing every app in INSTALLED_APPS. That
+        # import is the real gate: a plugin bump whose app module raises on
+        # import passes both `uv pip check` and a bare settings import, and only
+        # fails here.
+        if django_check:
+            for svc in ("lms", "cms"):
+                container = container.with_exec(
+                    [
+                        "sh",
+                        "-c",
+                        f"SERVICE_VARIANT={svc} python manage.py {svc} check "
+                        "--settings=aqueduct",
+                    ]
+                )
+
+        # ── 3. Model drift ────────────────────────────────────────────────────
+        if drift:
+            for svc in ("lms", "cms"):
+                container = container.with_exec(
+                    [
+                        "sh",
+                        "-c",
+                        f"DJANGO_SETTINGS_MODULE={_GEN_SETTINGS_MODULE} "
+                        "python -m django generate_aqueduct_settings "
+                        f"--modules {svc}.envs.common "
+                        f"--output /tmp/{svc}_aqueduct.py --reset",  # noqa: S108
+                    ]
+                )
+            # Same formatting step regeneration applies, so the diff below
+            # compares content rather than line wrapping.
+            container = _ruff_format(
+                container,
+                ["/tmp/lms_aqueduct.py", "/tmp/cms_aqueduct.py"],  # noqa: S108
+            )
+            # The remediation has to be copy-pasteable from a CI log by someone
+            # who did not write this function: the full command with this cell's
+            # coordinates, the export step (regeneration returns a Directory —
+            # without `export` nothing lands on disk), and the copy. The
+            # manifest path is the one value that genuinely varies by operator,
+            # so it stays a named placeholder rather than a wrong guess.
+            for svc in ("lms", "cms"):
+                remediation = (
+                    f"DRIFT: the committed {svc}/models/aqueduct.py is stale "
+                    f"against {resolved.platform_branch}. Regenerate and commit "
+                    "it:\\n"
+                    "  dagger call platform regenerate-aqueduct-settings \\\\\\n"
+                    f"    --deployment-name {deployment_name} "
+                    f"--release-name {release_name} \\\\\\n"
+                    "    --build-manifest <your group's build_manifest.yaml> "
+                    "\\\\\\n"
+                    "    export --path ./generated\\n"
+                    f"  cp generated/{svc}/models/aqueduct.py "
+                    f"<your settings dir>/{svc}/models/aqueduct.py"
+                )
+                container = container.with_exec(
+                    [
+                        "sh",
+                        "-c",
+                        f"diff -u {svc}/envs/models/aqueduct.py "  # noqa: S108
+                        f"/tmp/{svc}_aqueduct.py || {{ "
+                        f"printf '%s\\n' {shlex.quote(remediation)}; exit 1; }}",
+                    ]
+                )
+
+        return await container.stdout()

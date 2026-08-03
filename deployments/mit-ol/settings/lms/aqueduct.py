@@ -7,14 +7,21 @@ Usage::
 
     DJANGO_SETTINGS_MODULE=lms.envs.aqueduct
 
-The typed pydantic model that backs this module lives alongside it at
-``lms.envs.models.aqueduct`` (generated from the running platform via
-``manage.py generate_aqueduct_settings``).  Update that model by running
-the command inside the Docker image and committing the result to lehrer::
+The typed model is split across two sibling files:
 
-    DJANGO_SETTINGS_MODULE=lms.envs.aqueduct \\
-        python manage.py generate_aqueduct_settings \\
-        --output lms/envs/models/aqueduct.py
+  models/base.py     ← ProductionSettingsMixin (lehrer core; K8s source wiring,
+                       type corrections, structural deferrals, shared validators)
+  models/aqueduct.py ← AqueductSettings(BaseSettings), pure django-aqueduct
+                       codegen v2 output.  Regenerate via::
+
+    dagger call platform regenerate-aqueduct-settings \\
+        --deployment-name mit-ol --release-name master \\
+        --build-manifest ./deployments/mit-ol/build_manifest.yaml \\
+        export --path ./generated
+    # then copy generated/lms/models/aqueduct.py over the committed model.
+
+The mixin is listed **first** so its declarations win in the pydantic MRO over
+the generated defaults — see models/base.py.
 
 Loading strategy (highest → lowest priority):
 
@@ -22,28 +29,34 @@ Loading strategy (highest → lowest priority):
    and Secrets.
 2. YAML files under ``OL_SETTINGS_DIR`` (sorted, deep-merged) — complex
    types such as ``DATABASES``, ``CACHES``, ``JWT_AUTH``, ``FEATURES``.
-3. ``AqueductSettings`` field defaults from ``lms.envs.models.aqueduct``.
+3. ``AqueductSettings`` field defaults from ``lms.envs.models.aqueduct``,
+   overlaid onto ``lms.envs.common``.
 """
 
 from __future__ import annotations
+
+from typing import Any, ClassVar
 
 from pydantic import Field, model_validator
 
 from django_aqueduct import configure_django_settings
 
 from .models.aqueduct import AqueductSettings
+from .models.base import ProductionSettingsMixin
 
 
-class LMSProductionSettings(AqueductSettings):
+class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
     """Typed LMS production settings."""
 
     # YAML key from 82-lms-interpolated-config; Django setting is LMS_SEGMENT_KEY.
     SEGMENT_KEY: str | None = Field(default=None)
 
-    # List from 81-lms-general-config; merged into AUTHENTICATION_BACKENDS below.
+    # List from 81-lms-general-config; prepended onto AUTHENTICATION_BACKENDS by
+    # the post-configure structural adjustment below (AUTHENTICATION_BACKENDS is
+    # deferred to the plugin-complete base, so it can't be mutated in-model).
     THIRD_PARTY_AUTH_BACKENDS: list[str] | None = Field(default=None)
     # Legacy code paths still read these values from settings.FEATURES.
-    FEATURES_COMPAT_KEYS: tuple[str, ...] = (
+    FEATURES_COMPAT_KEYS: ClassVar[tuple[str, ...]] = (
         "ALLOW_ALL_ADVANCED_COMPONENTS",
         "ALLOW_COURSE_STAFF_GRADE_DOWNLOADS",
         "ALLOW_HIDING_DISCUSSION_TAB",
@@ -155,55 +168,60 @@ class LMSProductionSettings(AqueductSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_authentication_backends(self) -> LMSProductionSettings:
-        """Prepend THIRD_PARTY_AUTH_BACKENDS before AUTHENTICATION_BACKENDS.
-
-        Arrives via YAML (complex list type).  Deduplication preserves order.
-        """
-        if not self.THIRD_PARTY_AUTH_BACKENDS:
-            return self
-        features = getattr(self, "FEATURES", None) or {}
-        if isinstance(features, dict) and not features.get(
-            "ENABLE_THIRD_PARTY_AUTH", True
-        ):
-            return self
-        existing = list(getattr(self, "AUTHENTICATION_BACKENDS", None) or [])
-        self.AUTHENTICATION_BACKENDS = self.THIRD_PARTY_AUTH_BACKENDS + [  # type: ignore[attr-defined]
-            b for b in existing if b not in self.THIRD_PARTY_AUTH_BACKENDS
-        ]
-        return self
-
-    @model_validator(mode="after")
     def _derive_social_auth_clean_usernames(self) -> LMSProductionSettings:
         if getattr(self, "SOCIAL_AUTH_CLEAN_USERNAMES", None) is None:
             self.SOCIAL_AUTH_CLEAN_USERNAMES = False  # type: ignore[attr-defined]
         return self
 
-    @model_validator(mode="after")
-    def _derive_lti_provider(self) -> LMSProductionSettings:
-        """Mirror production.py: add lti_provider app + backend when enabled.
 
-        lms/urls.py unconditionally includes lms.djangoapps.lti_provider.urls,
-        so the app must be in INSTALLED_APPS whenever LTI is enabled or Django
-        will raise a RuntimeError at startup when importing the models.
-        """
-        if not getattr(self, "ENABLE_LTI_PROVIDER", False):
-            return self
-        apps: list = list(getattr(self, "INSTALLED_APPS", None) or [])
+def _apply_structural_overrides(merged: dict[str, Any], model: Any) -> None:
+    """Post-overlay adjustments to plugin-complete INSTALLED_APPS / AUTH_BACKENDS.
+
+    Passed as ``configure_django_settings(post_configure=…)``; runs *after* the
+    ``base="lms.envs.common"`` overlay, so ``INSTALLED_APPS`` and
+    ``AUTHENTICATION_BACKENDS`` here are the live, plugin-complete base lists
+    (the model never overrides them, so the overlay defers them to the base).
+    These two mit-ol adjustments *extend* those lists, which a ``@model_validator``
+    cannot do — the model is built before the overlay and has no access to the
+    base.  ``merged`` is the merged settings dict (mutate in place); ``model`` is
+    the validated model instance for typed inputs.
+    """
+    features = getattr(model, "FEATURES", None) or {}
+    backends = list(merged.get("AUTHENTICATION_BACKENDS") or [])
+
+    # Prepend THIRD_PARTY_AUTH_BACKENDS (arrives via YAML) unless third-party auth
+    # is explicitly disabled.  Deduplication preserves order.
+    third_party = getattr(model, "THIRD_PARTY_AUTH_BACKENDS", None)
+    if third_party and (
+        not isinstance(features, dict) or features.get("ENABLE_THIRD_PARTY_AUTH", True)
+    ):
+        backends = list(third_party) + [b for b in backends if b not in third_party]
+
+    # LTI provider: add the app + backend when enabled.  lms/urls.py always
+    # includes lms.djangoapps.lti_provider.urls, so the app must be in
+    # INSTALLED_APPS whenever LTI is enabled or Django raises at startup.
+    # (production.py did this; common.py does not, so the base overlay omits it.)
+    if getattr(model, "ENABLE_LTI_PROVIDER", False):
         lti_app = "lms.djangoapps.lti_provider.apps.LtiProviderConfig"
         lti_backend = "lms.djangoapps.lti_provider.users.LtiBackend"
+        apps = list(merged.get("INSTALLED_APPS") or [])
         if lti_app not in apps:
             apps.append(lti_app)
-            self.INSTALLED_APPS = apps  # type: ignore[attr-defined]
-        backends: list = list(getattr(self, "AUTHENTICATION_BACKENDS", None) or [])
+            merged["INSTALLED_APPS"] = apps
         if lti_backend not in backends:
             backends.append(lti_backend)
-            self.AUTHENTICATION_BACKENDS = backends  # type: ignore[attr-defined]
-        return self
+
+    merged["AUTHENTICATION_BACKENDS"] = backends
 
 
 # base="lms.envs.common" overlays the model onto edx-platform's upstream
-# defaults: any setting the model does not carry, or that the generator could
-# not serialise (rendered as None — e.g. opaque tuples/dicts), falls back to
-# the real common.py value instead of vanishing to Django's empty default.
-configure_django_settings(LMSProductionSettings, base="lms.envs.common")
+# defaults: any setting the model does not override (env/YAML source or
+# validator) defers to the real common.py value — including the structural
+# settings openedx augments at runtime via add_plugins (INSTALLED_APPS, …).
+# post_configure runs _apply_structural_overrides against the merged,
+# plugin-complete settings (see that function).
+configure_django_settings(
+    LMSProductionSettings,
+    base="lms.envs.common",
+    post_configure=_apply_structural_overrides,
+)

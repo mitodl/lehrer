@@ -257,9 +257,9 @@ def start(
     deployment_config
         Path to a deployment config directory (default: the generic config).
     release_name
-        Open edX release name (matches a ``pip_package_lists`` subdir).
+        Open edX release name (matches a ``build_manifest.yaml`` cell).
     deployment_name
-        Deployment name (matches a ``pip_package_lists`` filename).
+        Deployment name (matches a ``build_manifest.yaml`` cell).
     settings_namespace
         Django settings namespace for the assets/i18n modules.
     mfe_hot_reload

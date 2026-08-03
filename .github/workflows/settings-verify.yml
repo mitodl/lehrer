@@ -1,27 +1,26 @@
 ---
-name: Plugin Compatibility Matrix
+name: Settings Verification
 
-# Verify that each (release × deployment) build cell's pinned requirement set
-# still installs and imports against its matching edx-platform branch.
+# Boot each group's *committed* aqueduct settings tree against a build cell's
+# pinned plugin set, and (where the model is release-matched) fail on model
+# drift. This is the tier above plugin-compat: that one proves the plugins
+# install and import, this one proves the settings they feed still resolve into
+# a Django configuration that starts.
 #
-#   * On a PR, the enumerate job computes the affected cells from the diff and
-#     runs only those; a PR touching no requirements yields an empty matrix and
-#     the check job is skipped. The workflow deliberately has NO top-level
-#     `paths:` filter: a workflow skipped by a path filter never reports its
-#     status, which would leave an unrelated PR pending on a required check.
-#     Running enumerate on every PR (it's cheap) and gating only the matrix job
-#     keeps the check reportable on every PR.
+# Structure mirrors plugin-compat.yml deliberately — enumerate → matrix → gate:
+#   * No top-level `paths:` filter. A workflow skipped by a path filter never
+#     reports its status, which would leave an unrelated PR pending on a
+#     required check. Enumerate on every PR (it's cheap) and gate only the
+#     matrix job, so the check stays reportable everywhere.
 #   * On the weekly schedule (and manual dispatch with `all`), run every cell,
-#     to catch drift in cells no recent PR touched.
-#
-# build_manifest.yaml is the source of truth (see plans/06) — each cell's
-# `packages`/`overrides` lines are the direct input this matrix tests, so a
-# manifest edit here is tested exactly as-is, not via a separate proxy file.
+#     to catch settings that broke from upstream edx-platform drift rather than
+#     from anything in this repo.
 on:
   pull_request:
   schedule:
-    # Mondays 06:00 UTC — full matrix.
-  - cron: "0 6 * * 1"
+    # Mondays 07:00 UTC — an hour after plugin-compat, so a requirements
+    # regression is already visible when these results land.
+  - cron: "0 7 * * 1"
   workflow_dispatch:
     inputs:
       all_cells:
@@ -30,17 +29,20 @@ on:
         default: false
 
 concurrency:
-  group: plugin-compat-${{ github.workflow }}-${{ github.ref }}
+  group: settings-verify-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 # Least privilege: both jobs only read the repo (checkout + diff); the Dagger
-# check needs no token scopes. Resolves the CodeQL "workflow does not limit the
-# permissions of the GITHUB_TOKEN" finding.
+# check needs no token scopes.
 permissions:
   contents: read
 
 jobs:
   enumerate:
+    # Named explicitly: plugin-compat.yml has jobs with these same ids, and an
+    # unnamed job's check takes the id verbatim — two 'enumerate' rows in the
+    # check bar with no way to tell which workflow each belongs to.
+    name: enumerate settings cells
     runs-on: ubuntu-latest
     outputs:
       any: ${{ steps.matrix.outputs.any }}
@@ -50,7 +52,7 @@ jobs:
       with:
         # Full history so the PR base is available to diff against.
         fetch-depth: 0
-    - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+    - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
       with:
         enable-cache: true
     - run: uv sync --all-groups
@@ -63,7 +65,7 @@ jobs:
       run: |
         set -euo pipefail
         if [ "$EVENT_NAME" = "schedule" ] || [ "$RUN_ALL" = "true" ]; then
-          json="$(uv run lehrer compat matrix --all)"
+          json="$(uv run lehrer compat settings-matrix --all)"
         else
           # PRs carry a base sha; a manual (workflow_dispatch) run does not, so
           # fall back to the default branch. Without this, `git diff "" HEAD`
@@ -75,18 +77,18 @@ jobs:
             base="origin/$DEFAULT_BRANCH"
           fi
           json="$(git diff --name-only "$base" HEAD \
-            | uv run lehrer compat matrix)"
+            | uv run lehrer compat settings-matrix)"
         fi
         echo "any=$(echo "$json" | jq -r '.any')" >> "$GITHUB_OUTPUT"
         echo "cells=$(echo "$json" | jq -c '.cells')" >> "$GITHUB_OUTPUT"
         {
-          echo "### Plugin-compat cells"
+          echo "### Settings-verify cells"
           echo '```json'
           echo "$json" | jq .
           echo '```'
         } >> "$GITHUB_STEP_SUMMARY"
 
-  check:
+  verify:
     needs: enumerate
     if: needs.enumerate.outputs.any == 'true'
     runs-on: ubuntu-latest
@@ -94,51 +96,58 @@ jobs:
       fail-fast: false
       matrix:
         cell: ${{ fromJSON(needs.enumerate.outputs.cells) }}
-    name: ${{ matrix.cell.group }}/${{ matrix.cell.release }}/${{ matrix.cell.deployment
+    # Prefixed: plugin-compat.yml names its matrix jobs with the bare cell
+    # coordinate, so without this both workflows post identically-named checks
+    # and the check bar can't tell a settings failure from a requirements one —
+    # nor can branch protection require them separately.
+    name: settings ${{ matrix.cell.group }}/${{ matrix.cell.release }}/${{ matrix.cell.deployment
       }}
     steps:
     - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
     # Installs the CLI and starts an engine that pulls Docker Hub images
     # through a caching mirror; see the action for why.
     - uses: ./.github/actions/dagger-engine
-    - name: check-deployment
+    - name: verify-settings
       env:
         MANIFEST: ${{ matrix.cell.manifest }}
         RELEASE: ${{ matrix.cell.release }}
         DEPLOYMENT: ${{ matrix.cell.deployment }}
+        SETTINGS: ${{ matrix.cell.settings }}
+        # Only the release the committed model was generated from can be
+        # compared against a fresh render (see settings_model_release).
+        DRIFT: ${{ matrix.cell.drift }}
       run: |
         set -euo pipefail
-        dagger call platform check-deployment \
+        dagger call platform verify-settings \
           --build-manifest "$MANIFEST" \
           --release-name "$RELEASE" \
-          --deployment-name "$DEPLOYMENT"
+          --deployment-name "$DEPLOYMENT" \
+          --custom-settings "$SETTINGS" \
+          --drift="$DRIFT"
 
   # Single always-reporting status suitable as the required branch-protection
-  # check. The per-cell `check` job can't be required directly: it is skipped
-  # on PRs that touch no requirements, and a skipped-but-required job wedges
-  # every unrelated PR. This job runs on every PR, passing when the matrix
-  # succeeded OR was legitimately skipped, and failing when any cell failed —
-  # so a broken plugin bump actually blocks merge while unrelated PRs stay
-  # green. Require `gate` (not `enumerate`, which stays green even when a cell
-  # fails, nor `check`, which skips).
+  # check — see the same rationale in plugin-compat.yml: the per-cell `verify`
+  # job is skipped on PRs that touch no settings, and a skipped-but-required
+  # job wedges every unrelated PR.
   gate:
-    needs: [enumerate, check]
+    name: settings-gate
+    needs: [enumerate, verify]
     if: always()
     runs-on: ubuntu-latest
     steps:
-    - name: Evaluate plugin-compat result
+    - name: Evaluate settings-verify result
       env:
         ENUM_RESULT: ${{ needs.enumerate.result }}
-        CHECK_RESULT: ${{ needs.check.result }}
+        VERIFY_RESULT: ${{ needs.verify.result }}
       run: |
         set -euo pipefail
-        echo "enumerate: $ENUM_RESULT / check: $CHECK_RESULT"
+        echo "enumerate: $ENUM_RESULT / verify: $VERIFY_RESULT"
         if [ "$ENUM_RESULT" != "success" ]; then
           echo "::error::enumerate did not succeed ($ENUM_RESULT)."
           exit 1
         fi
-        if [ "$CHECK_RESULT" = "failure" ] || [ "$CHECK_RESULT" = "cancelled" ]; then
-          echo "::error::One or more plugin-compat cells failed."
+        if [ "$VERIFY_RESULT" = "failure" ] || [ "$VERIFY_RESULT" = "cancelled" ]; then
+          echo "::error::One or more settings-verify cells failed."
           exit 1
         fi
-        echo "plugin-compat gate passed (matrix: $CHECK_RESULT)."
+        echo "settings-verify gate passed (matrix: $VERIFY_RESULT)."

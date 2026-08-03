@@ -1,1 +1,4 @@
 dist/
+
+# Scratch export dir for `regenerate-aqueduct-settings` / other Dagger exports.
+/generated/
