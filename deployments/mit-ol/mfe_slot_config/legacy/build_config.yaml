@@ -33,4 +33,4 @@ mfes:
         ulmo: SidebarAIDrawerCoordinator.ulmo.jsx
         default: SidebarAIDrawerCoordinator.jsx
     extra_npm_bundles:
-    - "@mitodl/smoot-design@^6.31.0|public/static/smoot-design"
+    - "@mitodl/smoot-design@^6.33.0|public/static/smoot-design"
