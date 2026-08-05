@@ -3,6 +3,7 @@ import {
 	useSiteConfig,
 	useAuthenticatedUser,
 	WidgetOperationTypes,
+	Slot,
 } from "@openedx/frontend-base";
 import type { App, SlotOperation } from "@openedx/frontend-base";
 import { Dropdown, Hyperlink, Image } from "@openedx/paragon";
@@ -13,18 +14,28 @@ import { isLearnCourse, isMITxOnlineCourse } from "../utils/courseContext";
 // ---------------------------------------------------------------------------
 
 const SLOT = {
+	desktop: "org.openedx.frontend.slot.header.desktop.v1",
+	mobile: "org.openedx.frontend.slot.header.mobile.v1",
 	desktopLeft: "org.openedx.frontend.slot.header.desktopLeft.v1",
 	desktopRight: "org.openedx.frontend.slot.header.desktopRight.v1",
 	mobileCenter: "org.openedx.frontend.slot.header.mobileCenter.v1",
+	mobileRight: "org.openedx.frontend.slot.header.mobileRight.v1",
 	secondaryLinks: "org.openedx.frontend.slot.header.secondaryLinks.v1",
 	authenticatedMenu: "org.openedx.frontend.slot.header.authenticatedMenu.v1",
 } as const;
 
 const WIDGET = {
+	desktopLayout: "org.openedx.frontend.widget.header.desktopLayout.v1",
+	mobileLayout: "org.openedx.frontend.widget.header.mobileLayout.v1",
 	desktopLogo: "org.openedx.frontend.widget.header.desktopLogo.v1",
 	mobileLogo: "org.openedx.frontend.widget.header.mobileLogo.v1",
 	desktopPrimaryLinks:
 		"org.openedx.frontend.widget.header.desktopPrimaryLinks.v1",
+	desktopAuthenticatedMenu:
+		"org.openedx.frontend.widget.header.desktopAuthenticatedMenu.v1",
+	mobileAuthenticatedMenu:
+		"org.openedx.frontend.widget.header.mobileAuthenticatedMenu.v1",
+	help: "org.openedx.frontend.widget.header.help.v1",
 	menuProfile:
 		"org.openedx.frontend.widget.header.desktopAuthenticatedMenuProfile.v1",
 	menuAccount:
@@ -57,11 +68,18 @@ function useMITOLHeaderConfig(): MITOLHeaderConfig {
 const UserMenuToggle: FC = () => {
 	const authenticatedUser = useAuthenticatedUser();
 	if (!authenticatedUser) return null;
+	const displayName = authenticatedUser.name || authenticatedUser.username;
 	return (
 		<Dropdown.Toggle
-			as="div"
+			// Render a native <button> (not a div) so the toggle is focusable and
+			// keyboard-activatable. aria-label gives it an accessible name in the
+			// icon-only state (the username is hidden below 992px — see the
+			// mitxonline.scss media query).
+			as="button"
+			type="button"
+			aria-label={displayName}
 			id="user-nav-dropdown-custom"
-			className="d-flex align-items-center gap-2 cursor-pointer"
+			className="d-flex align-items-center gap-2 cursor-pointer bg-transparent"
 		>
 			{/* Person icon */}
 			<svg
@@ -76,9 +94,7 @@ const UserMenuToggle: FC = () => {
 					fill="white"
 				/>
 			</svg>
-			<span className="user-menu-name">
-				{authenticatedUser.name || authenticatedUser.username}
-			</span>
+			<span className="user-menu-name">{displayName}</span>
 			<svg
 				viewBox="0 0 24 24"
 				xmlns="http://www.w3.org/2000/svg"
@@ -93,6 +109,50 @@ const UserMenuToggle: FC = () => {
 };
 
 // ---------------------------------------------------------------------------
+// Custom authenticated user menu — replaces the default AvatarButton toggle
+// with UserMenuToggle (person icon + display name + chevron) while keeping the
+// frontend-base authenticatedMenu slot for the dropdown items.
+// ---------------------------------------------------------------------------
+
+const MITxOnlineAuthenticatedMenu: FC<{ className?: string }> = ({
+	className,
+}) => (
+	<Dropdown className={className}>
+		<UserMenuToggle />
+		<Dropdown.Menu className="dropdown-menu-right">
+			<Slot id={SLOT.authenticatedMenu} />
+		</Dropdown.Menu>
+	</Dropdown>
+);
+
+// ---------------------------------------------------------------------------
+// Always-desktop header layout. The frontend-base shell swaps to a hamburger +
+// centered-logo MobileLayout below 768px (via a JS media query). MIT OL keeps
+// the desktop-style layout (logo left, course info, user menu right) at every
+// width to match the rest of the platform, so we replace the shell's
+// DesktopLayout with one that never applies `d-none` and replace MobileLayout
+// with nothing. Narrow-width trimming is handled in the deployment SCSS.
+// ---------------------------------------------------------------------------
+
+const AlwaysDesktopLayout: FC = () => (
+	// Match the legacy header container exactly: a plain `.container-xl py-2` flex
+	// row. Paragon's <Container> can't emit `.container-xl` (its `fluid` prop is
+	// boolean-only, and `size="xl"` produces the wider `.container-mw-xl`), so we
+	// use a plain div — the same element the legacy header uses. `.container-xl`
+	// also lines up with the instructor-dashboard body (`#main-content.container-xl`).
+	<div className="container-xl py-2 align-items-center justify-content-between d-flex">
+		<div className="d-flex flex-grow-1 align-items-center">
+			<Slot id={SLOT.desktopLeft} />
+		</div>
+		<div className="d-flex align-items-center">
+			<Slot id={SLOT.desktopRight} />
+		</div>
+	</div>
+);
+
+const NoMobileLayout: FC = () => null;
+
+// ---------------------------------------------------------------------------
 // MITx Online header — full UAI/Learn course detection, custom logo, user menu
 // ---------------------------------------------------------------------------
 
@@ -105,7 +165,10 @@ const MITxOnlineLogo: FC = () => {
 		: `${marketingSiteBaseUrl ?? lmsBaseUrl}/dashboard/`;
 	const { headerLogoImageUrl } = useSiteConfig();
 	return (
-		<Hyperlink destination={destinationUrl} className="p-0">
+		// `logo` class mirrors the legacy learning-header logo anchor so the
+		// mitxonline.scss `.logo img { height: 24px }` rule applies (matching the
+		// legacy 24px logo instead of the frontend-base default 2rem/32px).
+		<Hyperlink destination={destinationUrl} className="logo p-0">
 			<Image
 				src={headerLogoImageUrl ?? "https://edx-cdn.org/v3/default/logo.svg"}
 				style={{ maxHeight: "2rem" }}
@@ -168,6 +231,21 @@ const MITxOnlineLogoutMenuItem: FC = () => {
 
 export function createMITxOnlineHeaderApp(): App {
 	const slots: SlotOperation[] = [
+		// Keep the desktop-style header layout at all widths (no mobile hamburger).
+		{
+			slotId: SLOT.desktop,
+			id: "mitol.header.mitxonline.desktopLayout",
+			relatedId: WIDGET.desktopLayout,
+			op: WidgetOperationTypes.REPLACE,
+			component: AlwaysDesktopLayout,
+		},
+		{
+			slotId: SLOT.mobile,
+			id: "mitol.header.mitxonline.mobileLayout",
+			relatedId: WIDGET.mobileLayout,
+			op: WidgetOperationTypes.REPLACE,
+			component: NoMobileLayout,
+		},
 		// Replace desktop and mobile logo widgets with context-aware logo.
 		{
 			slotId: SLOT.desktopLeft,
@@ -189,6 +267,28 @@ export function createMITxOnlineHeaderApp(): App {
 			id: "mitol.header.mitxonline.dashboardLink",
 			op: WidgetOperationTypes.PREPEND,
 			component: MITxOnlineDashboardLink,
+		},
+		// Remove the default Help link from the header.
+		{
+			slotId: SLOT.secondaryLinks,
+			op: WidgetOperationTypes.REMOVE,
+			relatedId: WIDGET.help,
+		},
+		// Replace the default avatar-button toggle with the custom MIT OL user menu
+		// (person icon + display name + chevron), on both desktop and mobile.
+		{
+			slotId: SLOT.desktopRight,
+			id: "mitol.header.mitxonline.desktopAuthenticatedMenu",
+			relatedId: WIDGET.desktopAuthenticatedMenu,
+			op: WidgetOperationTypes.REPLACE,
+			component: MITxOnlineAuthenticatedMenu,
+		},
+		{
+			slotId: SLOT.mobileRight,
+			id: "mitol.header.mitxonline.mobileAuthenticatedMenu",
+			relatedId: WIDGET.mobileAuthenticatedMenu,
+			op: WidgetOperationTypes.REPLACE,
+			component: MITxOnlineAuthenticatedMenu,
 		},
 		// Replace all three default authenticated menu items with mitxonline-specific ones.
 		{
@@ -230,12 +330,6 @@ export function createMITxOnlineHeaderApp(): App {
 			op: WidgetOperationTypes.APPEND,
 			component: MITxOnlineLogoutMenuItem,
 		},
-		// TODO: Replace AuthenticatedMenu widget toggle with UserMenuToggle for custom SVG icon.
-		// Requires REPLACE on org.openedx.frontend.widget.header.desktopAuthenticatedMenu.v1
-		// and org.openedx.frontend.widget.header.mobileAuthenticatedMenu.v1 — but these widgets
-		// embed both the toggle and the menu, so a full custom AuthenticatedMenu component is
-		// needed. Deferred until confirmed approach with UX.
-		//
 		// TODO: Hide primary nav links on dashboard apps (gradebook, learner-dashboard).
 		// This requires knowing which route roles those apps register. Add a condition with
 		// condition: { active: ['<gradebook-role>'] } once frontend-app-gradebook is a module.
@@ -269,6 +363,22 @@ const MITxLogoutMenuItem: FC = () => {
 
 export function createMITxHeaderApp(): App {
 	const slots: SlotOperation[] = [
+		// Keep the desktop-style header layout at all widths (no mobile hamburger),
+		// matching the legacy MITx header. Narrow-width trimming is in mitx.scss.
+		{
+			slotId: SLOT.desktop,
+			id: "mitol.header.mitx.desktopLayout",
+			relatedId: WIDGET.desktopLayout,
+			op: WidgetOperationTypes.REPLACE,
+			component: AlwaysDesktopLayout,
+		},
+		{
+			slotId: SLOT.mobile,
+			id: "mitol.header.mitx.mobileLayout",
+			relatedId: WIDGET.mobileLayout,
+			op: WidgetOperationTypes.REPLACE,
+			component: NoMobileLayout,
+		},
 		// Replace default menu items with LMS-based dashboard + logout.
 		{
 			slotId: SLOT.authenticatedMenu,
@@ -346,6 +456,22 @@ const XProLogoutMenuItem: FC = () => {
 
 export function createXProHeaderApp(): App {
 	const slots: SlotOperation[] = [
+		// Keep the desktop-style header layout at all widths (no mobile hamburger),
+		// matching the legacy xPRO header. Narrow-width trimming is in mitx.scss.
+		{
+			slotId: SLOT.desktop,
+			id: "mitol.header.xpro.desktopLayout",
+			relatedId: WIDGET.desktopLayout,
+			op: WidgetOperationTypes.REPLACE,
+			component: AlwaysDesktopLayout,
+		},
+		{
+			slotId: SLOT.mobile,
+			id: "mitol.header.xpro.mobileLayout",
+			relatedId: WIDGET.mobileLayout,
+			op: WidgetOperationTypes.REPLACE,
+			component: NoMobileLayout,
+		},
 		// Replace all default menu items with xPRO marketing-site links.
 		{
 			slotId: SLOT.authenticatedMenu,
@@ -392,6 +518,3 @@ export function createXProHeaderApp(): App {
 
 	return { appId: "mitol.header.xpro", slots };
 }
-
-// Re-export for consumers that only need the shared toggle component.
-export { UserMenuToggle };
