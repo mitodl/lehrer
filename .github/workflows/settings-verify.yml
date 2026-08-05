@@ -48,7 +48,7 @@ jobs:
       any: ${{ steps.matrix.outputs.any }}
       cells: ${{ steps.matrix.outputs.cells }}
     steps:
-    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         # Full history so the PR base is available to diff against.
         fetch-depth: 0
@@ -103,7 +103,7 @@ jobs:
     name: settings ${{ matrix.cell.group }}/${{ matrix.cell.release }}/${{ matrix.cell.deployment
       }}
     steps:
-    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
     # Installs the CLI and starts an engine that pulls Docker Hub images
     # through a caching mirror; see the action for why.
     - uses: ./.github/actions/dagger-engine
