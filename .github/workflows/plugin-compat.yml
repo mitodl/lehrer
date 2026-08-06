@@ -46,10 +46,11 @@ jobs:
       any: ${{ steps.matrix.outputs.any }}
       cells: ${{ steps.matrix.outputs.cells }}
     steps:
-    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         # Full history so the PR base is available to diff against.
         fetch-depth: 0
+        persist-credentials: false
     - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       with:
         enable-cache: true
@@ -97,7 +98,9 @@ jobs:
     name: ${{ matrix.cell.group }}/${{ matrix.cell.release }}/${{ matrix.cell.deployment
       }}
     steps:
-    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        persist-credentials: false
     # Installs the CLI and starts an engine that pulls Docker Hub images
     # through a caching mirror; see the action for why.
     - uses: ./.github/actions/dagger-engine

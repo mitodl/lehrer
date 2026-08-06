@@ -114,3 +114,8 @@ repos:
   rev: v2.14.0
   hooks:
   - id: hadolint-docker
+- repo: https://github.com/zizmorcore/zizmor-pre-commit
+  rev: v1.29.0
+  hooks:
+  - id: zizmor
+    args: [--no-progress, --min-severity=medium, --min-confidence=medium]
