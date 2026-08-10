@@ -5,10 +5,12 @@ import ast
 import pytest
 
 from lehrer.core.platform import (
+    _FAILURE_OUTPUT_CHARS,
     _derive_test_settings,
     _edx_base_deps_script,
     _edx_testing_deps_script,
     _test_paths,
+    _TestRunFailed,
 )
 
 
@@ -49,6 +51,31 @@ def test_derive_test_settings_is_valid_python(service: str) -> None:
 def test_derive_test_settings_rejects_unknown_service() -> None:
     with pytest.raises(ValueError, match="service must be one of"):
         _derive_test_settings("workers")
+
+
+def test_failure_carries_the_run_output() -> None:
+    # `expect=ANY` means Dagger no longer prints a failing exec's output, so a
+    # red run is only diagnosable if the exception carries it.
+    message = str(_TestRunFailed(1, "collected 3 items\nFAILED test_x", "Traceback"))
+    assert "pytest exited 1" in message
+    assert "FAILED test_x" in message
+    assert "Traceback" in message
+
+
+def test_failure_omits_empty_streams() -> None:
+    message = str(_TestRunFailed(2, "some stdout", "   \n "))
+    assert "--- stdout ---" in message
+    assert "--- stderr ---" not in message
+
+
+def test_failure_truncates_from_the_end() -> None:
+    # Keep the tail: pytest's summary and the traceback are at the end, and an
+    # error that buried them under the first 8k of collection noise is useless.
+    stdout = "noise" * _FAILURE_OUTPUT_CHARS + "THE ACTUAL FAILURE"
+    message = str(_TestRunFailed(1, stdout, ""))
+    assert "THE ACTUAL FAILURE" in message
+    assert "(truncated)" in message
+    assert len(message) < _FAILURE_OUTPUT_CHARS + 500
 
 
 def test_edx_base_deps_script_branches_on_uv_lock() -> None:

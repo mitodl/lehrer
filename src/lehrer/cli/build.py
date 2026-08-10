@@ -10,8 +10,9 @@ groups the commands the way you reason about them:
 * **Verify** — the compatibility pyramid for a build cell, cheapest first:
   ``check`` (install + import) → ``test`` (edx-platform's own suite under the
   deployment's settings, and — with ``--include-plugins``, the default — the
-  installed plugins' own suites in the same run); plus ``codejail-test`` /
-  ``notes-test`` for those services.
+  installed plugins' own suites in the same run) → ``test-report`` (the same
+  run, returning a retrievable JUnit + per-plugin summary instead of stdout);
+  plus ``codejail-test`` / ``notes-test`` for those services.
 * **Utilities** — ``cells``, ``functions``, and the raw ``call`` escape hatch.
 
 Each command is a thin wrapper that forwards its trailing arguments straight to
@@ -191,6 +192,21 @@ def test(cell: CellArg = None, *dagger_args: DaggerArgs) -> None:
     Remember ``--custom-settings ./deployments/<group>/settings``.
     """
     _platform_cell_command("test", cell, dagger_args)
+
+
+@app.command(name="test-report", group=_VERIFY)
+def test_report(cell: CellArg = None, *dagger_args: DaggerArgs) -> None:
+    """Run the same suite as ``test`` and export its report (``platform test-report``).
+
+    Takes every flag ``test`` does, but returns the run's report *directory*
+    instead of stdout — and returns it whether the suite passed or failed, which
+    is the case you actually want a report for. Append ``export --path
+    ./reports`` to write ``report.xml`` (JUnit), ``summary.json`` and
+    ``summary.md`` to disk; ``summary.json`` names which plugins contributed
+    tests and which collected none.
+    Remember ``--custom-settings ./deployments/<group>/settings``.
+    """
+    _platform_cell_command("test-report", cell, dagger_args)
 
 
 @app.command(name="codejail-test", group=_VERIFY)
