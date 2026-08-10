@@ -30,7 +30,7 @@ cells:
   packages:
   - granian==2.7.9
   - django-redis==7.0.0
-  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-git-auto-export==0.8.3
   - edx-sysadmin==0.4.2
   - edx-username-changer==0.5.0
   - openedx-companion-auth==1.2.0
@@ -86,7 +86,7 @@ cells:
   - ol-openedx-course-export==0.2.0
   - ol-openedx-course-structure-api==0.2.0
   - ol-openedx-logging==0.3.5
-  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-git-auto-export==0.8.3
   - ol-openedx-rapid-response-reports==0.5.1
   - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
@@ -119,7 +119,7 @@ cells:
   - ol-openedx-canvas-integration==0.8.2
   - ol-openedx-course-export==0.2.0
   - ol-openedx-course-structure-api==0.2.0
-  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-git-auto-export==0.8.3
   - ol-openedx-logging==0.3.5
   - ol-openedx-rapid-response-reports==0.5.1
   - ol-openedx-sentry==0.4.0
@@ -178,7 +178,7 @@ cells:
   packages:
   - granian==2.7.9
   - django-redis==7.0.0
-  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-git-auto-export==0.8.3
   - edx-sysadmin==0.4.2
   - invideoquiz-xblock==2.0.0
   - nodeenv>=1.7.0
@@ -219,7 +219,7 @@ cells:
   - ol-openedx-canvas-integration==0.8.2
   - ol-openedx-course-export==0.2.0
   - ol-openedx-course-structure-api==0.2.0
-  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-git-auto-export==0.8.3
   - ol-openedx-logging==0.3.5
   - ol-openedx-rapid-response-reports==0.5.1
   - ol-openedx-sentry==0.4.0
@@ -247,7 +247,7 @@ cells:
   packages:
   - granian==2.7.9
   - django-redis==7.0.0
-  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-git-auto-export==0.8.3
   - edx-sysadmin==0.4.2
   - edx-username-changer==0.5.0
   - git+https://github.com/mitodl/ubcpi.git@master#egg=ubcpi-xblock
