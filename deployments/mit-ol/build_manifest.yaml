@@ -30,7 +30,7 @@ cells:
   packages:
   - granian==2.7.9
   - django-redis==7.0.0
-  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-git-auto-export==0.8.3
   - edx-sysadmin==0.4.2
   - edx-username-changer==0.5.0
   - openedx-companion-auth==1.2.0
@@ -47,10 +47,11 @@ cells:
   - django-aqueduct==0.10.0
   - ol-openedx-chat==0.5.9
   - ol-openedx-chat-xblock==0.4.6
+  - ol-openedx-feedback==0.1.0
   - ol-openedx-lti-utilities==0.1.2
   - ol-openedx-events-handler==0.2.1
   - ol-openedx-course-sync==1.0.1
-  - ol-openedx-uai-content-customization==0.1.2
+  - ol-openedx-uai-content-customization==0.2.0
   - opentelemetry-api
   - django-extensions
   - setuptools==81.0.0
@@ -63,8 +64,8 @@ cells:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - git+https://github.com/verificient/edx-proctoring-proctortrack.git@31c6c9923a51c903ae83760ecbbac191363aa2a2#egg=edx_proctoring_proctortrack
-  - lxml==5.3.0
-  - xmlsec==1.3.14
+  - lxml==6.1.0
+  - xmlsec==1.3.17
   - openai==2.43.0
   - ol-openedx-course-translations==0.8.0
   - ol-openedx-auto-select-language==0.1.2
@@ -85,7 +86,7 @@ cells:
   - ol-openedx-course-export==0.2.0
   - ol-openedx-course-structure-api==0.2.0
   - ol-openedx-logging==0.3.5
-  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-git-auto-export==0.8.3
   - ol-openedx-rapid-response-reports==0.5.1
   - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
@@ -101,8 +102,8 @@ cells:
   overrides:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
-  - lxml==5.3.0
-  - xmlsec==1.3.14
+  - lxml==6.1.0
+  - xmlsec==1.3.17
 - release: master
   deployment: mitx-staging
   platform_branch: master
@@ -118,7 +119,7 @@ cells:
   - ol-openedx-canvas-integration==0.8.2
   - ol-openedx-course-export==0.2.0
   - ol-openedx-course-structure-api==0.2.0
-  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-git-auto-export==0.8.3
   - ol-openedx-logging==0.3.5
   - ol-openedx-rapid-response-reports==0.5.1
   - ol-openedx-sentry==0.4.0
@@ -135,8 +136,8 @@ cells:
   overrides:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
-  - lxml==5.3.0
-  - xmlsec==1.3.14
+  - lxml==6.1.0
+  - xmlsec==1.3.17
 - release: ulmo
   deployment: xpro
   platform_branch: release/ulmo
@@ -166,8 +167,8 @@ cells:
   - setuptools==81.0.0
   overrides:
   - openedx-forum==0.4.1
-  - lxml==5.3.0
-  - xmlsec==1.3.14
+  - lxml==6.1.0
+  - xmlsec==1.3.17
 - release: verawood
   deployment: mitx
   platform_repo: https://github.com/openedx/edx-platform
@@ -177,7 +178,7 @@ cells:
   packages:
   - granian==2.7.9
   - django-redis==7.0.0
-  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-git-auto-export==0.8.3
   - edx-sysadmin==0.4.2
   - invideoquiz-xblock==2.0.0
   - nodeenv>=1.7.0
@@ -200,8 +201,8 @@ cells:
   overrides:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
-  - lxml==5.3.0
-  - xmlsec==1.3.14
+  - lxml==6.1.0
+  - xmlsec==1.3.17
   - edx-sga==0.29.0
 - release: verawood
   deployment: mitx-staging
@@ -218,7 +219,7 @@ cells:
   - ol-openedx-canvas-integration==0.8.2
   - ol-openedx-course-export==0.2.0
   - ol-openedx-course-structure-api==0.2.0
-  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-git-auto-export==0.8.3
   - ol-openedx-logging==0.3.5
   - ol-openedx-rapid-response-reports==0.5.1
   - ol-openedx-sentry==0.4.0
@@ -235,8 +236,8 @@ cells:
   overrides:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
-  - lxml==5.3.0
-  - xmlsec==1.3.14
+  - lxml==6.1.0
+  - xmlsec==1.3.17
   - edx-sga==0.29.0
 - release: verawood
   deployment: xpro
@@ -246,7 +247,7 @@ cells:
   packages:
   - granian==2.7.9
   - django-redis==7.0.0
-  - ol-openedx-git-auto-export==0.8.2
+  - ol-openedx-git-auto-export==0.8.3
   - edx-sysadmin==0.4.2
   - edx-username-changer==0.5.0
   - git+https://github.com/mitodl/ubcpi.git@master#egg=ubcpi-xblock
@@ -267,5 +268,5 @@ cells:
   - django-extensions
   - setuptools==81.0.0
   overrides:
-  - lxml==5.3.0
-  - xmlsec==1.3.14
+  - lxml==6.1.0
+  - xmlsec==1.3.17

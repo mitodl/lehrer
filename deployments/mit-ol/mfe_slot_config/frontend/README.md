@@ -75,8 +75,8 @@ Currently contains:
 
 | Deployment | Module library | npm version |
 |---|---|---|
-| mitxonline | `@openedx/frontend-app-instructor-dashboard` | `^1.0.0-alpha` |
-| mitx | `@openedx/frontend-app-instructor-dashboard` | `^1.0.0-alpha` |
+| mitxonline | `@openedx/frontend-app-instructor-dashboard` | `^1.1.0-alpha` |
+| mitx | `@openedx/frontend-app-instructor-dashboard` | `^1.1.0-alpha` |
 | xpro | `@openedx/frontend-app-instructor-dashboard` | `^1.0.0-alpha` |
 
 ## Deployment prerequisites

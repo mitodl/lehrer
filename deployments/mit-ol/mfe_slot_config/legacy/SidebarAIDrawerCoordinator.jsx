@@ -1,17 +1,102 @@
 import React, { useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import PropTypes from 'prop-types';
 import { getConfig } from '@edx/frontend-platform';
 
 import Sidebar from './src/courseware/course/sidebar/Sidebar';
 import SidebarContext from './src/courseware/course/sidebar/SidebarContext';
 import AIDrawerManagerSidebar from './AIDrawerManagerSidebar';
+import FeedbackDrawerSlot from './FeedbackDrawerSlot';
 
 const AI_DRAWER_MESSAGE_TYPES = [
     'smoot-design::ai-drawer-open',
     'smoot-design::tutor-drawer-open',
 ];
 
-const SidebarAIDrawerCoordinator = ({ courseId }) => {
+const FEEDBACK_OPEN_MESSAGE = 'ol-feedback::drawer-open';
+const AI_DRAWER_CLOSE_MESSAGE = 'smoot-design::ai-drawer-close';
+
+// Keeps `--ai-drawer-height` in sync with the visible viewport on scroll/resize;
+// shared by AskTIM and feedback slot. `active` = visible AND not full-screen.
+const useStickyDrawerHeight = (wrapperRef, active) => {
+    useEffect(() => {
+        const wrapper = wrapperRef.current;
+        if (!wrapper) {
+            return undefined;
+        }
+        if (!active) {
+            wrapper.style.removeProperty('--ai-drawer-height');
+            return undefined;
+        }
+
+        const INSET_PX = 16;
+        const desktopMediaQuery = window.matchMedia('(min-width: 1025px)');
+
+        let animationFrameId = null;
+        let resizeObserver = null;
+
+        const recalcHeight = () => {
+            animationFrameId = null;
+            if (!desktopMediaQuery.matches) {
+                wrapper.style.removeProperty('--ai-drawer-height');
+                return;
+            }
+            const parent = wrapper.parentElement;
+            if (!parent) return;
+            const parentRect = parent.getBoundingClientRect();
+            const stickyTop = Math.max(parentRect.top, INSET_PX);
+            const effectiveBottom = Math.min(window.innerHeight - INSET_PX, parentRect.bottom);
+            const availableHeight = effectiveBottom - stickyTop;
+
+            wrapper.style.setProperty(
+                '--ai-drawer-height',
+                `${Math.max(0, availableHeight)}px`,
+            );
+        };
+
+        const scheduleRecalc = () => {
+            if (animationFrameId == null) {
+                animationFrameId = window.requestAnimationFrame(recalcHeight);
+            }
+        };
+
+        const stopTracking = () => {
+            window.removeEventListener('scroll', scheduleRecalc);
+            window.removeEventListener('resize', scheduleRecalc);
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+                resizeObserver = null;
+            }
+            if (animationFrameId != null) {
+                window.cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            wrapper.style.removeProperty('--ai-drawer-height');
+        };
+
+        const startTracking = () => {
+            if (desktopMediaQuery.matches) {
+                window.addEventListener('scroll', scheduleRecalc, { passive: true });
+                window.addEventListener('resize', scheduleRecalc);
+                if (!resizeObserver && wrapper.parentElement && typeof ResizeObserver !== 'undefined') {
+                    resizeObserver = new ResizeObserver(scheduleRecalc);
+                    resizeObserver.observe(wrapper.parentElement);
+                }
+                scheduleRecalc();
+            } else {
+                stopTracking();
+            }
+        };
+
+        desktopMediaQuery.addEventListener('change', startTracking);
+        startTracking();
+
+        return () => {
+            desktopMediaQuery.removeEventListener('change', startTracking);
+            stopTracking();
+        };
+    }, [wrapperRef, active]);
+};
+
+const SidebarAIDrawerCoordinator = () => {
     const contextValue = useContext(SidebarContext);
     const currentSidebar = contextValue?.currentSidebar ?? null;
     const toggleSidebar = contextValue?.toggleSidebar ?? (() => { });
@@ -19,9 +104,11 @@ const SidebarAIDrawerCoordinator = ({ courseId }) => {
     const unitId = contextValue?.unitId ?? null;
 
     const [showAIDrawer, setShowAIDrawer] = useState(false);
+    const [showFeedback, setShowFeedback] = useState(false);
     const prevUnitIdRef = useRef(unitId);
     const showAIDrawerRef = useRef(false);
     const wrapperRef = useRef(null);
+    const feedbackWrapperRef = useRef(null);
 
     const messageOrigin = useMemo(() => {
         const lmsBaseUrl = getConfig().LMS_BASE_URL;
@@ -29,7 +116,7 @@ const SidebarAIDrawerCoordinator = ({ courseId }) => {
             try {
                 return new URL(lmsBaseUrl).origin;
             } catch (error) {
-                // Fallback to window.location.origin
+                // ignore; falls through to window.location.origin
             }
         }
         return window.location.origin;
@@ -40,8 +127,19 @@ const SidebarAIDrawerCoordinator = ({ courseId }) => {
             return;
         }
 
-        if (event.data?.type && AI_DRAWER_MESSAGE_TYPES.includes(event.data.type)) {
+        const messageType = event.data?.type;
+
+        if (messageType && AI_DRAWER_MESSAGE_TYPES.includes(messageType)) {
             setShowAIDrawer(true);
+            // Opening AskTIM hides feedback (they share this column).
+            setShowFeedback(false);
+            if (currentSidebar !== null) {
+                toggleSidebar(null);
+            }
+        } else if (messageType === FEEDBACK_OPEN_MESSAGE) {
+            setShowFeedback(true);
+            // Opening feedback hides AskTIM and the discussions sidebar.
+            setShowAIDrawer(false);
             if (currentSidebar !== null) {
                 toggleSidebar(null);
             }
@@ -57,7 +155,9 @@ const SidebarAIDrawerCoordinator = ({ courseId }) => {
 
     useEffect(() => {
         if (currentSidebar !== null) {
+            // Opening the discussions sidebar hides both drawers (React state only).
             setShowAIDrawer(false);
+            setShowFeedback(false);
         }
     }, [currentSidebar]);
 
@@ -67,98 +167,25 @@ const SidebarAIDrawerCoordinator = ({ courseId }) => {
 
     useEffect(() => {
         if (prevUnitIdRef.current && prevUnitIdRef.current !== unitId && unitId !== null) {
-            // Only send close message if drawer is actually open
+            // AskTIM's bundle still listens for this close message from the LMS iframe;
+            // only send it when the drawer is actually open.
             if (showAIDrawerRef.current) {
                 window.postMessage(
                     {
-                        type: 'smoot-design::ai-drawer-close',
+                        type: AI_DRAWER_CLOSE_MESSAGE,
                     },
                     messageOrigin
                 );
             }
             setShowAIDrawer(false);
+            // Auto-close feedback on unit change too (mirrors AskTIM); handled by state.
+            setShowFeedback(false);
         }
         prevUnitIdRef.current = unitId;
     }, [unitId, messageOrigin]);
 
-    // Keeps --ai-drawer-height in sync with the actual visible area on each
-    // scroll/resize so the sticky drawer never overflows the viewport bottom.
-    useEffect(() => {
-        const wrapper = wrapperRef.current;
-        if (!wrapper) return undefined;
-
-        if (!showAIDrawer || shouldDisplayFullScreen) {
-            wrapper.style.removeProperty('--ai-drawer-height');
-            return undefined;
-        }
-
-        const INSET_PX = 16; // matches the `1rem` inset in the CSS rule
-        const mq = window.matchMedia('(min-width: 1025px)');
-
-        let rafId = null;
-        let resizeObserver = null;
-
-        const update = () => {
-            rafId = null;
-            if (!mq.matches) {
-                wrapper.style.removeProperty('--ai-drawer-height');
-                return;
-            }
-            const parent = wrapper.parentElement;
-            if (!parent) return;
-            const parentRect = parent.getBoundingClientRect();
-            const stickyTop = Math.max(parentRect.top, INSET_PX);
-            const effectiveBottom = Math.min(window.innerHeight - INSET_PX, parentRect.bottom);
-            const available = effectiveBottom - stickyTop;
-
-            wrapper.style.setProperty(
-                '--ai-drawer-height',
-                `${Math.max(0, available)}px`,
-            );
-        };
-
-        const schedule = () => {
-            if (rafId == null) {
-                rafId = window.requestAnimationFrame(update);
-            }
-        };
-
-        const attach = () => {
-            if (mq.matches) {
-                window.addEventListener('scroll', schedule, { passive: true });
-                window.addEventListener('resize', schedule);
-                if (!resizeObserver && wrapper.parentElement && typeof ResizeObserver !== 'undefined') {
-                    resizeObserver = new ResizeObserver(schedule);
-                    resizeObserver.observe(wrapper.parentElement);
-                }
-                schedule();
-            } else {
-                detach();
-            }
-        };
-
-        const detach = () => {
-            window.removeEventListener('scroll', schedule);
-            window.removeEventListener('resize', schedule);
-            if (resizeObserver) {
-                resizeObserver.disconnect();
-                resizeObserver = null;
-            }
-            if (rafId != null) {
-                window.cancelAnimationFrame(rafId);
-                rafId = null;
-            }
-            wrapper.style.removeProperty('--ai-drawer-height');
-        };
-
-        mq.addEventListener('change', attach);
-        attach();
-
-        return () => {
-            mq.removeEventListener('change', attach);
-            detach();
-        };
-    }, [showAIDrawer, shouldDisplayFullScreen]);
+    useStickyDrawerHeight(wrapperRef, showAIDrawer && !shouldDisplayFullScreen);
+    useStickyDrawerHeight(feedbackWrapperRef, showFeedback && !shouldDisplayFullScreen);
 
     return (
         <>
@@ -171,12 +198,16 @@ const SidebarAIDrawerCoordinator = ({ courseId }) => {
             >
                 <AIDrawerManagerSidebar />
             </div>
+            <div
+                ref={feedbackWrapperRef}
+                className={`ai-drawer-wrapper ml-0 ml-xl-4 align-top ${shouldDisplayFullScreen ? 'ai-drawer-wrapper-fullscreen' : ''
+                } ${showFeedback ? '' : 'd-none'}`}
+                aria-hidden={!showFeedback}
+            >
+                <FeedbackDrawerSlot />
+            </div>
         </>
     );
-};
-
-SidebarAIDrawerCoordinator.propTypes = {
-    courseId: PropTypes.string.isRequired,
 };
 
 export default SidebarAIDrawerCoordinator;

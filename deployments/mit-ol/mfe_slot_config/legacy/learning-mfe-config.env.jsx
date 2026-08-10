@@ -160,7 +160,9 @@ if (process.env.DEPLOYMENT_NAME?.includes("mitxonline")) {
           },
         ],
       },
-      // Slot-based AskTim Chatbot - only if feature flag is enabled
+      // Slot-based AskTIM chatbot + per-block feedback drawer share this slot.
+      // The coordinator owns the column (AskTIM plus the inline feedback drawer);
+      // the LMS-side feedback_enabled waffle flag is the per-course gate.
       ...(ENABLE_AI_DRAWER_SLOT ? {
         'org.openedx.frontend.learning.notifications_discussions_sidebar.v1': {
             keepDefault: false,
@@ -170,7 +172,7 @@ if (process.env.DEPLOYMENT_NAME?.includes("mitxonline")) {
                     widget: {
                         id: 'coordinated_sidebar_with_ai_drawer',
                         type: DIRECT_PLUGIN,
-                        RenderWidget: ({ courseId }) => <SidebarAIDrawerCoordinator courseId={courseId} />,
+                        RenderWidget: () => <SidebarAIDrawerCoordinator />,
                     },
                 },
             ],

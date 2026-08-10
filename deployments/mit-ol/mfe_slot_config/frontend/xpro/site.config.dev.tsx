@@ -28,7 +28,12 @@ const siteConfig: SiteConfig = {
 		shellApp,
 		headerApp,
 		footerApp,
-		createMITOLFooterApp(),
+		// xPRO footer matches the legacy xPRO footer: About Us · Privacy Policy ·
+		// Honor Code · Terms of Service · Accessibility (no Help). URLs still come
+		// from the runtime mitolFooter config.
+		createMITOLFooterApp({
+			linkOrder: ["about", "privacy", "honor", "tos", "accessibility"],
+		}),
 		createXProHeaderApp(),
 		wrapWithAppsPath(instructorDashboardApp),
 	],

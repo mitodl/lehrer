@@ -1,16 +1,31 @@
-.learning-header, .site-header-desktop {
+.learning-header, .site-header-desktop, header.border-bottom {
   background-color: #303337 !important;
   color: #FFF !important;
   font-family: neue-haas-grotesk-text, sans-serif !important;
   font-style: normal !important;
   font-size: 14px !important;
   line-height: 18px !important;
+  // Remove the shell's light-grey bottom border. The `.border-bottom` utility
+  // lives in the paragon cascade layer with !important, so a site-layer
+  // !important override cannot win; instead we zero the CSS variable it
+  // resolves (--pgn-size-border-width), which removes the line without fighting
+  // the cascade. Children with explicit borders (dropdown toggle/menu) are
+  // unaffected because they set their own border values.
+  --pgn-size-border-width: 0;
+  box-shadow: none !important;
 
   .user-dropdown .btn {
     height: 40px !important;
   }
-  .container-xl{
+  // Match the legacy learning-header row height (72px). The intended 16px
+  // vertical padding loses to the `.py-2` utility on the container (it sets
+  // padding-top/bottom !important from an unlayered utility that our layered
+  // site rule can't outrank), so we also pin `min-height` — which no utility
+  // sets, so it always wins — and the row's `align-items-center` keeps the
+  // content vertically centred. 72px = 40px content + 16px×2.
+  .container-xl, .container-mw-xl, .container-fluid {
     padding: 16px 8px !important;
+    min-height: 72px !important;
   }
 
   .dropdown-toggle::after{
@@ -19,6 +34,11 @@
 
   .logo img{
     height: 24px !important;
+  }
+
+  // Spacing between the Dashboard button group and the user menu dropdown.
+  .secondary-nav-links {
+    margin-right: 16px !important;
   }
 
   .font-weight-bold {
@@ -38,6 +58,9 @@
     align-items: center !important;
     gap: 8px;
     color: #FFF !important;
+    // Reset the native <button> UA background (the toggle renders as a button
+    // for keyboard accessibility) so it stays transparent on the dark header.
+    background-color: transparent !important;
     border-radius: 4px !important;
     border: 1px solid var(--dark-silver-gray-text-secondary, #626A73) !important;
     opacity: 0.75 !important;
@@ -47,7 +70,8 @@
     font-size: 0.875rem !important;
     line-height: 1.125rem !important;
     opacity: 0.75 !important;
-    height: auto !important;
+    // Match the Dashboard button height so the two sit at the same size.
+    height: 40px !important;
 
     &:hover, &:focus {
       display: flex !important;
@@ -93,7 +117,11 @@
   }
   }
   .dropdown-menu-right{
-    display: flex !important;
+    // Only apply display:flex while the menu is open. Bootstrap's base
+    // `.dropdown-menu` sets `display: none` when closed (no `.show`); an
+    // unscoped `display: flex !important` here would override that and keep the
+    // menu permanently visible after it is opened once.
+    &.show { display: flex !important; }
     flex-direction: column !important;
     align-items: stretch !important;
     padding: 0 !important;
@@ -172,9 +200,11 @@
 .btn:not(:disabled, .disabled, .btn-link).focus::before, .btn:not(:disabled, .disabled, .btn-link):focus::before {
   border: none !important;
 }
-// Mobile responsive adjustments
+// Mobile responsive adjustments. The custom header keeps the desktop-style
+// layout at all widths (see AlwaysDesktopLayout in shared/src/header); these
+// rules trim it for narrow viewports.
 @media (max-width: 991px) {
-  .learning-header, .site-header-desktop {
+  .learning-header, .site-header-desktop, header.border-bottom {
     // Hide standalone dashboard button; moved into user dropdown
     .dashboard-btn { display: none !important; }
 

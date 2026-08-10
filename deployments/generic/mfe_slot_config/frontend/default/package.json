@@ -20,6 +20,6 @@
     "react-router-dom": "^6"
   },
   "devDependencies": {
-    "@edx/browserslist-config": "^1.5.0"
+    "@edx/browserslist-config": "1.5.1"
   }
 }

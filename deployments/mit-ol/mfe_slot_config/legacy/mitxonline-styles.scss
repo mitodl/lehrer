@@ -524,3 +524,75 @@
     }
   }
 }
+
+// Inner container for the feedback drawer slot (FeedbackDrawerSlot.jsx).
+// Shares the sticky .ai-drawer-wrapper with AskTIM, but unlike AskTIM's
+// absolutely-positioned ChatScreen/EntryScreen, smoot-design's feedback
+// SlotContainer lays its content out in normal flow (a flex column). Without
+// a bounded height + internal scroll, tall content (e.g. the comment textarea
+// + Submit on a short viewport, or in fullscreen) would overflow the sticky
+// wrapper and push the Submit control out of reach. So we fill the wrapper and
+// make [data-smoot-version] the scroll region.
+.feedback-drawer-slot-wrapper {
+  // Fill the sticky parent completely (parent gives us the height budget).
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+
+  &:has([data-smoot-version]) {
+    background: white;
+    border: 1px solid var(--pgn-color-light-400, #d7d3d1);
+    border-radius: 4px;
+  }
+
+  // DOM chain from smoot-design's init():
+  // .feedback-drawer-slot-wrapper
+  //   └── div (reactContainer)
+  //       └── div (StyleIsolationRoot)
+  //           └── [data-smoot-version] (SlotContainer)
+  // Pass height: 100% through the intermediate divs so the scroll region below
+  // has a bounded height to work against.
+  > div {
+    height: 100%;
+    width: 100%;
+
+    > div {
+      height: 100%;
+      width: 100%;
+    }
+  }
+
+  // SlotContainer from smoot-design: the internal scroll region.
+  [data-smoot-version] {
+    height: 100% !important;
+    width: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  // Fullscreen mode - fill entire viewport
+  .ai-drawer-wrapper-fullscreen & {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+
+    &:has([data-smoot-version]) {
+      background: white;
+    }
+  }
+}
