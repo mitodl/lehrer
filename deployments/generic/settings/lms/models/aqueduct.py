@@ -473,8 +473,8 @@ class AqueductSettings(BaseSettings):
         description=".. toggle_name: settings.ENABLE_COURSE_FILENAME_CCX_SUFFIX\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: If set to True, CCX ID will be included in the generated filename for CCX courses.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2021-03-16\n.. toggle_target_removal_date: None\n.. toggle_tickets: None\n.. toggle_warning: Turning this feature ON will affect all generated filenames which are related to CCX courses.",  # noqa: E501
     )
     ENABLE_COURSE_HOME_REDIRECT: bool = Field(
-        default=True,
-        description='.. toggle_name: settings.ENABLE_COURSE_HOME_REDIRECT\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: When enabled, along with the ENABLE_MKTG_SITE feature toggle, users who attempt to access a\ncourse "about" page will be redirected to the course home url.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2019-01-15\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/19604',  # noqa: E501
+        default=False,
+        description='.. toggle_name: settings.ENABLE_COURSE_HOME_REDIRECT\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When enabled, users who attempt to access a course "about" page will be redirected to the\ncourse home url. Previously this only took effect when ENABLE_MKTG_SITE was also True; now it is the sole gate.\nOperators who relied on ENABLE_MKTG_SITE=True to activate this redirect should set this to True explicitly.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2019-01-15\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/19604',  # noqa: E501
     )
     ENABLE_COURSE_SORTING_BY_START_DATE: bool = Field(
         default=True,
@@ -504,6 +504,10 @@ class AqueductSettings(BaseSettings):
     )
     ENABLE_ENTERPRISE_INTEGRATION: bool = Field(
         default=False, description="Set to enable Enterprise integration"
+    )
+    ENABLE_FINANCIAL_ASSISTANCE_FORM: bool = Field(
+        default=False,
+        description='.. toggle_name: settings.ENABLE_FINANCIAL_ASSISTANCE_FORM\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When enabled, exposes the financial assistance application form and its URL route,\nand shows the "financial assistance" course tool link for eligible learners.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-12-04\n.. toggle_tickets: ECOM-2824',  # noqa: E501
     )
     ENABLE_FOOTER_MOBILE_APP_LINKS: bool = Field(
         default=False,
@@ -776,10 +780,7 @@ class AqueductSettings(BaseSettings):
         default=None,
         description="Name the exchange and queues w.r.t the SERVICE_VARIANT",
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
-    HOMEPAGE_COURSE_MAX: Any = Field(
-        default=None,
-        description="Sets the maximum number of courses listed on the homepage\nIf set to None, all courses will be listed on the homepage",  # noqa: E501
-    )  # TODO: refine type
+    HOMEPAGE_COURSE_MAX: Any = Field(default=None)  # TODO: refine type
     HOSTNAME_MODULESTORE_DEFAULT_MAPPINGS: Annotated[dict[str, Any], NoDecode] = Field(
         default_factory=lambda: {}
     )
@@ -989,6 +990,7 @@ class AqueductSettings(BaseSettings):
             "django_filters",
             # API Documentation
             "drf_yasg",
+            "drf_spectacular",
             # edx-drf-extensions
             "csrf.apps.CsrfAppConfig",  # Enables frontend apps to retrieve CSRF tokens.
             "xss_utils",
@@ -1599,6 +1601,16 @@ class AqueductSettings(BaseSettings):
         },
         description="The current list of social platforms to be shown to the user.\nurl_stub represents the host URL, it must end with a forward\nslash and represent the profile at https://www.[url_stub][username]\nThe example will be used as a placeholder in the social link\ninput field as well as in some messaging describing an example of a\nvalid link.",  # noqa: E501
     )
+    SPECTACULAR_SETTINGS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "TITLE": "LMS Enrollment API",
+            "VERSION": "0.1.0",
+            "SERVE_INCLUDE_SCHEMA": False,
+            "PREPROCESSING_HOOKS": ["lms.lib.spectacular.lms_api_filter"],
+            "SCHEMA_PATH_PREFIX": "/api/enrollment",
+            "SCHEMA_PATH_PREFIX_TRIM": "/api/enrollment",
+        },
+    )
     SQUELCH_PII_IN_LOGS: bool = Field(
         default=True,
         description="Hide any Personally Identifiable Information from application logs",  # noqa: E501
@@ -1844,6 +1856,7 @@ class AqueductSettings(BaseSettings):
         "REQUIRE_JS_PATH_OVERRIDES",
         "SOCIAL_AUTH_AZUREAD_OAUTH2_AUTH_EXTRA_ARGUMENTS",
         "SOCIAL_PLATFORMS",
+        "SPECTACULAR_SETTINGS",
         "SURVEY_REPORT_EXTRA_DATA",
         "SWAGGER_SETTINGS",
         "TRACKING_SEGMENTIO_SOURCE_MAP",
