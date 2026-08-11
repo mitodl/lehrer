@@ -164,7 +164,7 @@ if (process.env.DEPLOYMENT_NAME?.includes("mitxonline")) {
       // The coordinator owns the column (AskTIM plus the inline feedback drawer);
       // the LMS-side feedback_enabled waffle flag is the per-course gate.
       ...(ENABLE_AI_DRAWER_SLOT ? {
-        'org.openedx.frontend.learning.notifications_discussions_sidebar.v1': {
+        'org.openedx.frontend.learning.right_sidebar.v1': {
             keepDefault: false,
             plugins: [
                 {
