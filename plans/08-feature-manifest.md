@@ -8,9 +8,11 @@
 
 Turning on one user-facing Open edX feature today means editing up to ten unrelated
 places, in two repositories, in three languages, with no mechanism that connects them
-and nothing that fails when you miss one. This RFC proposes a **feature manifest**: one
-declarative YAML per feature per deployment group, validated by Pydantic models in
-lehrer core, that names the complete fan-out across every layer a feature touches — and
+and nothing that fails when you miss one. This RFC proposes **feature manifests**, split
+into a per-feature *definition* — the complete set of operations that feature requires,
+plus the parameters it accepts — and a per-deployment *adoption* file that names which
+features it takes and with what values. Both are validated by Pydantic models in
+lehrer core, and together they name the complete fan-out across every layer — and
 a `lehrer features compile` step that emits per-layer artifacts in a documented,
 versioned contract.
 
@@ -84,6 +86,11 @@ class of thing this RFC exists to make declarative.
 **Goals**
 
 - One declarative home per feature, naming its full cross-layer fan-out.
+- A feature's contract stated independently of anyone's adoption of it, so the set of
+  available features is enumerable and an upstream-native definition is shareable
+  between operators rather than rewritten by each.
+- Values, not just on/off: a feature may take typed parameters (integers, strings,
+  enums), since most real toggles configure something as well as enabling it.
 - Compile-time validation: an unknown setting name, an unsatisfied plugin requirement,
   or two features fighting over the same key fails before anything is built.
 - A documented, versioned artifact contract any consumer can read.
@@ -105,12 +112,30 @@ class of thing this RFC exists to make declarative.
 
 ### 4.1 Layout
 
+A feature's **definition** and its **adoption** are separate artifacts. The definition
+is a contract — the complete set of operations that must happen for the feature to work,
+plus the parameters it accepts. Adoption is a deployment stating which features it takes
+and with what values. Conflating the two is what makes today's situation
+undiagnosable: there is no artifact anywhere that answers "what does this feature
+require?" independently of "where is it on?"
+
 ```
-deployments/<group>/features/
-  scopes.yaml          # the group's scope labels, declared once
-  ai-drawer.yaml       # one file per feature
+src/lehrer/features/               # upstream-native definitions, shipped with lehrer
   course-notes.yaml
+
+deployments/<group>/features/
+  definitions/                     # plugin-contributed and operator-specific
+    ai-drawer.yaml
+  scopes.yaml                      # scope labels -> build cells
+  adoption.yaml                    # which features each scope takes, with values
 ```
+
+Splitting them buys three things beyond tidiness. Definitions become *enumerable* — a
+catalog of what can be turned on, independent of anyone's deployment. Upstream-native
+definitions are operator-agnostic by construction, so lehrer can ship them and every
+operator inherits them (the catalog may start empty and grow). And adoption becomes a
+short, reviewable file: the diff for turning a feature on is one block, not a hunt
+across ten mechanisms.
 
 New core module `src/lehrer/core/feature_manifest.py`, following the established
 precedent of `mfe_config.py` and `build_manifest.py`: Pydantic models that serve as both
@@ -145,22 +170,38 @@ Declaring scopes centrally means a typo in a feature file fails at load rather t
 silently matching nothing. This follows the `settings_model_release` validator precedent
 in `build_manifest.py:134` — *a gate that quietly stops gating is worse than no gate.*
 
-### 4.3 Feature schema
+### 4.3 Feature definitions — the contract
+
+A definition names every operation the feature needs and every parameter it accepts. It
+says nothing about where the feature is on.
 
 ```yaml
-# deployments/mit-ol/features/ai-drawer.yaml
+# deployments/mit-ol/features/definitions/ai-drawer.yaml
 version: 1
 feature: ai-drawer
 summary: Slot-based AskTIM chat drawer in the learning MFE right sidebar.
+
+origin: plugin                    # upstream | plugin | operator
+provided_by: ol-openedx-chat      # required when origin: plugin
+
+parameters:
+  history_limit:
+    type: integer
+    default: 20
+  chat_model:
+    type: string
+    default: null
+    description: Overrides the plugin default when set.
 
 requires:
   plugins: [ol-openedx-chat]      # checked against the scope's cell packages
   services: []                    # e.g. [notes], [codejail]
 
-layers:                           # defaults, applied wherever enabled
+operations:                       # the complete fan-out
   settings:
     lms:
-      SOME_SETTING: value         # validated against the AqueductSettings inventory
+      OL_CHAT_HISTORY_LIMIT: ${history_limit}
+      OL_CHAT_MODEL: ${chat_model}
   features:                       # FEATURES dict entries
     lms:
       ENABLE_SOMETHING: true
@@ -190,12 +231,18 @@ layers:                           # defaults, applied wherever enabled
       service: lms
       argv: [manage.py, lms, create_dot_application, ...]
       stage: post-migrate
-
-scopes:
-  mitxonline-ci:         {enabled: true}
-  mitxonline-production: {enabled: true}
-  mitx-ci:               {enabled: false}
 ```
+
+**`origin` is not documentation — it selects which validations apply.** An
+`upstream` feature's settings must exist in the generated `AqueductSettings` inventory,
+because that model is generated from upstream's `common.py`. A `plugin` feature's
+settings deliberately must *not* be required to: plugin settings arrive at runtime via
+`add_plugins()`, which codegen v2's static discovery cannot see, so checking them
+against the upstream inventory would reject every correct plugin feature. Without this
+classification the §4.4.1 settings gate is not merely incomplete, it is wrong. In
+exchange, `plugin` carries an obligation `upstream` does not: `provided_by` must appear
+in the adopting scope's cell packages. `operator` asserts neither and gets shape checks
+only.
 
 `mfe_assets` reuses the existing `build_config.yaml` vocabulary
 (`extra_slot_files`, `extra_npm_bundles`, the `by_release` mapping), sharing the
@@ -211,12 +258,56 @@ the deployment stylesheet named in `styles:`. Baseline stylesheet first, fragmen
 after, in the order features are declared — so a fragment can override baseline rules
 but two features cannot silently reorder each other.
 
-### 4.3.1 Scope override and merge semantics
+### 4.3.1 Adoption — what a deployment turns on
 
-Per-scope `layers` merge over the feature's defaults. "Deep merge" alone is
-underspecified for the list-valued layers, and the three plausible policies
-(replacement, concatenation, identity-keyed) produce different compiled artifacts and
-different conflict results, so the contract fixes it:
+Adoption names features and supplies parameter values. Presence means adopted; values
+are typed by the definition, not restricted to booleans.
+
+```yaml
+# deployments/<group>/features/adoption.yaml
+version: 1
+adoption:
+  mitxonline-production:
+    ai-drawer:
+      history_limit: 50
+      chat_model: gpt-4o
+    course-notes: {}              # adopted with definition defaults
+  mitxonline-ci:
+    ai-drawer:
+      history_limit: 20
+  mitx-ci:
+    ai-drawer: {enabled: false}   # deliberate non-adoption, recorded
+```
+
+`enabled` is a reserved key, not a parameter — a definition may not declare a parameter
+by that name. Omitting a feature and writing `enabled: false` both leave it off; the
+latter exists so a deliberate decision leaves a trace rather than looking like an
+oversight.
+
+A parameter value must satisfy its declared type, and a parameter the definition does
+not declare is an error rather than an ignored key. Unsupplied parameters take the
+definition's default; a parameter with no default that is never supplied fails compile
+for that scope.
+
+### 4.3.2 Per-scope operation overrides and merge semantics
+
+Parameters cover the values a definition anticipated. A scope may also need to override
+an *operation* the definition did not parameterise — an escape hatch that should be rare
+and visible, since anything overridden repeatedly is a missing parameter:
+
+```yaml
+  mitxonline-ci:
+    ai-drawer:
+      history_limit: 20
+      operations:                 # escape hatch, merged over the definition
+        waffle:
+          - flag: feedback.feedback_enabled
+            args: ["--create", "--everyone", "--staff"]
+```
+
+"Deep merge" alone is underspecified for the list-valued operations, and the three
+plausible policies (replacement, concatenation, identity-keyed) produce different
+compiled artifacts and different conflict results, so the contract fixes it:
 
 - **Mappings** merge recursively; the scope's value wins at each leaf key.
 - **Lists whose elements have an identity** merge by that identity. A scope entry
@@ -227,19 +318,11 @@ different conflict results, so the contract fixes it:
 - **Ordering is deterministic**: defaults in declared order, then appended scope
   entries in declared order. Compiled output must be byte-stable across runs so it can
   be diffed and drift-checked.
-- **`requires`** is feature-level and not scope-overridable. A feature's dependencies
-  do not change based on where it is turned on.
+- **`requires`** belongs to the definition and is not overridable from adoption. A
+  feature's dependencies do not change based on where it is turned on.
 
-```yaml
-scopes:
-  mitxonline-ci:
-    enabled: true
-    layers:
-      waffle:
-        # same `flag` as the default entry -> replaces it, not a second flag
-        - flag: feedback.feedback_enabled
-          args: ["--create", "--everyone", "--staff"]
-```
+So the override above carries the same `flag` as the definition's entry, which means it
+*replaces* that entry — it does not add a second registration of the same flag.
 
 ### 4.4 Validation
 
@@ -247,11 +330,17 @@ Everything here runs in plain Python with no container and no Django. The genera
 `AqueductSettings` model is a *static* codegen-v2 file, so `ast.parse` recovers the full
 field inventory in milliseconds — the settings gate costs nothing to run on every commit.
 
-1. **Settings names** — every key under `layers.settings.<service>` must be a field of
-   that service's committed `models/aqueduct.py`. Unknown key → compile error. This is
-   the single highest-value check: it turns a typo that silently does nothing into a
-   failure at PR time.
-2. **Scope names** — must appear in `scopes.yaml`.
+1. **Settings names** — for an `origin: upstream` feature, every key under
+   `operations.settings.<service>` must be a field of that service's committed
+   `models/aqueduct.py`. Unknown key → compile error. This is the single highest-value
+   check: it turns a typo that silently does nothing into a failure at PR time. For
+   `origin: plugin`, the check is inverted into an obligation on `provided_by` (§4.3) —
+   plugin settings are injected at runtime by `add_plugins()` and are legitimately
+   absent from the static model, so requiring them here would reject every correct
+   plugin feature.
+2. **Scope and feature names** — scopes must appear in `scopes.yaml`; every feature
+   named in `adoption.yaml` must resolve to a definition, and every parameter supplied
+   must be declared by it, with a value matching its declared type.
 3. **Plugin requirements** — `requires.plugins` ⊆ the packages of the scope's cell in
    `build_manifest.yaml`. This is not a literal subset test: `Cell.packages` holds
    verbatim requirement lines (`ol-openedx-chat==0.5.9`) while `requires.plugins`
@@ -270,9 +359,11 @@ field inventory in milliseconds — the settings gate costs nothing to run on ev
 5. **Slot files** — every referenced source file, including `style_fragments`, must
    exist in the slot config dir.
 6. **Shapes** — waffle flags as `namespace.name`; npm bundles as `spec|target`.
-7. **Conflicts** — two features enabled in the same scope that assign different values
+7. **Conflicts** — two features adopted in the same scope that assign different values
    to the same setting, FEATURES key, waffle flag, or MFE build var is a hard error.
-   Nothing detects this today.
+   Nothing detects this today. Note this check only becomes possible once definitions
+   are separate from adoption: it needs the resolved operation set of every feature a
+   scope takes, which is precisely what compile now has.
 8. **FEATURES keys** are *not* statically checkable — `FEATURES` is typed `Any` in the
    generated model (`models/aqueduct.py:689`), and the authoritative key set lives in
    edx-platform's `common.py`. This check belongs in the existing settings-verify CI
@@ -281,15 +372,21 @@ field inventory in milliseconds — the settings gate costs nothing to run on ev
 ### 4.5 CLI
 
 ```
-lehrer features compile --group <g> --scope <s> --out <dir>
-lehrer features check   --group <g>              # validate all scopes, emit nothing
-lehrer features list    --group <g> [--scope <s>]
-lehrer features explain <feature> --group <g> --scope <s>
+lehrer features compile  --group <g> --scope <s> --out <dir>
+lehrer features check    --group <g>             # validate all scopes, emit nothing
+lehrer features catalog  [--group <g>]           # every definition, with parameters
+lehrer features adopted  --group <g> --scope <s> # what this scope takes, resolved
+lehrer features explain  <feature> [--group <g>] [--scope <s>]
 ```
 
 `check` is a cheap CI gate alongside the existing `build-config-schema` /
-`build-manifest-schema` hooks. `explain` prints the resolved fan-out for one feature —
-the answer to "what does turning this on touch?"
+`build-manifest-schema` hooks.
+
+`catalog` and `adopted` are the two halves the split makes possible: what *can* be
+turned on (definitions, independent of any deployment — with no `--group`, lehrer's
+shipped upstream-native catalog alone) versus what a given scope *has* turned on.
+`explain` prints one feature's fan-out; without `--scope` it prints the contract with
+parameter placeholders intact, with `--scope` the values resolved for that deployment.
 
 Path-reasoning logic lives in `src/lehrer/cli/`, not `core/`: the `lehrer-core-boundary`
 pre-commit hook forbids the literal string `deployments` under `src/lehrer/core/`.
@@ -330,9 +427,9 @@ style_fragments: [ai-drawer.scss]
 (`{"waffles": [[flag, *args]]}`), so it is drop-in for any operator already using that
 script — which lehrer bakes into every image.
 
-### 4.7 Self-served versus emitted layers
+### 4.7 Self-served versus emitted operations
 
-Two of these layers describe steps **lehrer itself performs**. For those, requiring a
+Two of these operation groups describe steps **lehrer itself performs**. For those, requiring a
 consumer to read a file and hand values back to lehrer is a pointless round trip.
 
 A `--scope` string alone is not sufficient to close that loop, though.
@@ -347,7 +444,7 @@ The build functions therefore take **two** new inputs: `--features`, a
 is already passed), and `--scope`, the label to resolve within it. Path reasoning stays
 in `src/lehrer/cli/`, which is where the group layout is allowed to be known.
 
-| Layer | lehrer self-serves | Also emitted |
+| Operation group | lehrer self-serves | Also emitted |
 |---|---|---|
 | `mfe_build_env` | yes, via `--features` + `--scope` | yes |
 | `mfe_assets` | yes, via `--features` + `--scope` | yes |
@@ -362,21 +459,27 @@ argument behaves exactly as it does today.
 
 ## 5. AI drawer as a manifest
 
-The §2.2 walk-through collapses to one file plus one flag. The hard-coded
-`DEPLOYMENT_NAME?.includes("mitxonline")` test in `learning-mfe-config.env.jsx:40`
-becomes the scope's `enabled:` value, and the JSX reads a single build var. The
-implementation-switch nature of the flag (§2.2 item 6) is expressible because
-`mfe_build_env` sets a value rather than a boolean presence.
+The §2.2 walk-through splits cleanly in two. All eight coupled edits become one
+`ai-drawer.yaml` definition — written once, by whoever understands the feature — and
+turning it on for a deployment becomes three lines in `adoption.yaml`.
+
+That split is what makes the two anomalies in §2.2 tractable. The hard-coded
+`DEPLOYMENT_NAME?.includes("mitxonline")` test at `learning-mfe-config.env.jsx:40` is an
+adoption decision that leaked into a definition file; it becomes presence in
+`adoption.yaml`, and the JSX reads a single build var. And the implementation-switch
+nature of the flag (§2.2 item 6) is expressible because operations set *values* — the
+drawer is not a boolean but a choice between the slot-based coordinator and the
+standalone bundle, which a parameter can name.
 
 ## 6. Relationship to existing configuration
 
 - **`build_manifest.yaml`** — unchanged. It owns build definitions per cell; feature
   manifests reference cells through `scopes.yaml` and never duplicate their content.
 - **`build_config.yaml`** — remains the *baseline*, unconditional MFE customisation.
-  Feature manifests contribute the *conditional* subset. `build_legacy_configured`
-  merges baseline with the resolved feature layer for the requested scope; no second
+  Feature definitions contribute the *conditional* subset. `build_legacy_configured`
+  merges baseline with the operations resolved for the requested scope; no second
   generated file, so no drift gate is needed. Migrating an existing entry from
-  `build_config.yaml` into a feature manifest is a deliberate, reviewable move.
+  `build_config.yaml` into a definition is a deliberate, reviewable move.
 - **Settings trees** — feature manifests emit `OL_SETTINGS_DIR` fragments; they do not
   edit the generated models, and never introduce validators. (Reminder for
   implementation: no validator may import from `lms.*`, `cms.*`, or `openedx.*` — that
@@ -406,12 +509,15 @@ stated requirement that something else satisfies.
 
 ## 8. Rollout
 
-- **Phase 0** — schema, `compile`, `check`, validation. No consumer changes. Emit
-  artifacts for existing deployments and diff them against what each operator produces
-  by hand; equivalence is the acceptance test.
-- **Phase 1** — AI drawer pilot. Add `--scope` to `build_legacy_configured`.
-- **Phase 2** — runtime layers (waffle, settings fragments, site config), per whichever
-  channel each operator selects.
+- **Phase 0** — schema, `compile`, `check`, validation. No consumer changes. Write
+  definitions for what already exists and diff the compiled artifacts against what each
+  operator produces by hand; equivalence is the acceptance test. Definitions can be
+  written and validated before any deployment adopts them, so this phase carries no
+  deployment risk at all.
+- **Phase 1** — AI drawer pilot. Add `--features` and `--scope` to
+  `build_legacy_configured`.
+- **Phase 2** — runtime operations (waffle, settings fragments, site config), per
+  whichever channel each operator selects.
 - **Phase 3** — migrate remaining features; add `features check` to CI.
 
 Every phase is independently revertable, and Phase 0 changes no behaviour at all.
@@ -440,6 +546,17 @@ Every phase is independently revertable, and Phase 0 changes no behaviour at all
    rules (`mitxonline-styles.scss:354+`) where they are. Should adopting a feature also
    *extract* its rules out of the baseline sheet, and if so is that migration in scope
    for the pilot or a follow-up?
+7. **Where plugin-contributed definitions belong.** §4.1 puts them in the operator's
+   tree, which means every operator installing `ol-openedx-chat` rewrites the same
+   definition. The contract properly belongs to the plugin that provides it — shipped in
+   the distribution and discovered from the installed package, the way plugin settings
+   already arrive via `add_plugins()`. Is that the eventual target, and if so does the
+   RFC's layout need to anticipate it now or can it migrate later?
+8. **Parameter expressiveness.** §4.3 proposes scalar typed parameters with
+   `${name}` substitution. Real features may want enums (the drawer's
+   slot-vs-standalone choice), or an operation included only when a parameter is set.
+   Conditional operations are a small step from a templating language, which is a
+   direction worth choosing deliberately rather than arriving at.
 
 ## Appendix A — MIT OL integration (non-normative)
 
