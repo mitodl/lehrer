@@ -50,6 +50,21 @@ class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
             self.ROOT_URLCONF = "lms.urls"  # type: ignore[attr-defined]
         return self
 
+    @model_validator(mode="after")
+    def _derive_spectacular_servers(self) -> LMSProductionSettings:
+        """Populate SPECTACULAR_SETTINGS["SERVERS"] with the LMS root URL.
+
+        Upstream's lms.envs.production adds this after lms.envs.common runs;
+        lehrer overlays common directly (see module docstring), so the
+        mutation is reproduced here. Runs after ProductionSettingsMixin's
+        _derive_service_root_urls, which populates LMS_ROOT_URL.
+        """
+        spectacular = getattr(self, "SPECTACULAR_SETTINGS", None)
+        root_url = getattr(self, "LMS_ROOT_URL", None)
+        if isinstance(spectacular, dict) and root_url:
+            spectacular["SERVERS"] = [{"url": root_url, "description": "Local"}]
+        return self
+
 
 # base="lms.envs.common" overlays the model onto edx-platform's upstream
 # defaults: any setting the model does not override (via an env/YAML source or a
