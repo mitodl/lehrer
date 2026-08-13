@@ -154,6 +154,10 @@ class AqueductSettings(BaseSettings):
         default=False,
         description=".. toggle_name: DISABLE_DEPRECATED_SIGNUP_URL\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Toggle for removing the deprecated /signup url.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2019-12-02\n.. toggle_target_removal_date: 2020-06-01\n.. toggle_warning: This url can be removed once it no longer has any real traffic.\n.. toggle_tickets: ARCH-1253",  # noqa: E501
     )
+    DISABLE_LIBRARY_CREATION: Any = Field(
+        default=None,
+        description='.. setting_name: DISABLE_LIBRARY_CREATION\n.. setting_default: None\n.. setting_description: If set to True, disables library creation for users without a staff role and hides the\n"New Library" button in Studio. If set to False, enables library creation independently of DISABLE_COURSE_CREATION.\nIf None (the default), DISABLE_COURSE_CREATION is used to decide whether library creation is disabled.',  # noqa: E501
+    )  # TODO: refine type
     DISCUSSIONS_INCONTEXT_FEEDBACK_URL: str = Field(
         default="",
         description="Feedback link in upgraded discussion notification alert",
@@ -197,6 +201,10 @@ class AqueductSettings(BaseSettings):
         description=".. toggle_name: ENABLE_DATES_COURSE_APP\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Controls whether the Dates course app is surfaced via the course apps API/UI.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2026-02-02\n.. toggle_tickets: https://github.com/openedx/platform-roadmap/issues/392",  # noqa: E501
     )
     ENABLE_DISCUSSION_HOME_PANEL: bool = Field(default=True)
+    ENABLE_EXTENDED_COURSE_DETAILS: bool = Field(
+        default=False,
+        description=".. toggle_name: settings.ENABLE_EXTENDED_COURSE_DETAILS\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When enabled, exposes the extended course detail fields (course background image,\nvideo thumbnail image, and related text fields) on the Schedule & Details page in Open edX Studio.\nCan also be overridden per-org via site configuration.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2016-04-30\n.. toggle_tickets: WL-398",  # noqa: E501
+    )
     ENABLE_GRADE_DOWNLOADS: bool = Field(default=True)
     ENABLE_HIDE_FROM_TOC_UI: bool = Field(
         default=False,
@@ -786,6 +794,10 @@ class AqueductSettings(BaseSettings):
     USER_TASKS_MAX_AGE: datetime.timedelta = Field(
         default_factory=lambda: timedelta(days=7),
         description="How long until database records about the outcome of a task and its artifacts get deleted?",  # noqa: E501
+    )
+    VIDEO_DOWNLOAD_RATE_LIMIT: str = Field(
+        default="12/hour",
+        description=".. setting_name: VIDEO_DOWNLOAD_RATE_LIMIT\n.. setting_default: '12/hour'\n.. setting_description: Per-user rate limit applied to the Studio\nvideo-download endpoint\n(``PUT /api/contentstore/v1/videos/{course_id}/download``). Bounds how\noften a single course author can initiate a multi-video zip download.\nRate format: DRF ``UserRateThrottle`` rate string. See\nhttps://www.django-rest-framework.org/api-guide/throttling/#setting-the-throttling-policy",  # noqa: E501
     )
     VIDEO_IMAGE_ASPECT_RATIO: Any = Field(
         default_factory=lambda: 16 / 9.0
