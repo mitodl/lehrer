@@ -59,7 +59,10 @@ Enabling the slot-based AskTIM drawer for a deployment currently requires:
    in `build_config.yaml`.
 3. **npm bundle** — `@mitodl/smoot-design@^6.33.0|public/static/smoot-design` in
    `extra_npm_bundles`.
-4. **Stylesheet** — the deployment's entry in the `styles:` map.
+4. **Stylesheet** — the deployment's entry in the `styles:` map. Note what that
+   actually means: `mitxonline-styles.scss` is a 598-line *deployment-wide*
+   stylesheet whose lines 354+ are the drawer's layout rules. The feature owns a
+   fragment of a file it does not own, and nothing marks the boundary.
 5. **Config JSX** — `learning-mfe-config.env.jsx:14` reads
    `process.env.ENABLE_AI_DRAWER_SLOT`, and at line 40 the whole `pluginSlots` block is
    *additionally* gated on `process.env.DEPLOYMENT_NAME?.includes("mitxonline")` — a
@@ -177,6 +180,8 @@ layers:                           # defaults, applied wherever enabled
             default: SidebarAIDrawerCoordinator.jsx
       extra_npm_bundles:
         - "@mitodl/smoot-design@^6.33.0|public/static/smoot-design"
+      style_fragments:            # appended to the deployment stylesheet
+        - ai-drawer.scss
   site_config:                    # FRONTEND_SITE_CONFIG / MFE_CONFIG keys
     commonAppConfig:
       aiDrawer: {enabled: true}
@@ -192,7 +197,38 @@ scopes:
   mitx-ci:               {enabled: false}
 ```
 
-Per-scope overrides deep-merge over `layers`:
+`mfe_assets` reuses the existing `build_config.yaml` vocabulary
+(`extra_slot_files`, `extra_npm_bundles`, the `by_release` mapping), sharing the
+`SlotFileByRelease` model from `mfe_config.py` rather than inventing a parallel one.
+
+`style_fragments` is the one addition, and it exists because `build_config.yaml`'s
+`styles:` map is a *whole-file, per-deployment* override — one stylesheet per
+deployment, which a feature therefore cannot own. Today the consequence is that the
+AI drawer's rules sit inside a 598-line deployment stylesheet with no marked boundary
+(§2.2). A fragment is a standalone partial listed by a feature; compile emits the
+resolved ordered list, and the build appends `@use` lines for each enabled fragment to
+the deployment stylesheet named in `styles:`. Baseline stylesheet first, fragments
+after, in the order features are declared — so a fragment can override baseline rules
+but two features cannot silently reorder each other.
+
+### 4.3.1 Scope override and merge semantics
+
+Per-scope `layers` merge over the feature's defaults. "Deep merge" alone is
+underspecified for the list-valued layers, and the three plausible policies
+(replacement, concatenation, identity-keyed) produce different compiled artifacts and
+different conflict results, so the contract fixes it:
+
+- **Mappings** merge recursively; the scope's value wins at each leaf key.
+- **Lists whose elements have an identity** merge by that identity. A scope entry
+  whose identity matches a default entry replaces it wholesale (not field-by-field);
+  an unmatched identity is appended. Identities: `waffle` → `flag`,
+  `extra_slot_files` → `dest`, `extra_npm_bundles` → target directory,
+  `style_fragments` → filename, `commands` → `id`.
+- **Ordering is deterministic**: defaults in declared order, then appended scope
+  entries in declared order. Compiled output must be byte-stable across runs so it can
+  be diffed and drift-checked.
+- **`requires`** is feature-level and not scope-overridable. A feature's dependencies
+  do not change based on where it is turned on.
 
 ```yaml
 scopes:
@@ -200,13 +236,10 @@ scopes:
     enabled: true
     layers:
       waffle:
+        # same `flag` as the default entry -> replaces it, not a second flag
         - flag: feedback.feedback_enabled
-          args: ["--create", "--everyone"]
+          args: ["--create", "--everyone", "--staff"]
 ```
-
-`mfe_assets` deliberately reuses the existing `build_config.yaml` vocabulary
-(`extra_slot_files`, `extra_npm_bundles`, the `by_release` mapping), sharing the
-`SlotFileByRelease` model from `mfe_config.py` rather than inventing a parallel one.
 
 ### 4.4 Validation
 
@@ -220,9 +253,22 @@ field inventory in milliseconds — the settings gate costs nothing to run on ev
    failure at PR time.
 2. **Scope names** — must appear in `scopes.yaml`.
 3. **Plugin requirements** — `requires.plugins` ⊆ the packages of the scope's cell in
-   `build_manifest.yaml`.
-4. **MFE names** — must appear in the group's `build_config.yaml` `mfes` map.
-5. **Slot files** — every referenced source file must exist in the slot config dir.
+   `build_manifest.yaml`. This is not a literal subset test: `Cell.packages` holds
+   verbatim requirement lines (`ol-openedx-chat==0.5.9`) while `requires.plugins`
+   names bare distributions, so both sides are canonicalised to PEP 503 normalised
+   project names first. `plugin_imports._distribution_name` already implements exactly
+   this and should be reused rather than reimplemented. One caveat to state plainly:
+   it returns `None` for VCS and direct-reference lines, so a plugin satisfied only by
+   a `git+https://…` override is invisible to the check. Such a requirement must fail
+   loudly as unverifiable rather than silently pass.
+4. **MFE names** — *deferred; no authoritative inventory exists.* The obvious source,
+   `build_config.yaml`'s `mfes` map, is not one: `BuildConfig.mfe()`
+   (`mfe_config.py:120`) deliberately returns an empty default for absent keys, so the
+   map lists only MFEs with baseline customisation — two, today. Validating against it
+   would reject feature assets for any other perfectly buildable MFE. Until an
+   operator-supplied MFE inventory exists (§9.5), compile checks name *shape* only.
+5. **Slot files** — every referenced source file, including `style_fragments`, must
+   exist in the slot config dir.
 6. **Shapes** — waffle flags as `namespace.name`; npm bundles as `spec|target`.
 7. **Conflicts** — two features enabled in the same scope that assign different values
    to the same setting, FEATURES key, waffle flag, or MFE build var is a hard error.
@@ -261,7 +307,23 @@ pre-commit hook forbids the literal string `deployments` under `src/lehrer/core/
   settings/cms.yaml
   site_config.yaml         # FRONTEND_SITE_CONFIG / MFE_CONFIG keys
   mfe_build_env/<mfe>.env  # KEY=VALUE
+  mfe_assets/<mfe>.yaml    # resolved slot files, npm bundles, style fragments
   checklist.yaml           # required services, plugins, commands
+```
+
+`mfe_assets/<mfe>.yaml` holds the *resolved* result — `by_release` already collapsed
+to concrete filenames for the scope's cell, merge order already applied — so a
+non-lehrer build system gets a flat list it can act on without reimplementing
+resolution:
+
+```yaml
+contract_version: 1
+extra_slot_files:
+  - {source: AIDrawerManagerSidebar.jsx, dest: AIDrawerManagerSidebar.jsx}
+  - {source: SidebarAIDrawerCoordinator.ulmo.jsx, dest: SidebarAIDrawerCoordinator.jsx}
+extra_npm_bundles:
+  - {spec: "@mitodl/smoot-design@^6.33.0", target: public/static/smoot-design}
+style_fragments: [ai-drawer.scss]
 ```
 
 `waffles.yaml` matches byte-for-byte what `set_waffle_flags.py` already consumes
@@ -271,22 +333,32 @@ script — which lehrer bakes into every image.
 ### 4.7 Self-served versus emitted layers
 
 Two of these layers describe steps **lehrer itself performs**. For those, requiring a
-consumer to read a file and hand values back to lehrer is a pointless round trip:
-`build_legacy_configured` already receives `--deployment-name` and `--release-name`, so
-it can resolve the manifest directly given `--scope`.
+consumer to read a file and hand values back to lehrer is a pointless round trip.
+
+A `--scope` string alone is not sufficient to close that loop, though.
+`build_legacy_configured` receives `slot_config` as a `dagger.Directory` plus
+`deployment_name`/`release_name` as plain strings; it has no path to a group's manifest
+tree, and the `lehrer-core-boundary` pre-commit hook forbids the literal string
+`deployments` anywhere under `src/lehrer/core/`, so core cannot construct one. Scopes
+are also group-local, and two groups may legitimately use the same cell coordinates.
+
+The build functions therefore take **two** new inputs: `--features`, a
+`dagger.Directory` holding the group's `features/` tree (mirroring how `--slot-config`
+is already passed), and `--scope`, the label to resolve within it. Path reasoning stays
+in `src/lehrer/cli/`, which is where the group layout is allowed to be known.
 
 | Layer | lehrer self-serves | Also emitted |
 |---|---|---|
-| `mfe_build_env` | yes, via `--scope` | yes |
-| `mfe_assets` | yes, via `--scope` | yes |
+| `mfe_build_env` | yes, via `--features` + `--scope` | yes |
+| `mfe_assets` | yes, via `--features` + `--scope` | yes |
 | `settings`, `features` | no | yes |
 | `waffle` | no | yes |
 | `site_config` | no | yes |
 | `commands`, `requires` | no | yes (checklist) |
 
 Everything is emitted regardless, so an operator using a different build system is never
-locked out. `--scope` is purely additive: omit it and every existing explicit argument
-behaves exactly as it does today.
+locked out. Both new flags are purely additive: omit them and every existing explicit
+argument behaves exactly as it does today.
 
 ## 5. AI drawer as a manifest
 
@@ -358,6 +430,16 @@ Every phase is independently revertable, and Phase 0 changes no behaviour at all
 4. **`site_config` overlap.** `FRONTEND_SITE_CONFIG` is largely topology (URLs, cookie
    names) with a little feature content. Does the manifest carry only the feature-owned
    subset, and if so how is the boundary kept honest?
+5. **MFE inventory.** §4.4.4 defers MFE-name validation because lehrer has no
+   authoritative list of the MFEs an operator builds — `build_config.yaml`'s `mfes` map
+   is customisation, not inventory. Should lehrer gain one (a new key in `scopes.yaml`,
+   or a group-level `mfes.yaml`), or is name validation not worth the extra required
+   config?
+6. **Style fragments vs. extraction.** §4.3 appends feature fragments to the baseline
+   deployment stylesheet, which is additive and safe but leaves the existing embedded
+   rules (`mitxonline-styles.scss:354+`) where they are. Should adopting a feature also
+   *extract* its rules out of the baseline sheet, and if so is that migration in scope
+   for the pilot or a follow-up?
 
 ## Appendix A — MIT OL integration (non-normative)
 
