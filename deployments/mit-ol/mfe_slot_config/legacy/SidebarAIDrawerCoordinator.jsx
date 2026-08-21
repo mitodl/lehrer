@@ -204,7 +204,7 @@ const SidebarAIDrawerCoordinator = () => {
                 } ${showFeedback ? '' : 'd-none'}`}
                 aria-hidden={!showFeedback}
             >
-                <FeedbackDrawerSlot />
+                <FeedbackDrawerSlot onClose={() => setShowFeedback(false)} />
             </div>
         </>
     );

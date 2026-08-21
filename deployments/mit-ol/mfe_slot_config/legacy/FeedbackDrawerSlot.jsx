@@ -1,15 +1,23 @@
 import { useContext, useEffect, useRef } from 'react';
+import PropTypes from 'prop-types';
 import SidebarContext from './src/courseware/course/sidebar/SidebarContext';
 import {
   loadBundle, getMessageOrigin, SUBMIT_URL, CSRF_COOKIE_NAME, CSRF_HEADER_NAME, CSRF_PRIME_URL,
 } from './feedbackBundle';
 import useFeedbackEnrichment from './useFeedbackEnrichment';
 
-const FeedbackDrawerSlot = () => {
+const FeedbackDrawerSlot = ({ onClose }) => {
   const { courseId = null, unitId = null } = useContext(SidebarContext) ?? {};
   const getEnrichment = useFeedbackEnrichment(courseId, unitId);
   const containerRef = useRef(null);
   const instanceRef = useRef(null);
+  // The bundle is initialised once, so keep the latest onClose in a ref and pass
+  // a stable wrapper below; the manager calls it when the drawer closes so the
+  // coordinator can hide this (otherwise empty) column.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -30,6 +38,7 @@ const FeedbackDrawerSlot = () => {
             csrfPrimeUrl: CSRF_PRIME_URL,
             getEnrichment,
             variant: 'slot',
+            onClose: () => onCloseRef.current?.(),
           },
           { container: containerRef.current },
         );
@@ -52,6 +61,10 @@ const FeedbackDrawerSlot = () => {
   }, [getEnrichment]);
 
   return <div ref={containerRef} className="feedback-drawer-slot-wrapper" />;
+};
+
+FeedbackDrawerSlot.propTypes = {
+  onClose: PropTypes.func,
 };
 
 export default FeedbackDrawerSlot;
