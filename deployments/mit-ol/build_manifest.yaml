@@ -52,7 +52,11 @@ cells:
   - ol-openedx-events-handler==0.2.1
   - ol-openedx-course-sync==1.0.1
   - ol-openedx-uai-content-customization==0.3.0
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   - edx-sga==0.29.0
@@ -96,7 +100,11 @@ cells:
   - rapid-response-xblock==0.11.0
   - ol-openedx-chat==0.5.10
   - ol-openedx-chat-xblock==0.4.6
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   overrides:
@@ -130,7 +138,11 @@ cells:
   - rapid-response-xblock==0.11.0
   - ol-openedx-chat==0.5.10
   - ol-openedx-chat-xblock==0.4.6
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   overrides:
@@ -162,7 +174,11 @@ cells:
   - pydantic-settings[yaml]==2.15.0
   - ol-openedx-chat==0.5.10
   - ol-openedx-chat-xblock==0.4.6
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   overrides:
@@ -195,7 +211,11 @@ cells:
   - rapid-response-xblock==0.11.0
   - ol-openedx-chat==0.5.10
   - ol-openedx-chat-xblock==0.4.6
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   overrides:
@@ -230,7 +250,11 @@ cells:
   - rapid-response-xblock==0.11.0
   - ol-openedx-chat==0.5.10
   - ol-openedx-chat-xblock==0.4.6
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   overrides:
@@ -264,7 +288,11 @@ cells:
   - django-aqueduct==0.10.0
   - ol-openedx-chat==0.5.10
   - ol-openedx-chat-xblock==0.4.6
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   overrides:
