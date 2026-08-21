@@ -44,3 +44,15 @@ data:
   OL_SETTINGS_DIR: ""
 
   SERVICE_VARIANT: "cms"
+
+  # OpenTelemetry: console exporter, since there's no collector running in
+  # local dev. See deployment-{lms,cms,worker,cms-worker}.yaml for the
+  # opentelemetry-instrument wrap that actually activates this -- these
+  # variables alone do nothing without it.
+  OTEL_TRACES_EXPORTER: "console"
+  # Metrics/logs aren't part of this rollout; leaving OTEL_METRICS_EXPORTER/
+  # OTEL_LOGS_EXPORTER unset defaults to "otlp" (grpc), which isn't installed
+  # here (only opentelemetry-exporter-otlp-proto-http is) and aborts the
+  # *entire* SDK configuration, traces included -- not just metrics/logs.
+  OTEL_METRICS_EXPORTER: "none"
+  OTEL_LOGS_EXPORTER: "none"

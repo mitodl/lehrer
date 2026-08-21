@@ -19,4 +19,9 @@ cells:
   packages:
   - django-aqueduct==0.10.0
   - pydantic-settings[yaml]==2.15.0
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   overrides: []
