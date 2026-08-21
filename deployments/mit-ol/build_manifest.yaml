@@ -90,7 +90,7 @@ cells:
   - ol-openedx-rapid-response-reports==0.5.1
   - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
-  - pip==26.1.2
+  - pip==26.2
   - pydantic-settings[yaml]==2.15.0
   - django-aqueduct==0.10.0
   - rapid-response-xblock==0.11.0
@@ -124,7 +124,7 @@ cells:
   - ol-openedx-rapid-response-reports==0.5.1
   - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
-  - pip==26.1.2
+  - pip==26.2
   - pydantic-settings[yaml]==2.15.0
   - django-aqueduct==0.10.0
   - rapid-response-xblock==0.11.0
@@ -189,7 +189,7 @@ cells:
   - ol-openedx-rapid-response-reports==0.5.1
   - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
-  - pip==26.1.2
+  - pip==26.2
   - pydantic-settings[yaml]==2.15.0
   - django-aqueduct==0.10.0
   - rapid-response-xblock==0.11.0
@@ -224,7 +224,7 @@ cells:
   - ol-openedx-rapid-response-reports==0.5.1
   - ol-openedx-sentry==0.4.0
   - openedx-scorm-xblock==19.0.4
-  - pip==26.1.2
+  - pip==26.2
   - pydantic-settings[yaml]==2.15.0
   - django-aqueduct==0.10.0
   - rapid-response-xblock==0.11.0
