@@ -347,6 +347,10 @@ class AqueductSettings(BaseSettings):
             ],
         },
     )
+    FRONTEND_APP_PUBLISHER_URL: Any = Field(
+        default=None,
+        description='.. setting_name: FRONTEND_APP_PUBLISHER_URL\n.. setting_default: None\n.. setting_description: Base URL of the publisher frontend app. When set (globally here or per-org via\nsite configuration), the course "settings" page in Studio links out to the publisher app. Left unset\n(None) by default, in which case no publisher link is shown.',  # noqa: E501
+    )  # TODO: refine type
     FRONTEND_LOGIN_URL: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
