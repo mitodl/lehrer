@@ -1,0 +1,577 @@
+# RFC: Feature Manifests — one declaration, cross-layer fan-out
+
+**Status:** Draft for discussion
+**Repo:** mitodl/lehrer
+**Related:** [06 Build Manifest](./06-build-manifest.md), [03 Frontend-Base / OEP-65](./03-frontend-base-oep65.md)
+
+## 1. Summary
+
+Turning on one user-facing Open edX feature today means editing up to ten unrelated
+places, in two repositories, in three languages, with no mechanism that connects them
+and nothing that fails when you miss one. This RFC proposes **feature manifests**, split
+into a per-feature *definition* — the complete set of operations that feature requires,
+plus the parameters it accepts — and a per-deployment *adoption* file that names which
+features it takes and with what values. Both are validated by Pydantic models in
+lehrer core, and together they name the complete fan-out across every layer — and
+a `lehrer features compile` step that emits per-layer artifacts in a documented,
+versioned contract.
+
+The design goal that shapes every decision below: **lehrer is a stand-alone toolchain
+intended for operators beyond MIT Open Learning.** The manifest schema therefore
+contains no notion of environment stages, promotion pipelines, deployment enums, or any
+other MIT OL topology. Where an environment axis is unavoidable, it is an *opaque
+operator-defined label* that lehrer stores and matches but never interprets. How any
+particular operator ingests the compiled artifacts is deliberately outside the schema;
+MIT OL's own integration appears only in a non-normative appendix.
+
+## 2. Problem
+
+### 2.1 The ten mechanisms
+
+Feature state is spread across these, verified against lehrer `e14e3f0` and
+ol-infrastructure `c120a1d87`:
+
+| # | Mechanism | Where it lives |
+|---|---|---|
+| 1 | Env var → aqueduct Pydantic field | `deployments/<group>/settings/{lms,cms}/models/aqueduct.py` (394 LMS / 170 CMS fields for mit-ol) |
+| 2 | `OL_SETTINGS_DIR` YAML deep-merge for `FEATURES`/`MFE_CONFIG` | `src/lehrer/settings/base.py:112,277`; files supplied by the operator at runtime |
+| 3 | `@model_validator` derivation cascades | e.g. `_apply_structural_overrides` in `deployments/mit-ol/settings/lms/aqueduct.py:192` |
+| 4 | `FEATURES_COMPAT_KEYS` mirroring | `deployments/mit-ol/settings/lms/aqueduct.py:59-129` — ~70 keys mirrored into `FEATURES` |
+| 5 | Waffle DB flags | `set_waffle_flags.py` (baked into the image at `src/lehrer/core/platform.py:1221`) reading a YAML the operator supplies |
+| 6 | MFE build-time env vars | **no declarative home** — raw `list[str]` of `KEY=VALUE` at `src/lehrer/core/mfe.py:63,212` |
+| 7 | `build_config.yaml` slot files / npm bundles / styles | `deployments/<group>/mfe_slot_config/legacy/build_config.yaml` |
+| 8 | OEP-65 runtime config | `ENABLE_MFE_CONFIG_API` + `FRONTEND_SITE_CONFIG`, supplied by the operator |
+| 9 | Service image existence | notes / codejail — built by separate lehrer targets |
+| 10 | Data population | management commands (OAuth clients, `saml_pull`) run by the operator |
+
+Mechanisms 1–7 and 9 are lehrer's; 8 and 10 are the operator's. Nothing ties any of them
+together, and no gate detects a partial rollout. The failure mode is silent: the feature
+simply does not appear, or appears half-configured, and the diagnosis is a manual walk
+through all ten.
+
+### 2.2 Worked example — the AI drawer today
+
+Enabling the slot-based AskTIM drawer for a deployment currently requires:
+
+1. **MFE build env** — `enable_ai_drawer_slot="true"` on the correct entry in the
+   operator's build configuration (mechanism 6), threaded through a hand-maintained
+   field and a params dict.
+2. **Slot files** — `AIDrawerManagerSidebar.jsx` and a release-selected
+   `SidebarAIDrawerCoordinator.jsx` listed under the learning MFE's `extra_slot_files`
+   in `build_config.yaml`.
+3. **npm bundle** — `@mitodl/smoot-design@^6.33.0|public/static/smoot-design` in
+   `extra_npm_bundles`.
+4. **Stylesheet** — the deployment's entry in the `styles:` map. Note what that
+   actually means: `mitxonline-styles.scss` is a 598-line *deployment-wide*
+   stylesheet whose lines 354+ are the drawer's layout rules. The feature owns a
+   fragment of a file it does not own, and nothing marks the boundary.
+5. **Config JSX** — `learning-mfe-config.env.jsx:14` reads
+   `process.env.ENABLE_AI_DRAWER_SLOT`, and at line 40 the whole `pluginSlots` block is
+   *additionally* gated on `process.env.DEPLOYMENT_NAME?.includes("mitxonline")` — a
+   second, hard-coded deployment test that no schema knows about.
+6. **Inverse branch** — when the flag is off, the same file dynamically imports
+   `/learn/static/smoot-design/aiDrawerManager.es.js`, a hard-coded path. The flag is
+   not on/off; it *switches between two implementations*.
+7. **LMS plugin + settings** — the chat plugin must be in the cell's `packages` in
+   `build_manifest.yaml`, with its settings supplied at runtime.
+8. **Waffle** — a per-course gate for the companion feedback drawer, in a YAML the
+   operator maintains separately.
+
+Eight coupled edits, of which exactly one (`ENABLE_AI_DRAWER_SLOT`) looks like a feature
+flag. Item 5 in particular is an operator assumption hard-coded into a JSX file — the
+class of thing this RFC exists to make declarative.
+
+## 3. Goals and non-goals
+
+**Goals**
+
+- One declarative home per feature, naming its full cross-layer fan-out.
+- A feature's contract stated independently of anyone's adoption of it, so the set of
+  available features is enumerable and an upstream-native definition is shareable
+  between operators rather than rewritten by each.
+- Values, not just on/off: a feature may take typed parameters (integers, strings,
+  enums), since most real toggles configure something as well as enabling it.
+- Compile-time validation: an unknown setting name, an unsatisfied plugin requirement,
+  or two features fighting over the same key fails before anything is built.
+- A documented, versioned artifact contract any consumer can read.
+- `lehrer features explain <feature>` answers "what does flipping this actually touch?"
+  — today an unwritten oral tradition.
+- Graceful degradation: operators who do not adopt manifests keep today's explicit
+  arguments, unchanged.
+
+**Non-goals**
+
+- Not a runtime feature-flag service. Waffle remains the mechanism for per-user and
+  per-course targeting; the manifest declares *which* flags a feature needs.
+- No environment-stage, promotion, or rollout model. Scopes are opaque labels (§4.2).
+- Does not replace `build_manifest.yaml` (build definitions) or `build_config.yaml`
+  (baseline MFE customisation); it composes with both (§6).
+- Does not prescribe how an operator ingests artifacts (§7, Appendix A).
+
+## 4. Design
+
+### 4.1 Layout
+
+A feature's **definition** and its **adoption** are separate artifacts. The definition
+is a contract — the complete set of operations that must happen for the feature to work,
+plus the parameters it accepts. Adoption is a deployment stating which features it takes
+and with what values. Conflating the two is what makes today's situation
+undiagnosable: there is no artifact anywhere that answers "what does this feature
+require?" independently of "where is it on?"
+
+```
+src/lehrer/features/               # upstream-native definitions, shipped with lehrer
+  course-notes.yaml
+
+deployments/<group>/features/
+  definitions/                     # plugin-contributed and operator-specific
+    ai-drawer.yaml
+  scopes.yaml                      # scope labels -> build cells
+  adoption.yaml                    # which features each scope takes, with values
+```
+
+Splitting them buys three things beyond tidiness. Definitions become *enumerable* — a
+catalog of what can be turned on, independent of anyone's deployment. Upstream-native
+definitions are operator-agnostic by construction, so lehrer can ship them and every
+operator inherits them (the catalog may start empty and grow). And adoption becomes a
+short, reviewable file: the diff for turning a feature on is one block, not a hunt
+across ten mechanisms.
+
+New core module `src/lehrer/core/feature_manifest.py`, following the established
+precedent of `mfe_config.py` and `build_manifest.py`: Pydantic models that serve as both
+validator and JSON Schema source, with a `# yaml-language-server: $schema=` modeline for
+editor and agent validation.
+
+### 4.2 Scopes are opaque labels
+
+A feature is rarely on everywhere at once, so the manifest needs *some* axis. That axis
+must not encode anyone's topology. A **scope** is an operator-chosen string that lehrer
+stores, matches, and passes through — never parses.
+
+```yaml
+# deployments/<group>/features/scopes.yaml
+version: 1
+scopes:
+  mitxonline-ci:
+    cell: {release: master, deployment: mitxonline}
+  mitxonline-production:
+    cell: {release: master, deployment: mitxonline}
+  mitx-ci:
+    cell: {release: master, deployment: mitx}
+```
+
+`cell` points at an existing `build_manifest.yaml` coordinate. That join is what lets
+compile check a feature's plugin requirements against the packages the cell actually
+installs. Multiple scopes may share one cell — which is exactly the case a bare
+`(release, deployment)` coordinate cannot express, since a deployment may be built from
+one release but operated in several places with different features on.
+
+Declaring scopes centrally means a typo in a feature file fails at load rather than
+silently matching nothing. This follows the `settings_model_release` validator precedent
+in `build_manifest.py:134` — *a gate that quietly stops gating is worse than no gate.*
+
+### 4.3 Feature definitions — the contract
+
+A definition names every operation the feature needs and every parameter it accepts. It
+says nothing about where the feature is on.
+
+```yaml
+# deployments/mit-ol/features/definitions/ai-drawer.yaml
+version: 1
+feature: ai-drawer
+summary: Slot-based AskTIM chat drawer in the learning MFE right sidebar.
+
+origin: plugin                    # upstream | plugin | operator
+provided_by: ol-openedx-chat      # required when origin: plugin
+
+parameters:
+  history_limit:
+    type: integer
+    default: 20
+  chat_model:
+    type: string
+    default: null
+    description: Overrides the plugin default when set.
+
+requires:
+  plugins: [ol-openedx-chat]      # checked against the scope's cell packages
+  services: []                    # e.g. [notes], [codejail]
+
+operations:                       # the complete fan-out
+  settings:
+    lms:
+      OL_CHAT_HISTORY_LIMIT: ${history_limit}
+      OL_CHAT_MODEL: ${chat_model}
+  features:                       # FEATURES dict entries
+    lms:
+      ENABLE_SOMETHING: true
+  waffle:
+    - flag: feedback.feedback_enabled
+      args: ["--create", "--everyone"]
+  mfe_build_env:
+    learning:
+      ENABLE_AI_DRAWER_SLOT: "true"
+  mfe_assets:
+    learning:
+      extra_slot_files:
+        - AIDrawerManagerSidebar.jsx
+        - dest: SidebarAIDrawerCoordinator.jsx
+          by_release:
+            ulmo: SidebarAIDrawerCoordinator.ulmo.jsx
+            default: SidebarAIDrawerCoordinator.jsx
+      extra_npm_bundles:
+        - "@mitodl/smoot-design@^6.33.0|public/static/smoot-design"
+      style_fragments:            # appended to the deployment stylesheet
+        - ai-drawer.scss
+  site_config:                    # FRONTEND_SITE_CONFIG / MFE_CONFIG keys
+    commonAppConfig:
+      aiDrawer: {enabled: true}
+  commands:                       # data population this feature depends on
+    - id: chat-oauth-client
+      service: lms
+      argv: [manage.py, lms, create_dot_application, ...]
+      stage: post-migrate
+```
+
+**`origin` is not documentation — it selects which validations apply.** An
+`upstream` feature's settings must exist in the generated `AqueductSettings` inventory,
+because that model is generated from upstream's `common.py`. A `plugin` feature's
+settings deliberately must *not* be required to: plugin settings arrive at runtime via
+`add_plugins()`, which codegen v2's static discovery cannot see, so checking them
+against the upstream inventory would reject every correct plugin feature. Without this
+classification the §4.4.1 settings gate is not merely incomplete, it is wrong. In
+exchange, `plugin` carries an obligation `upstream` does not: `provided_by` must appear
+in the adopting scope's cell packages. `operator` asserts neither and gets shape checks
+only.
+
+`mfe_assets` reuses the existing `build_config.yaml` vocabulary
+(`extra_slot_files`, `extra_npm_bundles`, the `by_release` mapping), sharing the
+`SlotFileByRelease` model from `mfe_config.py` rather than inventing a parallel one.
+
+`style_fragments` is the one addition, and it exists because `build_config.yaml`'s
+`styles:` map is a *whole-file, per-deployment* override — one stylesheet per
+deployment, which a feature therefore cannot own. Today the consequence is that the
+AI drawer's rules sit inside a 598-line deployment stylesheet with no marked boundary
+(§2.2). A fragment is a standalone partial listed by a feature; compile emits the
+resolved ordered list, and the build appends `@use` lines for each enabled fragment to
+the deployment stylesheet named in `styles:`. Baseline stylesheet first, fragments
+after, in the order features are declared — so a fragment can override baseline rules
+but two features cannot silently reorder each other.
+
+### 4.3.1 Adoption — what a deployment turns on
+
+Adoption names features and supplies parameter values. Presence means adopted; values
+are typed by the definition, not restricted to booleans.
+
+```yaml
+# deployments/<group>/features/adoption.yaml
+version: 1
+adoption:
+  mitxonline-production:
+    ai-drawer:
+      history_limit: 50
+      chat_model: gpt-4o
+    course-notes: {}              # adopted with definition defaults
+  mitxonline-ci:
+    ai-drawer:
+      history_limit: 20
+  mitx-ci:
+    ai-drawer: {enabled: false}   # deliberate non-adoption, recorded
+```
+
+`enabled` is a reserved key, not a parameter — a definition may not declare a parameter
+by that name. Omitting a feature and writing `enabled: false` both leave it off; the
+latter exists so a deliberate decision leaves a trace rather than looking like an
+oversight.
+
+A parameter value must satisfy its declared type, and a parameter the definition does
+not declare is an error rather than an ignored key. Unsupplied parameters take the
+definition's default; a parameter with no default that is never supplied fails compile
+for that scope.
+
+### 4.3.2 Per-scope operation overrides and merge semantics
+
+Parameters cover the values a definition anticipated. A scope may also need to override
+an *operation* the definition did not parameterise — an escape hatch that should be rare
+and visible, since anything overridden repeatedly is a missing parameter:
+
+```yaml
+  mitxonline-ci:
+    ai-drawer:
+      history_limit: 20
+      operations:                 # escape hatch, merged over the definition
+        waffle:
+          - flag: feedback.feedback_enabled
+            args: ["--create", "--everyone", "--staff"]
+```
+
+"Deep merge" alone is underspecified for the list-valued operations, and the three
+plausible policies (replacement, concatenation, identity-keyed) produce different
+compiled artifacts and different conflict results, so the contract fixes it:
+
+- **Mappings** merge recursively; the scope's value wins at each leaf key.
+- **Lists whose elements have an identity** merge by that identity. A scope entry
+  whose identity matches a default entry replaces it wholesale (not field-by-field);
+  an unmatched identity is appended. Identities: `waffle` → `flag`,
+  `extra_slot_files` → `dest`, `extra_npm_bundles` → target directory,
+  `style_fragments` → filename, `commands` → `id`.
+- **Ordering is deterministic**: defaults in declared order, then appended scope
+  entries in declared order. Compiled output must be byte-stable across runs so it can
+  be diffed and drift-checked.
+- **`requires`** belongs to the definition and is not overridable from adoption. A
+  feature's dependencies do not change based on where it is turned on.
+
+So the override above carries the same `flag` as the definition's entry, which means it
+*replaces* that entry — it does not add a second registration of the same flag.
+
+### 4.4 Validation
+
+Everything here runs in plain Python with no container and no Django. The generated
+`AqueductSettings` model is a *static* codegen-v2 file, so `ast.parse` recovers the full
+field inventory in milliseconds — the settings gate costs nothing to run on every commit.
+
+1. **Settings names** — for an `origin: upstream` feature, every key under
+   `operations.settings.<service>` must be a field of that service's committed
+   `models/aqueduct.py`. Unknown key → compile error. This is the single highest-value
+   check: it turns a typo that silently does nothing into a failure at PR time. For
+   `origin: plugin`, the check is inverted into an obligation on `provided_by` (§4.3) —
+   plugin settings are injected at runtime by `add_plugins()` and are legitimately
+   absent from the static model, so requiring them here would reject every correct
+   plugin feature.
+2. **Scope and feature names** — scopes must appear in `scopes.yaml`; every feature
+   named in `adoption.yaml` must resolve to a definition, and every parameter supplied
+   must be declared by it, with a value matching its declared type.
+3. **Plugin requirements** — `requires.plugins` ⊆ the packages of the scope's cell in
+   `build_manifest.yaml`. This is not a literal subset test: `Cell.packages` holds
+   verbatim requirement lines (`ol-openedx-chat==0.5.9`) while `requires.plugins`
+   names bare distributions, so both sides are canonicalised to PEP 503 normalised
+   project names first. `plugin_imports._distribution_name` already implements exactly
+   this and should be reused rather than reimplemented. One caveat to state plainly:
+   it returns `None` for VCS and direct-reference lines, so a plugin satisfied only by
+   a `git+https://…` override is invisible to the check. Such a requirement must fail
+   loudly as unverifiable rather than silently pass.
+4. **MFE names** — *deferred; no authoritative inventory exists.* The obvious source,
+   `build_config.yaml`'s `mfes` map, is not one: `BuildConfig.mfe()`
+   (`mfe_config.py:120`) deliberately returns an empty default for absent keys, so the
+   map lists only MFEs with baseline customisation — two, today. Validating against it
+   would reject feature assets for any other perfectly buildable MFE. Until an
+   operator-supplied MFE inventory exists (§9.5), compile checks name *shape* only.
+5. **Slot files** — every referenced source file, including `style_fragments`, must
+   exist in the slot config dir.
+6. **Shapes** — waffle flags as `namespace.name`; npm bundles as `spec|target`.
+7. **Conflicts** — two features adopted in the same scope that assign different values
+   to the same setting, FEATURES key, waffle flag, or MFE build var is a hard error.
+   Nothing detects this today. Note this check only becomes possible once definitions
+   are separate from adoption: it needs the resolved operation set of every feature a
+   scope takes, which is precisely what compile now has.
+8. **FEATURES keys** are *not* statically checkable — `FEATURES` is typed `Any` in the
+   generated model (`models/aqueduct.py:689`), and the authoritative key set lives in
+   edx-platform's `common.py`. This check belongs in the existing settings-verify CI
+   tier, which already boots a real container, rather than in compile.
+
+### 4.5 CLI
+
+```
+lehrer features compile  --group <g> --scope <s> --out <dir>
+lehrer features check    --group <g>             # validate all scopes, emit nothing
+lehrer features catalog  [--group <g>]           # every definition, with parameters
+lehrer features adopted  --group <g> --scope <s> # what this scope takes, resolved
+lehrer features explain  <feature> [--group <g>] [--scope <s>]
+```
+
+`check` is a cheap CI gate alongside the existing `build-config-schema` /
+`build-manifest-schema` hooks.
+
+`catalog` and `adopted` are the two halves the split makes possible: what *can* be
+turned on (definitions, independent of any deployment — with no `--group`, lehrer's
+shipped upstream-native catalog alone) versus what a given scope *has* turned on.
+`explain` prints one feature's fan-out; without `--scope` it prints the contract with
+parameter placeholders intact, with `--scope` the values resolved for that deployment.
+
+Path-reasoning logic lives in `src/lehrer/cli/`, not `core/`: the `lehrer-core-boundary`
+pre-commit hook forbids the literal string `deployments` under `src/lehrer/core/`.
+
+### 4.6 Artifact contract
+
+`compile` writes a versioned tree. `contract_version` is independent of the manifest
+`version`, so consumers pin against output format, not input schema.
+
+```
+<out>/
+  manifest.json            # {contract_version: 1, group, scope, generated_from: {...}}
+  waffles.yaml             # {waffles: [[flag, arg, ...]]}
+  settings/lms.yaml        # OL_SETTINGS_DIR-shaped fragment
+  settings/cms.yaml
+  site_config.yaml         # FRONTEND_SITE_CONFIG / MFE_CONFIG keys
+  mfe_build_env/<mfe>.env  # KEY=VALUE
+  mfe_assets/<mfe>.yaml    # resolved slot files, npm bundles, style fragments
+  checklist.yaml           # required services, plugins, commands
+```
+
+`mfe_assets/<mfe>.yaml` holds the *resolved* result — `by_release` already collapsed
+to concrete filenames for the scope's cell, merge order already applied — so a
+non-lehrer build system gets a flat list it can act on without reimplementing
+resolution:
+
+```yaml
+contract_version: 1
+extra_slot_files:
+  - {source: AIDrawerManagerSidebar.jsx, dest: AIDrawerManagerSidebar.jsx}
+  - {source: SidebarAIDrawerCoordinator.ulmo.jsx, dest: SidebarAIDrawerCoordinator.jsx}
+extra_npm_bundles:
+  - {spec: "@mitodl/smoot-design@^6.33.0", target: public/static/smoot-design}
+style_fragments: [ai-drawer.scss]
+```
+
+`waffles.yaml` matches byte-for-byte what `set_waffle_flags.py` already consumes
+(`{"waffles": [[flag, *args]]}`), so it is drop-in for any operator already using that
+script — which lehrer bakes into every image.
+
+### 4.7 Self-served versus emitted operations
+
+Two of these operation groups describe steps **lehrer itself performs**. For those, requiring a
+consumer to read a file and hand values back to lehrer is a pointless round trip.
+
+A `--scope` string alone is not sufficient to close that loop, though.
+`build_legacy_configured` receives `slot_config` as a `dagger.Directory` plus
+`deployment_name`/`release_name` as plain strings; it has no path to a group's manifest
+tree, and the `lehrer-core-boundary` pre-commit hook forbids the literal string
+`deployments` anywhere under `src/lehrer/core/`, so core cannot construct one. Scopes
+are also group-local, and two groups may legitimately use the same cell coordinates.
+
+The build functions therefore take **two** new inputs: `--features`, a
+`dagger.Directory` holding the group's `features/` tree (mirroring how `--slot-config`
+is already passed), and `--scope`, the label to resolve within it. Path reasoning stays
+in `src/lehrer/cli/`, which is where the group layout is allowed to be known.
+
+| Operation group | lehrer self-serves | Also emitted |
+|---|---|---|
+| `mfe_build_env` | yes, via `--features` + `--scope` | yes |
+| `mfe_assets` | yes, via `--features` + `--scope` | yes |
+| `settings`, `features` | no | yes |
+| `waffle` | no | yes |
+| `site_config` | no | yes |
+| `commands`, `requires` | no | yes (checklist) |
+
+Everything is emitted regardless, so an operator using a different build system is never
+locked out. Both new flags are purely additive: omit them and every existing explicit
+argument behaves exactly as it does today.
+
+## 5. AI drawer as a manifest
+
+The §2.2 walk-through splits cleanly in two. All eight coupled edits become one
+`ai-drawer.yaml` definition — written once, by whoever understands the feature — and
+turning it on for a deployment becomes three lines in `adoption.yaml`.
+
+That split is what makes the two anomalies in §2.2 tractable. The hard-coded
+`DEPLOYMENT_NAME?.includes("mitxonline")` test at `learning-mfe-config.env.jsx:40` is an
+adoption decision that leaked into a definition file; it becomes presence in
+`adoption.yaml`, and the JSX reads a single build var. And the implementation-switch
+nature of the flag (§2.2 item 6) is expressible because operations set *values* — the
+drawer is not a boolean but a choice between the slot-based coordinator and the
+standalone bundle, which a parameter can name.
+
+## 6. Relationship to existing configuration
+
+- **`build_manifest.yaml`** — unchanged. It owns build definitions per cell; feature
+  manifests reference cells through `scopes.yaml` and never duplicate their content.
+- **`build_config.yaml`** — remains the *baseline*, unconditional MFE customisation.
+  Feature definitions contribute the *conditional* subset. `build_legacy_configured`
+  merges baseline with the operations resolved for the requested scope; no second
+  generated file, so no drift gate is needed. Migrating an existing entry from
+  `build_config.yaml` into a definition is a deliberate, reviewable move.
+- **Settings trees** — feature manifests emit `OL_SETTINGS_DIR` fragments; they do not
+  edit the generated models, and never introduce validators. (Reminder for
+  implementation: no validator may import from `lms.*`, `cms.*`, or `openedx.*` — that
+  is a circular-import hazard during settings load.)
+
+## 7. Consumer integration
+
+lehrer's responsibility ends at §4.6. How an operator moves those artifacts into a
+running deployment is theirs, and the plausible channels differ enough in operational
+character that baking one into the schema would be exactly the over-indexing this
+project exists to avoid. Three that we know work:
+
+- **Bake into the image** — copy the compiled scope tree to `/openedx/config/features/`
+  during the platform build, alongside the `set_waffle_flags.py` lehrer already injects.
+  No external plumbing whatsoever. Cost: a flag flip becomes an image rebuild.
+- **Read at deploy time** — the deployment tool reads the artifact tree and materialises
+  it (ConfigMaps, env, mounted files). Keeps flips at deploy latency; costs the operator
+  a way to obtain the tree.
+- **Vendor the artifacts** — sync compiled output into the deployment repo, reviewed
+  there. Explicit, at the cost of a two-repo dance and a drift surface.
+
+An operator may mix these per layer — waffle flags are deliberately the *fast* lever in
+most Open edX deployments, and an operator who values that may keep them at deploy
+latency while sourcing build-time layers from lehrer. The manifest supports this
+directly: a scope can declare waffle flags for `checklist.yaml` only, making them a
+stated requirement that something else satisfies.
+
+## 8. Rollout
+
+- **Phase 0** — schema, `compile`, `check`, validation. No consumer changes. Write
+  definitions for what already exists and diff the compiled artifacts against what each
+  operator produces by hand; equivalence is the acceptance test. Definitions can be
+  written and validated before any deployment adopts them, so this phase carries no
+  deployment risk at all.
+- **Phase 1** — AI drawer pilot. Add `--features` and `--scope` to
+  `build_legacy_configured`.
+- **Phase 2** — runtime operations (waffle, settings fragments, site config), per
+  whichever channel each operator selects.
+- **Phase 3** — migrate remaining features; add `features check` to CI.
+
+Every phase is independently revertable, and Phase 0 changes no behaviour at all.
+
+## 9. Open questions
+
+1. **Scope granularity.** Is one flat label per (deployment, place-it-runs) right, or do
+   operators need composition (a scope inheriting another's defaults)? Flat is proposed;
+   inheritance is easy to add later and hard to remove.
+2. **Conflict policy.** §4.4.7 makes conflicting assignments a hard error. Should an
+   explicit precedence declaration be allowed instead, or does that reintroduce exactly
+   the implicit-override confusion this replaces?
+3. **`commands` scope.** Is declaring management commands as a *checklist* enough, or
+   should lehrer eventually run them? Running them implies a runtime role lehrer does
+   not currently have.
+4. **`site_config` overlap.** `FRONTEND_SITE_CONFIG` is largely topology (URLs, cookie
+   names) with a little feature content. Does the manifest carry only the feature-owned
+   subset, and if so how is the boundary kept honest?
+5. **MFE inventory.** §4.4.4 defers MFE-name validation because lehrer has no
+   authoritative list of the MFEs an operator builds — `build_config.yaml`'s `mfes` map
+   is customisation, not inventory. Should lehrer gain one (a new key in `scopes.yaml`,
+   or a group-level `mfes.yaml`), or is name validation not worth the extra required
+   config?
+6. **Style fragments vs. extraction.** §4.3 appends feature fragments to the baseline
+   deployment stylesheet, which is additive and safe but leaves the existing embedded
+   rules (`mitxonline-styles.scss:354+`) where they are. Should adopting a feature also
+   *extract* its rules out of the baseline sheet, and if so is that migration in scope
+   for the pilot or a follow-up?
+7. **Where plugin-contributed definitions belong.** §4.1 puts them in the operator's
+   tree, which means every operator installing `ol-openedx-chat` rewrites the same
+   definition. The contract properly belongs to the plugin that provides it — shipped in
+   the distribution and discovered from the installed package, the way plugin settings
+   already arrive via `add_plugins()`. Is that the eventual target, and if so does the
+   RFC's layout need to anticipate it now or can it migrate later?
+8. **Parameter expressiveness.** §4.3 proposes scalar typed parameters with
+   `${name}` substitution. Real features may want enums (the drawer's
+   slot-vs-standalone choice), or an operation included only when a parameter is set.
+   Conditional operations are a small step from a templating language, which is a
+   direction worth choosing deliberately rather than arriving at.
+
+## Appendix A — MIT OL integration (non-normative)
+
+Illustrative only; no part of the schema depends on it.
+
+MIT OL builds via Concourse pipelines that already clone lehrer as a git resource with a
+path filter (`src/ol_concourse/pipelines/open_edx/mfe/pipeline.py:265`), so compiled
+artifacts committed under a filtered path would both be present on disk in the build
+task and trigger a rebuild when they change. Build-time layers would be self-served: the
+per-feature `--env-vars` flags currently generated from `values.py` collapse into a
+single `--scope`, while topology vars (domains, logos, URLs) stay where they are.
+
+Runtime layers have no existing channel — the edxapp Pulumi stack never sees lehrer.
+Waffle data is stack config (`edxapp:waffle_flags`), rendered to a ConfigMap
+(`k8s_configmaps.py:801`) and consumed by an `lms-waffleflag` pre-deploy command
+(`k8s_resources.py:825`); `FRONTEND_SITE_CONFIG` is a Python literal
+(`k8s_configmaps.py:211`). Adopting any of §7's channels for these is a separate
+ol-infrastructure decision, to be taken there.
