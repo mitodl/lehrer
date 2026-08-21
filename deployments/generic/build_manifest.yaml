@@ -18,5 +18,5 @@ cells:
   platform_branch: master
   packages:
   - django-aqueduct==0.10.0
-  - pydantic-settings[yaml]==2.14.2
+  - pydantic-settings[yaml]==2.15.0
   overrides: []
