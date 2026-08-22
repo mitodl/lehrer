@@ -52,7 +52,11 @@ cells:
   - ol-openedx-events-handler==0.2.1
   - ol-openedx-course-sync==1.0.1
   - ol-openedx-uai-content-customization==0.3.0
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   - edx-sga==0.29.0
@@ -61,6 +65,9 @@ cells:
   - ol-openedx-rapid-response-reports==0.5.1
   - rapid-response-xblock==0.11.0
   overrides:
+  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
+  # https://github.com/openedx/edx-django-utils/pull/549
+  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - git+https://github.com/verificient/edx-proctoring-proctortrack.git@31c6c9923a51c903ae83760ecbbac191363aa2a2#egg=edx_proctoring_proctortrack
@@ -96,10 +103,17 @@ cells:
   - rapid-response-xblock==0.11.0
   - ol-openedx-chat==0.5.10
   - ol-openedx-chat-xblock==0.4.6
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   overrides:
+  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
+  # https://github.com/openedx/edx-django-utils/pull/549
+  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - lxml==6.1.2
@@ -130,10 +144,17 @@ cells:
   - rapid-response-xblock==0.11.0
   - ol-openedx-chat==0.5.10
   - ol-openedx-chat-xblock==0.4.6
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   overrides:
+  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
+  # https://github.com/openedx/edx-django-utils/pull/549
+  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - lxml==6.1.2
@@ -162,10 +183,17 @@ cells:
   - pydantic-settings[yaml]==2.15.0
   - ol-openedx-chat==0.5.10
   - ol-openedx-chat-xblock==0.4.6
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   overrides:
+  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
+  # https://github.com/openedx/edx-django-utils/pull/549
+  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
   - openedx-forum==0.4.1
   - lxml==6.1.2
   - xmlsec==1.3.17
@@ -195,10 +223,17 @@ cells:
   - rapid-response-xblock==0.11.0
   - ol-openedx-chat==0.5.10
   - ol-openedx-chat-xblock==0.4.6
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   overrides:
+  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
+  # https://github.com/openedx/edx-django-utils/pull/549
+  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - lxml==6.1.2
@@ -230,10 +265,17 @@ cells:
   - rapid-response-xblock==0.11.0
   - ol-openedx-chat==0.5.10
   - ol-openedx-chat-xblock==0.4.6
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   overrides:
+  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
+  # https://github.com/openedx/edx-django-utils/pull/549
+  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - lxml==6.1.2
@@ -264,9 +306,16 @@ cells:
   - django-aqueduct==0.13.0
   - ol-openedx-chat==0.5.10
   - ol-openedx-chat-xblock==0.4.6
-  - opentelemetry-api
+  - opentelemetry-distro
+  - opentelemetry-exporter-otlp-proto-http
+  - opentelemetry-instrumentation-django
+  - opentelemetry-instrumentation-celery
+  - opentelemetry-instrumentation-mysqlclient
   - django-extensions
   - setuptools==81.0.0
   overrides:
+  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
+  # https://github.com/openedx/edx-django-utils/pull/549
+  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
   - lxml==6.1.2
   - xmlsec==1.3.17
