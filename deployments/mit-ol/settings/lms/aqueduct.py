@@ -42,7 +42,7 @@ from pydantic import Field, model_validator
 from django_aqueduct import configure_django_settings
 
 from .models.aqueduct import AqueductSettings
-from .models.base import ProductionSettingsMixin
+from .models.base import ProductionSettingsMixin, resolve_derived_settings
 
 
 class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
@@ -240,3 +240,4 @@ configure_django_settings(
     base="lms.envs.common",
     post_configure=_apply_structural_overrides,
 )
+resolve_derived_settings(__name__)

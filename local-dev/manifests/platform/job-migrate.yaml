@@ -100,6 +100,14 @@ spec:
           echo "==> CMS migrations"
           migrate_with_retry cms
 
+          # coursewarehistoryextended (the student_module_history app label)
+          # lives in a separate physical database (edxapp_csmh) that migrate
+          # never touches via the default-connection runs above — Django's
+          # migrate only targets --database=default unless told otherwise, so
+          # its tables must be created explicitly.
+          echo "==> coursewarehistoryextended migrations"
+          migrate lms migrate coursewarehistoryextended --database=student_module_history
+
           echo "==> Migrations complete"
         envFrom:
         - configMapRef:

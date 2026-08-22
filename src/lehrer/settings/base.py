@@ -112,6 +112,62 @@ _DEFAULT_SETTINGS_DIR = "/openedx/config-sources"
 _SETTINGS_DIR = os.environ.get("OL_SETTINGS_DIR", _DEFAULT_SETTINGS_DIR)
 
 
+# ---------------------------------------------------------------------------
+# Derived-settings resolution
+# ---------------------------------------------------------------------------
+
+
+def resolve_derived_settings(module_name: str, *, max_passes: int = 25) -> None:
+    """Resolve ``openedx.core.lib.derived.Derived`` sentinels left in *module*.
+
+    edx-platform's own settings modules leave dozens of values (``LOCALE_PATHS``,
+    queue/routing-key names, callback URLs, …) as ``Derived(calculate_value)``
+    placeholders, meant to be resolved once via ``derive_settings(__name__)`` as
+    the last line of the settings module — see ``openedx.core.lib.derived`` and
+    how ``lms/cms.envs.production`` use it.
+
+    ``derive_settings`` assumes its single pass sees dependencies before
+    dependents, true for a module's own natural (declaration-order) ``__dict__``
+    but not for this settings stack: ``django_aqueduct``'s base-settings
+    collection reads ``common.py`` via ``dir(module)``, which sorts
+    *alphabetically* — so e.g. ``ENTERPRISE_ENROLLMENT_API_URL`` (whose
+    ``Derived`` lambda reads ``LMS_INTERNAL_ROOT_URL``) lands before
+    ``LMS_INTERNAL_ROOT_URL`` itself, and edx-platform's single pass raises
+    instead of resolving it. This resolves the same sentinels per-key, retrying
+    whatever isn't ready yet against the results of everything already resolved
+    this pass, so ordering doesn't matter — only a genuine circular reference
+    would fail to converge.
+    """
+    import sys  # noqa: PLC0415
+
+    from openedx.core.lib.derived import _derive_recursively  # type: ignore[import-not-found]  # noqa: PLC0415
+
+    module = sys.modules[module_name]
+    the_dict = vars(module)
+    pending = {
+        key: value
+        for key, value in the_dict.items()
+        if key.isupper() and not key.startswith("_")
+    }
+    last_exc: BaseException | None = None
+    for _pass in range(max_passes):
+        if not pending:
+            return
+        still_pending: dict[str, Any] = {}
+        for key, value in pending.items():
+            try:
+                the_dict[key] = _derive_recursively(module, value)
+            except (TypeError, AttributeError) as exc:
+                still_pending[key] = value
+                last_exc = exc
+        if len(still_pending) == len(pending):
+            assert last_exc is not None  # noqa: S101
+            raise last_exc
+        pending = still_pending
+    assert last_exc is not None  # noqa: S101
+    raise last_exc
+
+
 def _sorted_yaml_files(settings_dir: str) -> list[Path]:
     """Return complex-type YAML files from *settings_dir*, sorted lexicographically.
 
@@ -452,26 +508,48 @@ class ProductionSettingsMixin(BaseSettings):
 
     @model_validator(mode="after")
     def _derive_databases(self) -> ProductionSettingsMixin:
-        """Point DATABASES at the configured MySQL server.
+        """Build DATABASES from the configured MySQL server.
 
         edx-platform's DATABASES is a nested dict (default / read_replica /
-        student_module_history) that can't arrive cleanly as a single env var.
+        student_module_history) that can't arrive cleanly as a single env var,
+        and -- unlike DOC_STORE_CONFIG/MODULESTORE below -- there is no base
+        settings value to overlay onto here: neither the generated model nor
+        edx-platform's own lms.envs.common/cms.envs.common declares a usable
+        DATABASES default (django.db.backends.dummy otherwise triggers
+        "settings.DATABASES is improperly configured. Please supply the
+        ENGINE value" the first time anything touches the DB, e.g.
+        `manage.py migrate`). Build the full structure here, the same way
+        _derive_doc_store_config builds CONTENTSTORE/MODULESTORE.
+
         The connection scalars come from the platform ConfigMap (host, port,
-        user, db name) and the openedx-secrets Secret (DB_PASSWORD); apply them
-        to every alias. The student_module_history alias keeps its own NAME
-        (edxapp_csmh); default and read_replica use MYSQL_DB_NAME.
+        user, db name) and the openedx-secrets Secret (DB_PASSWORD). The
+        student_module_history alias keeps its own NAME (edxapp_csmh);
+        default and read_replica use MYSQL_DB_NAME.
         """
         if not self.MYSQL_HOST:
             return self
-        for alias, db in getattr(self, "DATABASES", {}).items():
-            db["HOST"] = self.MYSQL_HOST
-            db["PORT"] = str(self.MYSQL_PORT)
+
+        def _database(name: str) -> dict:
+            db: dict = {
+                "ATOMIC_REQUESTS": True,
+                "CONN_MAX_AGE": 0,
+                "ENGINE": "django.db.backends.mysql",
+                "HOST": self.MYSQL_HOST,
+                "NAME": name,
+                "OPTIONS": {},
+                "PORT": str(self.MYSQL_PORT),
+            }
             if self.MYSQL_USER:
                 db["USER"] = self.MYSQL_USER
             if self.DB_PASSWORD:
                 db["PASSWORD"] = self.DB_PASSWORD
-            if self.MYSQL_DB_NAME and alias in ("default", "read_replica"):
-                db["NAME"] = self.MYSQL_DB_NAME
+            return db
+
+        self.DATABASES = {  # type: ignore[attr-defined]
+            "default": _database(self.MYSQL_DB_NAME),
+            "read_replica": _database(self.MYSQL_DB_NAME),
+            "student_module_history": _database("edxapp_csmh"),
+        }
         return self
 
     @model_validator(mode="after")
@@ -481,13 +559,19 @@ class ProductionSettingsMixin(BaseSettings):
         The generated models leave these as Any = None because the generator
         couldn't serialise their values.  openassessment's LoadStatic reads
         settings.LMS_ROOT_URL at import time and crashes with AttributeError
-        if it's None.  Derive from the LMS_BASE_URL / CMS_BASE_URL env vars
-        that the platform ConfigMap already supplies.
+        if it's None, and Django's own common_initialization.E001 system check
+        fails the build's boot-check gate (``_verify_boot`` in platform.py,
+        which runs ``manage.py check`` with no ConfigMap env vars at all) on a
+        None LMS_ROOT_URL. Derive from the LMS_BASE_URL / CMS_BASE_URL env vars
+        the platform ConfigMap supplies at runtime; fall back to the devstack-
+        standard localhost URLs when neither is set, so an env without a real
+        ConfigMap (the boot-check gate, a bare local `manage.py check`) still
+        gets a valid, non-None URL.
         """
-        if getattr(self, "LMS_ROOT_URL", None) is None and self.LMS_BASE_URL:
-            self.LMS_ROOT_URL = self.LMS_BASE_URL  # type: ignore[attr-defined]
-        if getattr(self, "CMS_ROOT_URL", None) is None and self.CMS_BASE_URL:
-            self.CMS_ROOT_URL = self.CMS_BASE_URL  # type: ignore[attr-defined]
+        if getattr(self, "LMS_ROOT_URL", None) is None:
+            self.LMS_ROOT_URL = self.LMS_BASE_URL or "http://localhost:18000"  # type: ignore[attr-defined]
+        if getattr(self, "CMS_ROOT_URL", None) is None:
+            self.CMS_ROOT_URL = self.CMS_BASE_URL or "http://localhost:18010"  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")

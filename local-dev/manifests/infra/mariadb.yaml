@@ -67,6 +67,7 @@ metadata:
   name: edxapp-csmh
   namespace: openedx
 spec:
+  name: edxapp_csmh
   mariaDbRef:
     name: mysql
   characterSet: utf8mb4
