@@ -38,7 +38,7 @@ from pydantic import model_validator
 from django_aqueduct import configure_django_settings
 
 from .models.aqueduct import AqueductSettings
-from .models.base import ProductionSettingsMixin
+from .models.base import ProductionSettingsMixin, resolve_derived_settings
 
 
 class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
@@ -72,3 +72,4 @@ class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
 # settings openedx augments at runtime via add_plugins (INSTALLED_APPS, …),
 # which the static model carries only as a plugin-incomplete snapshot.
 configure_django_settings(LMSProductionSettings, base="lms.envs.common")
+resolve_derived_settings(__name__)
