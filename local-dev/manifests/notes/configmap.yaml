@@ -1,0 +1,28 @@
+---
+# Shared environment for the notes Deployment and the notes-migrate Job.
+#
+# Both need the same database and search settings, and a Job whose DB_NAME
+# drifts from the Deployment's migrates the wrong schema silently, so they
+# read one ConfigMap rather than each carrying its own copy.
+#
+# Secrets (DJANGO_SECRET_KEY, DB_PASSWORD, NOTES_OAUTH_*) stay in the
+# openedx-secrets Secret.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notes-config
+  namespace: openedx
+data:
+  DJANGO_SETTINGS_MODULE: "notesserver.settings.env_config"
+
+  DB_HOST: "mysql.openedx.svc.cluster.local"
+  DB_NAME: "notes"
+  DB_USER: "edxapp"
+  DB_PORT: "3306"
+
+  ELASTICSEARCH_DSL_HOST: "opensearch-cluster-master.openedx.svc.cluster.local"
+  ELASTICSEARCH_DSL_PORT: "9200"
+  ELASTICSEARCH_DSL_USE_SSL: "false"
+  ELASTICSEARCH_DSL_VERIFY_CERTS: "false"
+
+  ALLOWED_HOSTS: "*"

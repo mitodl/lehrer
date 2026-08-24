@@ -1,0 +1,68 @@
+---
+# Imports the Open edX demo course so a fresh stack has something to browse.
+#
+# Kept out of edxapp-provision and wired as a manual Tilt trigger
+# (lehrer-core.star) because it clones ~100MB over the network and takes a
+# couple of minutes, which is not something every `tilt up` should pay for.
+# Trigger it from the Tilt UI, or with `tilt trigger edxapp-demo-course`.
+#
+# Re-running overwrites the existing course in place.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: edxapp-demo-course
+  namespace: openedx
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: edxapp-demo-course
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: import
+        # Image tag is managed by Tilt via custom_build (same ref as the
+        # platform deployments).
+        image: lehrer-registry:5000/openedx-platform:dev
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+
+          rm -rf /tmp/demo
+          mkdir -p /tmp/demo
+
+          echo "==> Cloning $DEMO_COURSE_GIT_REPO ($DEMO_COURSE_GIT_BRANCH)"
+          git clone --depth 1 --branch "$DEMO_COURSE_GIT_BRANCH" \
+            "$DEMO_COURSE_GIT_REPO" /tmp/demo/demo-course
+
+          # `import` takes a data directory plus course sub-directory names
+          # relative to it. Course assets land in the MongoDB contentstore,
+          # not on disk, so /tmp is fine as the staging directory.
+          echo "==> Importing into the CMS modulestore"
+          python manage.py cms import /tmp/demo demo-course --settings=aqueduct
+
+          echo "==> Imported. Open it in Studio at $CMS_BASE_URL/home"
+        env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: "cms.envs.aqueduct"
+        - name: DEMO_COURSE_GIT_REPO
+          value: "https://github.com/openedx/openedx-demo-course"
+        # `master` tracks edx-platform master, which is what the generic
+        # build_manifest cell builds. For a named release, point this at the
+        # matching branch (`release/teak`, `open-release/redwood.master`, ...).
+        - name: DEMO_COURSE_GIT_BRANCH
+          value: "master"
+        envFrom:
+        - configMapRef:
+            name: cms-config
+        - secretRef:
+            name: openedx-secrets
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "250m"
+          limits:
+            memory: "3Gi"

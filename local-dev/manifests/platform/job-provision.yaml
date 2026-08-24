@@ -1,0 +1,69 @@
+---
+# Provisions a freshly-migrated edxapp database with the objects the stack
+# needs in order to be usable: a superuser to log in as, the notes OAuth
+# client, and the waffle flags for the enabled features.
+#
+# Runs after edxapp-migrate (see lehrer-core.star) and before the LMS/CMS
+# deployments are considered ready. Everything it does is idempotent, so Tilt
+# re-running it on every platform image change is cheap.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: edxapp-provision
+  namespace: openedx
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: edxapp-provision
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: provision
+        # Image tag is managed by Tilt via custom_build (same ref as the
+        # platform deployments).
+        image: lehrer-registry:5000/openedx-platform:dev
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+
+          echo "==> Superuser and OAuth clients"
+          python /openedx/provision/provision.py
+
+          # set_waffle_flags.py is baked into the image by
+          # lehrer.core.platform; it takes the path to a YAML file with a
+          # top-level `waffles:` list. Same script and same file format as the
+          # lms-waffleflag job ol-infrastructure runs in AWS.
+          echo "==> Waffle flags"
+          python set_waffle_flags.py /openedx/provision/waffle-flags.yaml
+        env:
+        # provision.py and set_waffle_flags.py call django.setup() directly
+        # rather than going through manage.py, so the settings module has to
+        # come from the environment.
+        - name: DJANGO_SETTINGS_MODULE
+          value: "lms.envs.aqueduct"
+        - name: PROVISION_SUPERUSER_USERNAME
+          value: "edx"
+        - name: PROVISION_SUPERUSER_EMAIL
+          value: "edx@example.com"
+        envFrom:
+        - configMapRef:
+            name: lms-config
+        - secretRef:
+            name: openedx-secrets
+        volumeMounts:
+        - name: provision
+          mountPath: /openedx/provision
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+      volumes:
+      - name: provision
+        configMap:
+          name: edxapp-provision

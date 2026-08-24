@@ -60,7 +60,14 @@ _SECRET_DEFAULTS: tuple[tuple[str, str], ...] = (
     ("MONGO_PASSWORD", "openedx-dev"),
     ("NOTES_OAUTH_CLIENT_ID", "notes"),
     ("NOTES_OAUTH_CLIENT_SECRET", "notes-dev-secret"),
+    # Consumed by the edxapp-provision Job; the username and email it pairs
+    # with live in job-provision.yaml, since neither is secret.
+    ("PROVISION_SUPERUSER_PASSWORD", "edx"),
 )
+
+# Matches PROVISION_SUPERUSER_USERNAME in
+# local-dev/manifests/platform/job-provision.yaml.
+_SUPERUSER_USERNAME = "edx"
 
 
 ClusterState = Literal["absent", "stopped", "partial", "running"]
@@ -229,12 +236,17 @@ def setup() -> None:
     )
 
     local_dev = _paths.local_dev_dir()
+    password = os.environ.get("PROVISION_SUPERUSER_PASSWORD", "edx")
     print(
         "\n==> Setup complete!\n\n"
         "Start the dev environment with:\n"
         "    lehrer dev start\n\n"
         "Use a custom deployment config:\n"
         f"    lehrer dev start --deployment-config {local_dev}/../deployments/mit-ol\n\n"
+        "The edxapp-provision Job creates a superuser once the stack is up:\n"
+        f"    {_SUPERUSER_USERNAME} / {password}\n"
+        "Import the demo course by triggering edxapp-demo-course in the Tilt UI\n"
+        "(or `tilt trigger edxapp-demo-course`).\n\n"
         "Tear down with:\n"
         "    lehrer dev teardown"
     )
