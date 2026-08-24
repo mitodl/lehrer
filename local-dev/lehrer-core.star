@@ -368,7 +368,12 @@ def setup(cfg):
         quiet=True,
     ))
     k8s_yaml(local_dev + "/manifests/platform/job-provision.yaml")
-    k8s_yaml(local_dev + "/manifests/platform/job-demo-course.yaml")
+
+    # The demo course repo branches per Open edX release, so the Job is told
+    # which release this stack was built from and resolves the branch itself.
+    k8s_yaml(blob(str(read_file(
+        local_dev + "/manifests/platform/job-demo-course.yaml"
+    )).replace("__RELEASE_NAME__", release_name)))
     k8s_yaml(local_dev + "/manifests/platform/service-lms.yaml")
     k8s_yaml(local_dev + "/manifests/platform/service-cms.yaml")
     k8s_yaml(local_dev + "/manifests/platform/deployment-lms.yaml")
@@ -448,9 +453,21 @@ def setup(cfg):
     # K8s manifests — notes
     # ------------------------------------------------------------------ #
 
-    k8s_yaml(local_dev + "/manifests/notes/configmap.yaml")
+    notes_configmap = local_dev + "/manifests/notes/configmap.yaml"
+    k8s_yaml(notes_configmap)
     k8s_yaml(local_dev + "/manifests/notes/job-migrate.yaml")
-    k8s_yaml(local_dev + "/manifests/notes/deployment.yaml")
+
+    # Stamp the ConfigMap's hash into the notes pod template. Without it a
+    # config edit re-runs notes-migrate against the new values while the
+    # running pod keeps the old ones — envFrom does not trigger a rollout.
+    notes_config_checksum = str(local(
+        "sha256sum " + notes_configmap + " | cut -c1-16",
+        quiet=True,
+    )).strip()
+    k8s_yaml(blob(str(read_file(
+        local_dev + "/manifests/notes/deployment.yaml"
+    )).replace("__NOTES_CONFIG_CHECKSUM__", notes_config_checksum)))
+
     k8s_yaml(local_dev + "/manifests/notes/service.yaml")
 
     # The notes database and grant come from the MariaDB CR, but the schema and

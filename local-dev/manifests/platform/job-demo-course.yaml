@@ -34,6 +34,30 @@ spec:
           rm -rf /tmp/demo
           mkdir -p /tmp/demo
 
+          # openedx-demo-course has used three branch naming schemes across
+          # its history: release/<name> for Teak onward, open-release/
+          # <name>.master before that, and master tracking edx-platform
+          # master. Rather than encode a mapping that goes stale, probe for
+          # the first ref that exists for the release this stack was built
+          # from. DEMO_COURSE_GIT_BRANCH short-circuits the probe.
+          if [ -z "$DEMO_COURSE_GIT_BRANCH" ]; then
+            for ref in "release/$RELEASE_NAME" \
+                       "open-release/$RELEASE_NAME.master" \
+                       "$RELEASE_NAME"; do
+              if git ls-remote --exit-code --heads \
+                   "$DEMO_COURSE_GIT_REPO" "$ref" > /dev/null 2>&1; then
+                DEMO_COURSE_GIT_BRANCH="$ref"
+                break
+              fi
+            done
+          fi
+
+          if [ -z "$DEMO_COURSE_GIT_BRANCH" ]; then
+            echo "==> No openedx-demo-course branch found for release" \
+                 "'$RELEASE_NAME'. Set DEMO_COURSE_GIT_BRANCH explicitly."
+            exit 1
+          fi
+
           echo "==> Cloning $DEMO_COURSE_GIT_REPO ($DEMO_COURSE_GIT_BRANCH)"
           git clone --depth 1 --branch "$DEMO_COURSE_GIT_BRANCH" \
             "$DEMO_COURSE_GIT_REPO" /tmp/demo/demo-course
@@ -50,11 +74,14 @@ spec:
           value: "cms.envs.aqueduct"
         - name: DEMO_COURSE_GIT_REPO
           value: "https://github.com/openedx/openedx-demo-course"
-        # `master` tracks edx-platform master, which is what the generic
-        # build_manifest cell builds. For a named release, point this at the
-        # matching branch (`release/teak`, `open-release/redwood.master`, ...).
+        # Substituted by lehrer-core.star from the release this stack was
+        # built from, so the demo course matches the platform.
+        - name: RELEASE_NAME
+          value: "__RELEASE_NAME__"
+        # Empty means "probe for the branch matching RELEASE_NAME"; set a
+        # branch here to pin one instead.
         - name: DEMO_COURSE_GIT_BRANCH
-          value: "master"
+          value: ""
         envFrom:
         - configMapRef:
             name: cms-config

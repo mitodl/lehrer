@@ -13,6 +13,13 @@ spec:
     metadata:
       labels:
         app: notes
+      annotations:
+        # Kubernetes does not restart pods when a ConfigMap they read through
+        # envFrom changes, so an edit to notes-config would re-run
+        # notes-migrate against the new values while this pod kept the old
+        # ones. lehrer-core.star substitutes the ConfigMap's hash here, which
+        # changes the pod template and forces a rollout.
+        lehrer.mit.edu/notes-config-checksum: "__NOTES_CONFIG_CHECKSUM__"
     spec:
       containers:
       - name: notes

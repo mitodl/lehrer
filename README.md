@@ -77,12 +77,16 @@ ConfigMap.
 
 `notes-migrate` creates the tables in the `notes` database (the MariaDB CR
 creates the database and the grant, but nothing creates the schema) and the
-OpenSearch index. Index creation is best-effort: without it note *search* is
-unavailable, but the service still runs, so a failure there warns instead of
-holding the notes Deployment down.
+OpenSearch index. Both are required: edx-notes-api indexes on every save via
+`RealTimeSignalProcessor`, so a missing index breaks annotation writes and not
+just search. The Job fails rather than leave a notes service running that
+cannot be written to.
 
-`edxapp-demo-course` is left off the critical path because it clones the course
-repo over the network. Trigger it from the Tilt UI, or:
+`edxapp-demo-course` resolves the demo course branch matching the release the
+stack was built from, so a named-release stack does not import master content.
+Set `DEMO_COURSE_GIT_BRANCH` in the Job to pin a branch instead. It is left off
+the critical path because it clones the course repo over the network. Trigger
+it from the Tilt UI, or:
 
 ```bash
 tilt trigger edxapp-demo-course

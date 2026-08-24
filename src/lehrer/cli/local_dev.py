@@ -236,7 +236,13 @@ def setup() -> None:
     )
 
     local_dev = _paths.local_dev_dir()
-    password = os.environ.get("PROVISION_SUPERUSER_PASSWORD", "edx")
+    # Report where the password came from, never the value — a custom one
+    # would otherwise land in terminal scrollback and captured setup logs.
+    password_source = (
+        "$PROVISION_SUPERUSER_PASSWORD"
+        if "PROVISION_SUPERUSER_PASSWORD" in os.environ
+        else "the local-dev default"
+    )
     print(
         "\n==> Setup complete!\n\n"
         "Start the dev environment with:\n"
@@ -244,7 +250,7 @@ def setup() -> None:
         "Use a custom deployment config:\n"
         f"    lehrer dev start --deployment-config {local_dev}/../deployments/mit-ol\n\n"
         "The edxapp-provision Job creates a superuser once the stack is up:\n"
-        f"    {_SUPERUSER_USERNAME} / {password}\n"
+        f"    username {_SUPERUSER_USERNAME}, password from {password_source}\n"
         "Import the demo course by triggering edxapp-demo-course in the Tilt UI\n"
         "(or `tilt trigger edxapp-demo-course`).\n\n"
         "Tear down with:\n"
