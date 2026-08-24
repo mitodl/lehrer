@@ -2,8 +2,8 @@
 # Imports the Open edX demo course so a fresh stack has something to browse.
 #
 # Kept out of edxapp-provision and wired as a manual Tilt trigger
-# (lehrer-core.star) because it clones ~100MB over the network and takes a
-# couple of minutes, which is not something every `tilt up` should pay for.
+# (lehrer-core.star) because it clones ~70MB over the network, which is not
+# something every `tilt up` should pay for.
 # Trigger it from the Tilt UI, or with `tilt trigger edxapp-demo-course`.
 #
 # Re-running overwrites the existing course in place.
