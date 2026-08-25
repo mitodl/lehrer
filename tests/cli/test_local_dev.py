@@ -242,6 +242,18 @@ class TestStaleMariaDBSecretRefWarning:
             "delete mariadb mysql"
         ) in output
 
+    def test_recovery_also_deletes_the_retained_pvc(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Without this the replacement reattaches the datadir, keeping the
+        # databases and the old root password — so the CR delete alone leaves
+        # the developer worse off than before following the instruction.
+        output, _ = self._run(monkeypatch, "mariadb-root-secret")
+        assert (
+            f"kubectl --context {local_dev.CONTEXT} -n {local_dev.NAMESPACE} "
+            "delete pvc storage-mysql-0"
+        ) in output
+
     def test_probe_targets_the_local_context(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -249,6 +261,59 @@ class TestStaleMariaDBSecretRefWarning:
         assert len(calls) == 1
         assert "--context" in calls[0]
         assert calls[0][calls[0].index("--context") + 1] == local_dev.CONTEXT
+
+
+class TestInitOnlyRootPasswordWarning:
+    """MariaDB root is set at datadir init, so a later override never lands.
+
+    The Secret and the operator both move to the new value while the server
+    keeps the old one, and nothing in the CR is invalid — so without this
+    warning the only symptom is Grant/Database reconciliation failing on auth.
+    """
+
+    @staticmethod
+    def _run(
+        monkeypatch: pytest.MonkeyPatch,
+        previous: str,
+        current: str,
+        *,
+        datadir: bool,
+    ) -> str:
+        printed: list[str] = []
+        monkeypatch.setattr(local_dev, "_mariadb_datadir_exists", lambda: datadir)
+        monkeypatch.setattr("builtins.print", lambda *a: printed.append(" ".join(a)))
+        local_dev._warn_on_init_only_root_password(previous, current)
+        return "\n".join(printed)
+
+    def test_warns_when_an_initialized_datadir_cannot_take_the_new_value(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = self._run(monkeypatch, "openedx-dev", "hunter2", datadir=True)
+        assert "init-only" in output or "initializes an empty datadir" in output
+        assert "delete pvc storage-mysql-0" in output
+
+    def test_silent_on_a_fresh_cluster_with_no_datadir(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A first `setup` is exactly when an override *does* work.
+        assert self._run(monkeypatch, "openedx-dev", "hunter2", datadir=False) == ""
+
+    def test_silent_when_the_value_is_unchanged(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        assert self._run(monkeypatch, "openedx-dev", "openedx-dev", datadir=True) == ""
+
+    def test_silent_when_there_is_no_stored_value_to_compare(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        assert self._run(monkeypatch, "", "hunter2", datadir=True) == ""
+
+    def test_never_prints_either_password(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = self._run(monkeypatch, "openedx-dev", "hunter2", datadir=True)
+        assert "hunter2" not in output
+        assert "openedx-dev" not in output
 
 
 class TestSetupContract:

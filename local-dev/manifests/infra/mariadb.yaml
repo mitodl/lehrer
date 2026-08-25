@@ -11,6 +11,13 @@ spec:
   # environment. A separate Secret with the password written in here would
   # ignore a MYSQL_ROOT_PASSWORD override and leave the operator's root
   # account disagreeing with the value every other component is handed.
+  #
+  # Root is init-only: MariaDB sets its password when it initializes an empty
+  # datadir and nothing rotates it afterwards, so an override has to be in the
+  # environment before the *first* `lehrer dev setup`. Changing it later moves
+  # the Secret and the operator's client without moving the server, which
+  # surfaces as Grant/Database reconciliation failing on auth. `lehrer dev
+  # setup` compares the stored value against the incoming one and says so.
   rootPasswordSecretKeyRef:
     name: openedx-secrets
     key: MYSQL_ROOT_PASSWORD

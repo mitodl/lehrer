@@ -66,11 +66,21 @@ operators rather than only the application.
 >
 > ```bash
 > kubectl --context k3d-lehrer-dev -n openedx delete mariadb mysql
+> kubectl --context k3d-lehrer-dev -n openedx delete pvc storage-mysql-0
 > ```
 >
 > which drops the edxapp databases and lets the migrate and provision Jobs
-> rebuild them. Keep the `--context`: an unqualified delete lands on whichever
+> rebuild them. Both lines matter: the PVC is retained when the CR goes, and a
+> replacement that reattaches it keeps the old databases *and* the old root
+> password. Keep the `--context` too — an unqualified delete lands on whichever
 > cluster your kubeconfig currently points at.
+
+`MYSQL_ROOT_PASSWORD` is init-only. MariaDB sets root's password when it
+initializes an empty datadir and never rotates it, so an override has to be set
+before the **first** `lehrer dev setup`; changing it later moves the Secret but
+not the server. `lehrer dev setup` notices and prints the same recreate steps.
+`MONGO_PASSWORD` has no such limitation — the MongoDB operator rotates SCRAM
+credentials when the referenced Secret changes.
 
 #### Provisioning
 
