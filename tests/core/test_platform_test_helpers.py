@@ -103,6 +103,14 @@ def test_edx_base_deps_script_sync_is_inexact() -> None:
 def test_edx_base_deps_script_excludes_dev_group_by_default() -> None:
     script = _edx_base_deps_script()
     assert "--group assets" in script
+    # bundled holds packages requirements/edx/base.txt installed
+    # unconditionally pre-migration (ora2, edx-sga, several bundled XBlocks,
+    # ...) -- the sync arm has to request it explicitly or they're silently
+    # missing on any release that's made the uv.lock migration. Regression
+    # coverage for the ModuleNotFoundError this caused on openedx-platform
+    # master (`No module named 'openassessment'`) while release/verawood
+    # (pre-migration) passed the identical settings-verify check.
+    assert "--group bundled" in script
     assert "--group dev" not in script
     assert "development.txt" not in script
 
@@ -110,6 +118,7 @@ def test_edx_base_deps_script_excludes_dev_group_by_default() -> None:
 def test_edx_base_deps_script_include_dev() -> None:
     script = _edx_base_deps_script(include_dev=True)
     assert "--group assets" in script
+    assert "--group bundled" in script
     assert "--group dev" in script
     # legacy branch also needs the pre-migration development.txt equivalent.
     assert "-r requirements/edx/development.txt" in script
