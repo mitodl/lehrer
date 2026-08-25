@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import socket
 from typing import Any
 
@@ -151,3 +152,55 @@ class TestProvisioningManifests:
         assert waffles
         for argument_set in waffles:
             assert all(isinstance(argument, str) for argument in argument_set)
+
+
+class TestOperatorSecretRefs:
+    """The infra operators must read their passwords from openedx-secrets.
+
+    A CR carrying its own hardcoded password silently ignores the matching
+    environment override in ``_SECRET_DEFAULTS``, leaving the operator's
+    account disagreeing with the value every other component is handed.
+    """
+
+    @staticmethod
+    def _docs(name: str) -> list[dict[str, Any]]:
+        path = _paths.local_dev_dir() / "manifests" / "infra" / name
+        return [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
+
+    def test_mariadb_root_password_comes_from_openedx_secrets(self) -> None:
+        mariadb = next(d for d in self._docs("mariadb.yaml") if d["kind"] == "MariaDB")
+        ref = mariadb["spec"]["rootPasswordSecretKeyRef"]
+        assert ref["name"] == "openedx-secrets"
+        assert ref["key"] in {key for key, _ in local_dev._SECRET_DEFAULTS}
+
+    def test_mongodb_user_password_comes_from_openedx_secrets(self) -> None:
+        mongodb = next(
+            d for d in self._docs("mongodb.yaml") if d["kind"] == "MongoDBCommunity"
+        )
+        ref = mongodb["spec"]["users"][0]["passwordSecretRef"]
+        assert ref["name"] == "openedx-secrets"
+        assert ref["key"] in {key for key, _ in local_dev._SECRET_DEFAULTS}
+
+    def test_no_infra_manifest_ships_its_own_password_secret(self) -> None:
+        for name in ("mariadb.yaml", "mongodb.yaml"):
+            secrets = [d for d in self._docs(name) if d["kind"] == "Secret"]
+            assert secrets == [], f"{name} still defines its own Secret"
+
+
+class TestSetupContract:
+    """Every key the Tiltfile passes to setup() must be read by lehrer-core."""
+
+    def test_tiltfile_passes_no_keys_lehrer_core_ignores(self) -> None:
+        local_dev_dir = _paths.local_dev_dir()
+        passed = set(
+            re.findall(
+                r'^\s*"([a-z_]+)":', (local_dev_dir / "Tiltfile").read_text(), re.M
+            )
+        )
+        read = set(
+            re.findall(
+                r'cfg\["([a-z_]+)"\]', (local_dev_dir / "lehrer-core.star").read_text()
+            )
+        )
+        assert passed, "no setup() keys parsed out of the Tiltfile"
+        assert passed - read == set(), f"dead setup() keys: {sorted(passed - read)}"

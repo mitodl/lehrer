@@ -1,21 +1,28 @@
 ---
-# valkey/valkey — standalone Valkey (Redis-compatible) for local dev.
-# Release name "redis" keeps the service name "redis-master" to match
-# the CELERY_BROKER_HOSTNAME in the platform configmaps.
-architecture: standalone
+# valkey/valkey — Valkey (Redis-compatible) broker for local dev.
+#
+# This is the valkey.io chart, not Bitnami's. Its schema has no `architecture`
+# or top-level `persistence` key, and no `master:` section — those are Bitnami
+# names, and unknown keys are silently ignored rather than rejected, so values
+# written against the wrong schema look applied but do nothing.
+#
+# Standalone is the default (`replica.enabled: false`), and in that mode the
+# chart renders a Deployment with an emptyDir at /data — there is no
+# persistence option to set. Local dev does not need a durable Celery broker:
+# the queue is rebuilt on restart.
+#
+# The rendered Service is named `<release>-valkey`. lehrer-core.star installs
+# this under the release name "redis", so the in-cluster host is
+# `redis-valkey.openedx.svc.cluster.local` — which is what
+# CELERY_BROKER_HOSTNAME in the platform configmaps points at.
 
 auth:
   enabled: false
 
-master:
-  persistence:
-    enabled: true
-    storageClass: local-path
-    size: 1Gi
-  resources:
-    requests:
-      memory: "128Mi"
-      cpu: "100m"
-    limits:
-      memory: "256Mi"
-      cpu: "500m"
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "500m"

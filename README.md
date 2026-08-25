@@ -54,7 +54,16 @@ lehrer dev start --deployment-config ./deployments/mit-ol --mfe-hot-reload
 
 Secret values are read from the environment (`MYSQL_ROOT_PASSWORD`,
 `DJANGO_SECRET_KEY`, `MONGO_PASSWORD`, `PROVISION_SUPERUSER_PASSWORD`, ...) and
-fall back to safe local-dev defaults.
+fall back to safe local-dev defaults. They all land in the `openedx-secrets`
+Secret, which the MariaDB and MongoDB CRs read too — so an override reaches the
+operators rather than only the application.
+
+> **Existing clusters:** the MariaDB CR used to carry its own root-password
+> Secret, and `spec.rootPasswordSecretKeyRef` is immutable. A cluster created
+> before that change rejects the new manifest and `lehrer dev start` fails on
+> the `mysql` resource. `lehrer dev setup` detects this and prints the fix:
+> `kubectl -n openedx delete mariadb mysql`, which drops the edxapp databases
+> and lets the migrate and provision Jobs rebuild them.
 
 #### Provisioning
 

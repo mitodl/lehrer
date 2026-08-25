@@ -146,6 +146,40 @@ def _preflight_host_ports() -> None:
     )
 
 
+def _warn_on_stale_mariadb_secret_ref() -> None:
+    """Warn when an existing MariaDB CR predates the openedx-secrets root ref.
+
+    ``spec.rootPasswordSecretKeyRef`` is immutable, so a cluster created before
+    the CR pointed at ``openedx-secrets`` rejects the new manifest and Tilt
+    fails the ``mysql`` resource with an admission error that says nothing
+    about what to do. Recreating the CR drops the databases with it, so the
+    call is the developer's, not ours.
+    """
+    ref = capture(
+        "kubectl",
+        "--context",
+        CONTEXT,
+        "-n",
+        NAMESPACE,
+        "get",
+        "mariadb",
+        "mysql",
+        "-o",
+        "jsonpath={.spec.rootPasswordSecretKeyRef.name}",
+        check=False,
+    )
+    if not ref or ref == "openedx-secrets":
+        return
+    print(
+        f"\n!!! The existing MariaDB CR reads its root password from '{ref}',\n"
+        "    but the manifest now reads it from openedx-secrets, and the field\n"
+        "    is immutable — `lehrer dev start` will fail on the mysql resource.\n"
+        "    Recreate the instance (this drops the edxapp databases; the\n"
+        "    migrate and provision Jobs rebuild them):\n"
+        f"        kubectl -n {NAMESPACE} delete mariadb mysql\n"
+    )
+
+
 @app.command(name="check")
 def check_deps() -> None:
     """Verify that all required CLI tools are installed."""
@@ -234,6 +268,8 @@ def setup() -> None:
         ],
         ["kubectl", "apply", "-f", "-"],
     )
+
+    _warn_on_stale_mariadb_secret_ref()
 
     local_dev = _paths.local_dev_dir()
     # Report where the credential came from, never the value — a custom one
