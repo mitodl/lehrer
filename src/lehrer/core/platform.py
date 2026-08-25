@@ -513,6 +513,17 @@ def _edx_base_deps_script(*, include_dev: bool = False) -> str:
     up master's migration automatically without a lehrer change once it
     lands.
 
+    ``requirements/edx/base.txt`` (the legacy arm) bundles openedx-platform's
+    ``bundled`` dependency group unconditionally -- pyproject.toml's own
+    comment on that group says as much: "still installed by default (this
+    group is included from `testing`, and explicitly synced in
+    `base-requirements`)". The sync arm has to request it explicitly or it's
+    silently missing on any release that's made the uv.lock migration --
+    confirmed live: master's add_optional_apps() crashed on
+    ``ModuleNotFoundError: No module named 'openassessment'`` (ora2 lives in
+    ``bundled``, not ``assets``) while release/verawood (pre-migration, no
+    uv.lock) passed the identical settings-verify check.
+
     ``include_dev`` pulls in openedx-platform's ``dev`` dependency group
     (mypy, tox, django-debug-toolbar, ...) — or, pre-migration,
     ``requirements/edx/development.txt`` — for local-dev builds; production
@@ -524,7 +535,7 @@ def _edx_base_deps_script(*, include_dev: bool = False) -> str:
         "requirements/edx/base.txt",
         "requirements/edx/assets.txt",
     ]
-    sync_groups = ["assets"]
+    sync_groups = ["assets", "bundled"]
     if include_dev:
         legacy_requirements.append("requirements/edx/development.txt")
         sync_groups.append("dev")
