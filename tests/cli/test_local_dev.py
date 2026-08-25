@@ -430,6 +430,33 @@ class TestMFEDevServerPorts:
                 )
 
 
+class TestMFEDevHostnamesFailLoudly:
+    """A partial map would report success for sites it never looked at."""
+
+    def test_a_mistyped_deployment_config_is_an_error(self, tmp_path) -> None:
+        with pytest.raises(SystemExit, match="not a directory"):
+            local_dev.mfe_dev_hostnames(tmp_path / "typo")
+
+    def test_a_deployment_with_no_site_projects_is_an_error(self, tmp_path) -> None:
+        (tmp_path / "mfe_slot_config" / "frontend").mkdir(parents=True)
+        with pytest.raises(SystemExit, match="No site.config.dev.tsx"):
+            local_dev.mfe_dev_hostnames(tmp_path)
+
+    def test_a_config_without_a_base_url_is_an_error(self, tmp_path) -> None:
+        site = tmp_path / "mfe_slot_config" / "frontend" / "thing"
+        site.mkdir(parents=True)
+        (site / "site.config.dev.tsx").write_text("const siteConfig = {};\n")
+        with pytest.raises(SystemExit, match="No baseUrl"):
+            local_dev.mfe_dev_hostnames(tmp_path)
+
+    def test_a_base_url_without_a_host_is_an_error(self, tmp_path) -> None:
+        site = tmp_path / "mfe_slot_config" / "frontend" / "thing"
+        site.mkdir(parents=True)
+        (site / "site.config.dev.tsx").write_text('baseUrl: "/just/a/path",\n')
+        with pytest.raises(SystemExit, match="has no host"):
+            local_dev.mfe_dev_hostnames(tmp_path)
+
+
 class TestMFEDevHostnames:
     def test_hostnames_are_parsed_per_site(self) -> None:
         hostnames = local_dev.mfe_dev_hostnames(

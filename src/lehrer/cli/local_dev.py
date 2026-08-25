@@ -265,18 +265,28 @@ def _warn_on_init_only_root_password(previous: str, current: str) -> None:
 def mfe_dev_hostnames(deployment_config: Path) -> dict[str, str]:
     """Map each Site Project to the ``baseUrl`` hostname its dev server serves.
 
-    The dev config is the source of truth for where an MFE expects to be
-    reached; lehrer-core.star reads the port out of the same value.
+    Raises rather than returning a partial map. A check that quietly skips
+    what it cannot parse reports success for sites it never looked at, which
+    is worse than not running it — and a mistyped ``--deployment-config``
+    would otherwise pass by matching nothing at all.
     """
     frontend = deployment_config / "mfe_slot_config" / "frontend"
+    if not frontend.is_dir():
+        raise SystemExit(f"No Site Projects found: {frontend} is not a directory.")
+
+    configs = sorted(frontend.glob("*/site.config.dev.tsx"))
+    if not configs:
+        raise SystemExit(f"No site.config.dev.tsx under {frontend}.")
+
     hostnames: dict[str, str] = {}
-    for config in sorted(frontend.glob("*/site.config.dev.tsx")):
+    for config in configs:
         match = re.search(r'baseUrl:\s*"([^"]+)"', config.read_text())
         if match is None:
-            continue
+            raise SystemExit(f"No baseUrl in {config}.")
         host = urlsplit(match.group(1)).hostname
-        if host:
-            hostnames[config.parent.name] = host
+        if not host:
+            raise SystemExit(f"baseUrl '{match.group(1)}' in {config} has no host.")
+        hostnames[config.parent.name] = host
     return hostnames
 
 
