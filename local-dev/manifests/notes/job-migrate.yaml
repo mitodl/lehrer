@@ -11,7 +11,12 @@ metadata:
   name: notes-migrate
   namespace: openedx
 spec:
-  backoffLimit: 5
+  # MariaDB DDL is not transactional. A migration that dies partway leaves the
+  # tables and columns it already created behind, so a blind Job-level retry
+  # runs the same migration again against a schema it has half-built and fails
+  # on "table already exists" / "duplicate column" — which buries whatever the
+  # first, real error was. Fail on the first attempt and surface it instead.
+  backoffLimit: 0
   template:
     metadata:
       labels:

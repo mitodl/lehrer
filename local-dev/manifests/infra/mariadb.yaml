@@ -23,7 +23,13 @@ spec:
     key: MYSQL_ROOT_PASSWORD
     generate: false
 
-  # Initial application database and user
+  # Initial application database and user.
+  #
+  # `database` does not create the schema itself — the operator turns it into a
+  # Database CR named `<mariadb>-database` (so `mysql-database`, declared
+  # below). It has to stay set regardless: IsInitialUserEnabled() requires
+  # username, database *and* a password ref together, and dropping any one of
+  # them means the edxapp user is never created at all.
   database: edxapp
   username: edxapp
   passwordSecretKeyRef:
@@ -49,6 +55,41 @@ spec:
       cpu: 1000m
       memory: 1Gi
 ---
+# edxapp database.
+#
+# The name is not cosmetic: the MariaDB reconciler looks for a Database at
+# `<mariadb-name>-database` and only builds its own when that key is absent, so
+# declaring `mysql-database` here means the operator adopts this spec instead.
+#
+# Without it the generated Database carries no characterSet/collate, the CRD
+# defaults (utf8 / utf8_general_ci) get stamped on, and the operator issues
+# `CREATE DATABASE edxapp CHARACTER SET = 'utf8' COLLATE = 'utf8_general_ci'` —
+# an explicit clause, so the collation-server setting in myCnf above never gets
+# a say. That leaves edxapp on 3-byte utf8 with a general_ci collation while
+# notes and edxapp_csmh are on utf8mb4_unicode_ci.
+#
+# A schema's stored default collation is fixed at CREATE DATABASE time and does
+# not follow later server-config changes. Any CREATE TABLE without an explicit
+# COLLATE inherits that stale default, and an FK from such a table to one on the
+# other collation fails with errno 150 ("Foreign key constraint is incorrectly
+# formed"). Getting it right here is what keeps that failure class out of local
+# dev; `lehrer dev db-collation` audits and repairs datadirs created before this.
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Database
+metadata:
+  name: mysql-database
+  namespace: openedx
+spec:
+  name: edxapp
+  mariaDbRef:
+    name: mysql
+  characterSet: utf8mb4
+  collate: utf8mb4_unicode_ci
+  # Skip, not the Delete default: the Database finalizer drops the schema,
+  # so deleting this resource — to re-declare it, or by sweeping the
+  # namespace — would take the developer's data with it.
+  cleanupPolicy: Skip
+---
 # notes database for edx-notes-api
 apiVersion: k8s.mariadb.com/v1alpha1
 kind: Database
@@ -60,6 +101,7 @@ spec:
     name: mysql
   characterSet: utf8mb4
   collate: utf8mb4_unicode_ci
+  cleanupPolicy: Skip
 ---
 # edxapp_csmh database for courseware student module history
 apiVersion: k8s.mariadb.com/v1alpha1
@@ -73,6 +115,7 @@ spec:
     name: mysql
   characterSet: utf8mb4
   collate: utf8mb4_unicode_ci
+  cleanupPolicy: Skip
 ---
 # Grant edxapp user access to all three databases
 apiVersion: k8s.mariadb.com/v1alpha1

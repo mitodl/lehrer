@@ -189,6 +189,82 @@ class TestOperatorSecretRefs:
             assert secrets == [], f"{name} still defines its own Secret"
 
 
+class TestSchemaCollation:
+    """Every schema must be created on utf8mb4 / utf8mb4_unicode_ci.
+
+    A schema's default collation is fixed at CREATE DATABASE time and does not
+    follow a later collation-server change, so a table created without an
+    explicit COLLATE inherits it forever and an FK across the two collations
+    fails with errno 150. The Database CRD defaults to utf8/utf8_general_ci,
+    which the operator writes into an explicit CHARACTER SET clause — so
+    omitting these fields is not "inherit the server default", it is "get 3-byte
+    utf8".
+    """
+
+    @staticmethod
+    def _databases() -> list[dict[str, Any]]:
+        path = _paths.local_dev_dir() / "manifests" / "infra" / "mariadb.yaml"
+        docs = [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
+        return [doc for doc in docs if doc["kind"] == "Database"]
+
+    def test_every_database_pins_the_expected_collation(self) -> None:
+        databases = self._databases()
+        assert databases
+        for database in databases:
+            spec = database["spec"]
+            name = spec.get("name", database["metadata"]["name"])
+            assert spec["characterSet"] == local_dev.EXPECTED_CHARACTER_SET, name
+            assert spec["collate"] == local_dev.EXPECTED_COLLATION, name
+
+    def test_no_database_can_be_deleted_out_from_under_its_schema(self) -> None:
+        """The finalizer runs DROP DATABASE, and Delete is the CRD's default."""
+        for database in self._databases():
+            assert database["spec"]["cleanupPolicy"] == "Skip", database["metadata"][
+                "name"
+            ]
+
+    def test_every_audited_schema_is_declared(self) -> None:
+        declared = {
+            d["spec"].get("name", d["metadata"]["name"]) for d in self._databases()
+        }
+        assert set(local_dev._SCHEMAS) == declared
+
+    def test_edxapp_database_uses_the_key_the_operator_adopts(self) -> None:
+        """``<mariadb>-database`` is where the MariaDB reconciler looks first.
+
+        It only builds its own (collation-less) Database when that key is
+        absent, so renaming this resource silently hands edxapp back to the CRD
+        defaults with nothing failing.
+        """
+        edxapp = next(d for d in self._databases() if d["spec"].get("name") == "edxapp")
+        assert edxapp["metadata"]["name"] == "mysql-database"
+
+    def test_the_initial_user_fields_stay_together(self) -> None:
+        """IsInitialUserEnabled() needs all three, or no edxapp user is made."""
+        path = _paths.local_dev_dir() / "manifests" / "infra" / "mariadb.yaml"
+        docs = [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
+        spec = next(d for d in docs if d["kind"] == "MariaDB")["spec"]
+        assert spec["database"] == "edxapp"
+        assert spec["username"] == "edxapp"
+        assert spec["passwordSecretKeyRef"]["name"] == "openedx-secrets"
+
+
+class TestMigrationJobsDoNotRetry:
+    """MariaDB DDL is not transactional, so a Job-level retry compounds damage.
+
+    A migration that dies partway leaves what it already created behind; running
+    it again fails on "table already exists" and buries the original error.
+    """
+
+    @pytest.mark.parametrize(
+        "manifest",
+        [("platform", "job-migrate.yaml"), ("notes", "job-migrate.yaml")],
+    )
+    def test_backoff_limit_is_zero(self, manifest: tuple[str, str]) -> None:
+        path = _paths.local_dev_dir() / "manifests" / manifest[0] / manifest[1]
+        assert yaml.safe_load(path.read_text())["spec"]["backoffLimit"] == 0
+
+
 class TestStaleMariaDBSecretRefWarning:
     """The guard steering developers off the immutable-field admission error.
 
@@ -316,6 +392,154 @@ class TestInitOnlyRootPasswordWarning:
         output = self._run(monkeypatch, "openedx-dev", "hunter2", datadir=True)
         assert "hunter2" not in output
         assert "openedx-dev" not in output
+
+
+class TestUncollatedEdxappDatabaseWarning:
+    """The guard for a Database the operator generated on the CRD's utf8 default.
+
+    Its output tells developers to delete a resource whose finalizer drops
+    edxapp, so the detach step has to come first and stay in the message.
+    """
+
+    @staticmethod
+    def _run(monkeypatch: pytest.MonkeyPatch, character_set: str) -> str:
+        printed: list[str] = []
+        monkeypatch.setattr(local_dev, "capture", lambda *a, **k: character_set)
+        monkeypatch.setattr("builtins.print", lambda *a: printed.append(" ".join(a)))
+        local_dev._warn_on_uncollated_edxapp_database()
+        return "\n".join(printed)
+
+    def test_silent_when_no_database_resource_exists(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        assert self._run(monkeypatch, "") == ""
+
+    def test_silent_when_already_on_utf8mb4(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        assert self._run(monkeypatch, local_dev.EXPECTED_CHARACTER_SET) == ""
+
+    def test_detaches_the_finalizer_before_deleting(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = self._run(monkeypatch, "utf8")
+        patch = output.index("patch database")
+        delete = output.index("delete database")
+        assert patch < delete, "deleting first drops edxapp"
+        assert "cleanupPolicy" in output
+        assert "lehrer dev db-collation --fix" in output
+
+    def test_recovery_commands_are_pinned_to_the_local_context(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = self._run(monkeypatch, "utf8")
+        for line in output.splitlines():
+            if "kubectl" in line:
+                assert f"--context {local_dev.CONTEXT}" in line
+
+
+class TestSchemaCollationDriftWarning:
+    """The guard for datadirs created before the manifests pinned a collation.
+
+    It runs on every ``setup``, so silence is the default and the loud branch
+    has to name a schema and a way out.
+    """
+
+    @staticmethod
+    def _run(
+        monkeypatch: pytest.MonkeyPatch,
+        defaults: dict[str, str] | None,
+        *,
+        datadir: bool = True,
+    ) -> str:
+        printed: list[str] = []
+        monkeypatch.setattr(local_dev, "_mariadb_datadir_exists", lambda: datadir)
+        monkeypatch.setattr(local_dev, "_schema_defaults", lambda: defaults)
+        monkeypatch.setattr("builtins.print", lambda *a: printed.append(" ".join(a)))
+        local_dev._warn_on_schema_collation_drift()
+        return "\n".join(printed)
+
+    def test_names_the_drifted_schema_and_the_repair(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = self._run(
+            monkeypatch,
+            {"edxapp": "utf8_general_ci", "notes": local_dev.EXPECTED_COLLATION},
+        )
+        assert "edxapp" in output
+        assert "notes" not in output
+        assert "lehrer dev db-collation --fix" in output
+
+    def test_silent_when_every_schema_is_aligned(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        aligned = dict.fromkeys(local_dev._SCHEMAS, local_dev.EXPECTED_COLLATION)
+        assert self._run(monkeypatch, aligned) == ""
+
+    def test_silent_on_a_fresh_cluster_with_no_datadir(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Nothing to drift from: the manifests pin the collation at creation.
+        assert (
+            self._run(monkeypatch, {"edxapp": "utf8_general_ci"}, datadir=False) == ""
+        )
+
+    def test_silent_when_the_server_is_unreachable(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # MariaDB is routinely still starting during `setup`; a probe that
+        # cannot connect is not evidence of drift.
+        assert self._run(monkeypatch, None) == ""
+
+
+class TestMysqlExec:
+    """``_mysql`` must keep the root password out of every argv.
+
+    A password passed as an argument shows up in the container's own process
+    table and in whatever the CLI echoes, so it goes over stdin instead.
+    """
+
+    @staticmethod
+    def _call(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> tuple[tuple[str, ...], dict[str, Any]]:
+        seen: dict[str, Any] = {}
+
+        def fake_capture(*argv: str, **kwargs: Any) -> str:
+            seen["argv"] = argv
+            seen["kwargs"] = kwargs
+            return "edxapp\tutf8mb4_unicode_ci"
+
+        monkeypatch.setattr(local_dev, "_stored_secret_value", lambda _key: "hunter2")
+        monkeypatch.setattr(local_dev, "capture", fake_capture)
+        local_dev._mysql("SELECT 1")
+        return seen["argv"], seen["kwargs"]
+
+    def test_password_travels_on_stdin_only(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        argv, kwargs = self._call(monkeypatch)
+        assert kwargs["input"] == "hunter2\n"
+        assert not any("hunter2" in arg for arg in argv)
+
+    def test_exec_is_pinned_to_the_local_context(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        argv, _ = self._call(monkeypatch)
+        assert "--context" in argv
+        assert argv[argv.index("--context") + 1] == local_dev.CONTEXT
+        assert local_dev.NAMESPACE in argv
+
+    def test_returns_none_when_the_secret_has_no_password(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(local_dev, "_stored_secret_value", lambda _key: "")
+        monkeypatch.setattr(
+            local_dev,
+            "capture",
+            lambda *a, **k: pytest.fail("must not exec without a password"),
+        )
+        assert local_dev._mysql("SELECT 1") is None
 
 
 class TestSetupContract:

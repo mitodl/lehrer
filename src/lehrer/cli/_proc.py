@@ -67,12 +67,17 @@ def run(
     return completed.returncode
 
 
-def capture(*argv: str, check: bool = True) -> str:
-    """Run ``argv`` and return its stripped stdout (no echo, no streaming)."""
+def capture(*argv: str, check: bool = True, input: str | None = None) -> str:
+    """Run ``argv`` and return its stripped stdout (no echo, no streaming).
+
+    ``input`` is written to stdin, which is how a credential reaches a command
+    without ever appearing in an argv that ``ps`` can read.
+    """
     completed = subprocess.run(  # noqa: S603 - argv is an explicit token list
         argv,
         capture_output=True,
         text=True,
+        input=input,
     )
     if check and completed.returncode != 0:
         raise CommandError(argv, completed.returncode)
