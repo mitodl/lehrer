@@ -23,10 +23,15 @@ ports:
   nodeFilters: ["loadbalancer"]
 - port: 8010:80
   nodeFilters: ["loadbalancer"]
-# MFE ingress. 8090 rather than the conventional 8080 to avoid clashing with
-# other local dev servers that commonly squat on 8080. `lehrer dev setup`
-# preflights this port; the MFE baseUrl in the frontend site.config.*.tsx files
-# must match it.
+# MFE ingress for the *compiled* MFEs. 8090 rather than the conventional 8080
+# to avoid clashing with other local dev servers that commonly squat on 8080.
+# `lehrer dev setup` preflights this port; the baseUrl in each frontend
+# site.config.build.tsx must match it.
+#
+# site.config.dev.tsx is a separate matter: under `--mfe-hot-reload` the
+# compiled MFEs are not deployed at all, and each site's dev server binds its
+# own port from mfe_slot_config/frontend/dev-ports.yaml. Those must *not* be
+# 8090 — the loadbalancer holds it for as long as the cluster is up.
 - port: 8090:80
   nodeFilters: ["loadbalancer"]
 - port: 8001:80

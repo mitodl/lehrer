@@ -4,7 +4,9 @@ import ast
 import json
 import re
 import socket
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 import yaml
@@ -350,3 +352,122 @@ class TestSetupContract:
         assert read - passed == set(), (
             f"setup() keys read but never passed: {sorted(read - passed)}"
         )
+
+
+def _deployments() -> list[Path]:
+    root = _paths.repo_root() / "deployments"
+    return [d for d in sorted(root.iterdir()) if (d / "mfe_slot_config").is_dir()]
+
+
+def _sites(deployment: Path) -> set[str]:
+    frontend = deployment / "mfe_slot_config" / "frontend"
+    return {
+        d.name
+        for d in frontend.iterdir()
+        if d.is_dir() and d.name not in {"shared", "src"}
+    }
+
+
+def _declared_ports(deployment: Path) -> dict[str, int]:
+    path = deployment / "mfe_slot_config" / "frontend" / "dev-ports.yaml"
+    return yaml.safe_load(path.read_text())
+
+
+def _base_url_ports(deployment: Path) -> dict[str, int | None]:
+    """Per site, the port in its dev baseUrl — None for a sub-path URL."""
+    frontend = deployment / "mfe_slot_config" / "frontend"
+    ports: dict[str, int | None] = {}
+    for config in sorted(frontend.glob("*/site.config.dev.tsx")):
+        match = re.search(r'baseUrl:\s*"([^"]+)"', config.read_text())
+        assert match is not None, f"{config} has no baseUrl"
+        ports[config.parent.name] = urlsplit(match.group(1)).port
+    return ports
+
+
+class TestMFEDevServerPorts:
+    """Every Site Project's dev server needs a host port it can actually bind.
+
+    The port is declared in dev-ports.yaml rather than read out of baseUrl,
+    because an MFE served as a sub-path of the LMS — how ol-infrastructure
+    deploys them — has no port of its own to read. k3d's loadbalancer holds
+    its ports for the life of the cluster, and two sites naming the same port
+    cannot both listen.
+    """
+
+    def test_every_site_has_a_declared_dev_port(self) -> None:
+        for deployment in _deployments():
+            assert set(_declared_ports(deployment)) == _sites(deployment)
+
+    def test_no_dev_port_collides_with_the_k3d_loadbalancer(self) -> None:
+        reserved = set(local_dev._required_host_ports())
+        for deployment in _deployments():
+            for site, port in _declared_ports(deployment).items():
+                assert port not in reserved, (
+                    f"{deployment.name}/{site} wants dev port {port}, which "
+                    "k3d's loadbalancer binds"
+                )
+
+    def test_sites_in_a_deployment_do_not_share_a_dev_port(self) -> None:
+        for deployment in _deployments():
+            ports = _declared_ports(deployment)
+            assert len(set(ports.values())) == len(ports), (
+                f"{deployment.name} has duplicate dev ports: {ports}"
+            )
+
+    def test_a_base_url_that_names_a_port_agrees_with_the_declared_one(
+        self,
+    ) -> None:
+        # Only applies when the site owns a host; a sub-path baseUrl carries
+        # the LMS origin and has nothing to reconcile.
+        for deployment in _deployments():
+            declared = _declared_ports(deployment)
+            for site, base_port in _base_url_ports(deployment).items():
+                if base_port is None:
+                    continue
+                assert base_port == declared[site], (
+                    f"{deployment.name}/{site}: baseUrl points at {base_port} "
+                    f"but dev-ports.yaml declares {declared[site]}"
+                )
+
+
+class TestMFEDevHostnamesFailLoudly:
+    """A partial map would report success for sites it never looked at."""
+
+    def test_a_mistyped_deployment_config_is_an_error(self, tmp_path) -> None:
+        with pytest.raises(SystemExit, match="not a directory"):
+            local_dev.mfe_dev_hostnames(tmp_path / "typo")
+
+    def test_a_deployment_with_no_site_projects_is_an_error(self, tmp_path) -> None:
+        (tmp_path / "mfe_slot_config" / "frontend").mkdir(parents=True)
+        with pytest.raises(SystemExit, match="No site.config.dev.tsx"):
+            local_dev.mfe_dev_hostnames(tmp_path)
+
+    def test_a_config_without_a_base_url_is_an_error(self, tmp_path) -> None:
+        site = tmp_path / "mfe_slot_config" / "frontend" / "thing"
+        site.mkdir(parents=True)
+        (site / "site.config.dev.tsx").write_text("const siteConfig = {};\n")
+        with pytest.raises(SystemExit, match="No baseUrl"):
+            local_dev.mfe_dev_hostnames(tmp_path)
+
+    def test_a_base_url_without_a_host_is_an_error(self, tmp_path) -> None:
+        site = tmp_path / "mfe_slot_config" / "frontend" / "thing"
+        site.mkdir(parents=True)
+        (site / "site.config.dev.tsx").write_text('baseUrl: "/just/a/path",\n')
+        with pytest.raises(SystemExit, match="has no host"):
+            local_dev.mfe_dev_hostnames(tmp_path)
+
+
+class TestMFEDevHostnames:
+    def test_hostnames_are_parsed_per_site(self) -> None:
+        hostnames = local_dev.mfe_dev_hostnames(
+            _paths.repo_root() / "deployments/mit-ol"
+        )
+        assert hostnames
+        assert set(hostnames.values()) == {"apps.local.openedx.io"}
+
+    def test_generic_stays_on_localhost(self) -> None:
+        # The generic deployment must not depend on any name resolution.
+        hostnames = local_dev.mfe_dev_hostnames(
+            _paths.repo_root() / "deployments/generic"
+        )
+        assert set(hostnames.values()) == {"localhost"}

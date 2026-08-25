@@ -52,6 +52,45 @@ Use a deployment-specific config and MFE hot-reload:
 lehrer dev start --deployment-config ./deployments/mit-ol --mfe-hot-reload
 ```
 
+#### MFE hot reload
+
+`--mfe-hot-reload` serves the MFEs from host dev servers *instead of* from the
+cluster: the compiled nginx image, Deployment and ingress route are all skipped,
+so nothing is built for a site you are editing live.
+
+Each site's dev server binds the port declared for it in
+`mfe_slot_config/frontend/dev-ports.yaml`. Keep those clear of the ports k3d's
+loadbalancer binds (`k3d-config.yaml`: 8000, 8001, 8010, 8090) and distinct
+from each other; the Tiltfile refuses to load otherwise. Defaults:
+
+| Deployment | Site | Dev port | Dev `baseUrl` |
+|---|---|---|---|
+| generic | default    | 8100 | http://localhost:8100 |
+| mit-ol  | mitx       | 8101 | http://apps.local.openedx.io:8101 |
+| mit-ol  | mitxonline | 8102 | http://apps.local.openedx.io:8102 |
+| mit-ol  | xpro       | 8103 | http://apps.local.openedx.io:8103 |
+
+The port is declared rather than read out of `baseUrl` because the two answer
+different questions: the port is where webpack-dev-server listens on your
+machine, while `baseUrl` is where the browser reaches the app. They coincide
+only when a site gets a host to itself. An MFE served as a **sub-path of the
+LMS** — the topology ol-infrastructure deploys — has a `baseUrl` carrying the
+LMS origin and no port of its own. When `baseUrl` *does* name a port, the
+Tiltfile checks it matches, since a dev server listening anywhere else just
+serves a broken site.
+
+Hostnames are per-deployment settings, not fixed requirements. The defaults
+above need no setup because upstream Open edX publishes `*.local.openedx.io` as
+a public A record pointing at `127.0.0.1` — but that makes hot reload depend on
+public DNS, so it breaks offline or behind a resolver that filters the name. To
+check before starting:
+
+```bash
+lehrer dev check --deployment-config ./deployments/mit-ol
+```
+
+If a name does not resolve, map it to `127.0.0.1` in `/etc/hosts`.
+
 Secret values are read from the environment (`MYSQL_ROOT_PASSWORD`,
 `DJANGO_SECRET_KEY`, `MONGO_PASSWORD`, `PROVISION_SUPERUSER_PASSWORD`, ...) and
 fall back to safe local-dev defaults. They all land in the `openedx-secrets`
