@@ -26,12 +26,13 @@
 
 load("ext://helm_resource", "helm_resource", "helm_repo")
 
-def _dev_server_address(site_dir, site_name):
-    """Return the host port an OEP-65 Site Project's dev config serves on.
+def _base_url_port(site_dir, site_name):
+    """Return the port in a Site Project's dev ``baseUrl``, or "" if it has none.
 
-    Parsed out of the ``baseUrl`` in ``site.config.dev.tsx`` — the value the
-    MFE itself builds asset and route URLs from — so the dev server and the
-    site it serves cannot end up on different ports.
+    An MFE that owns a host carries its port here; one served as a sub-path of
+    the LMS (the topology ol-infrastructure deploys) carries the LMS origin and
+    no port of its own. Only the first case is worth cross-checking against the
+    declared dev port.
     """
     config_path = site_dir + "/site.config.dev.tsx"
     config = str(read_file(config_path))
@@ -45,13 +46,35 @@ def _dev_server_address(site_dir, site_name):
 
     authority = url.split("://")[-1].split("/")[0]
     parts = authority.split(":")
-    if len(parts) != 2 or not parts[1].isdigit():
+    if len(parts) == 2 and parts[1].isdigit():
+        return parts[1]
+    return ""
+
+
+def _dev_server_ports(frontend_dir, site_projects):
+    """Return {site: host port} for the hot-reload dev servers.
+
+    Declared in ``dev-ports.yaml`` next to the Site Projects rather than
+    derived from each site's baseUrl, since the two answer different questions
+    — see the comments in that file.
+    """
+    ports_path = frontend_dir + "/dev-ports.yaml"
+    if not os.path.exists(ports_path):
         fail(
-            "MFE site '" + site_name + "': baseUrl '" + url + "' in " +
-            config_path + " needs an explicit host and port for hot reload, " +
-            "e.g. http://localhost:8100."
+            "--mfe-hot-reload needs " + ports_path + ", declaring a host port " +
+            "for each of: " + ", ".join(site_projects) + "."
         )
-    return parts[1]
+    declared = decode_yaml(read_file(ports_path))
+
+    ports = {}
+    for site_name in site_projects:
+        if site_name not in declared:
+            fail(
+                "MFE site '" + site_name + "' has no dev-server port in " +
+                ports_path + "."
+            )
+        ports[site_name] = str(declared[site_name])
+    return ports
 
 def setup(cfg):
     """Deploy the full Open edX local dev stack from the given configuration."""
@@ -375,25 +398,38 @@ def setup(cfg):
         for match in str(read_file(local_dev + "/k3d-config.yaml")).split("- port: ")[1:]:
             reserved[match.split(":")[0].strip()] = True
 
+        ports_path = frontend_dir + "/dev-ports.yaml"
+        dev_ports = _dev_server_ports(frontend_dir, site_projects)
+
         claimed = {}
         for site_name in site_projects:
             site_dir = frontend_dir + "/" + site_name
-            port = _dev_server_address(site_dir, site_name)
+            port = dev_ports[site_name]
 
             if port in reserved:
                 fail(
                     "MFE site '" + site_name + "' asks for dev-server port " +
                     port + ", which k3d's loadbalancer binds for the cluster " +
-                    "ingress. Pick a free port in " + site_dir +
-                    "/site.config.dev.tsx (baseUrl)."
+                    "ingress. Pick a free port in " + ports_path + "."
                 )
             if port in claimed:
                 fail(
                     "MFE sites '" + claimed[port] + "' and '" + site_name +
                     "' both ask for dev-server port " + port + ". Give each " +
-                    "one its own port in its site.config.dev.tsx (baseUrl)."
+                    "one its own port in " + ports_path + "."
                 )
             claimed[port] = site_name
+
+            # Only meaningful when the site owns a host. A sub-path baseUrl
+            # carries the LMS origin, so there is nothing to reconcile.
+            base_port = _base_url_port(site_dir, site_name)
+            if base_port and base_port != port:
+                fail(
+                    "MFE site '" + site_name + "' serves on port " + port +
+                    " per " + ports_path + ", but its site.config.dev.tsx " +
+                    "baseUrl points at port " + base_port + ". The app would " +
+                    "load from an address nothing is listening on."
+                )
 
             # A baseUrl host that does not resolve is checked by
             # `lehrer dev check --deployment-config ...`, not here: a Tiltfile

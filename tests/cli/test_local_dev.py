@@ -161,31 +161,49 @@ def _deployments() -> list[Path]:
     return [d for d in sorted(root.iterdir()) if (d / "mfe_slot_config").is_dir()]
 
 
+def _sites(deployment: Path) -> set[str]:
+    frontend = deployment / "mfe_slot_config" / "frontend"
+    return {
+        d.name
+        for d in frontend.iterdir()
+        if d.is_dir() and d.name not in {"shared", "src"}
+    }
+
+
+def _declared_ports(deployment: Path) -> dict[str, int]:
+    path = deployment / "mfe_slot_config" / "frontend" / "dev-ports.yaml"
+    return yaml.safe_load(path.read_text())
+
+
+def _base_url_ports(deployment: Path) -> dict[str, int | None]:
+    """Per site, the port in its dev baseUrl — None for a sub-path URL."""
+    frontend = deployment / "mfe_slot_config" / "frontend"
+    ports: dict[str, int | None] = {}
+    for config in sorted(frontend.glob("*/site.config.dev.tsx")):
+        match = re.search(r'baseUrl:\s*"([^"]+)"', config.read_text())
+        assert match is not None, f"{config} has no baseUrl"
+        ports[config.parent.name] = urlsplit(match.group(1)).port
+    return ports
+
+
 class TestMFEDevServerPorts:
     """Every Site Project's dev server needs a host port it can actually bind.
 
-    lehrer-core.star takes the port from each site's own site.config.dev.tsx
-    baseUrl, so the committed configs are what decides whether hot reload
-    works: k3d's loadbalancer holds its ports for the life of the cluster, and
-    two sites naming the same port cannot both listen.
+    The port is declared in dev-ports.yaml rather than read out of baseUrl,
+    because an MFE served as a sub-path of the LMS — how ol-infrastructure
+    deploys them — has no port of its own to read. k3d's loadbalancer holds
+    its ports for the life of the cluster, and two sites naming the same port
+    cannot both listen.
     """
 
-    @staticmethod
-    def _dev_ports(deployment: Path) -> dict[str, int]:
-        ports: dict[str, int] = {}
-        frontend = deployment / "mfe_slot_config" / "frontend"
-        for config in sorted(frontend.glob("*/site.config.dev.tsx")):
-            match = re.search(r'baseUrl:\s*"([^"]+)"', config.read_text())
-            assert match is not None, f"{config} has no baseUrl"
-            port = urlsplit(match.group(1)).port
-            assert port is not None, f"{config} baseUrl declares no port"
-            ports[config.parent.name] = port
-        return ports
+    def test_every_site_has_a_declared_dev_port(self) -> None:
+        for deployment in _deployments():
+            assert set(_declared_ports(deployment)) == _sites(deployment)
 
     def test_no_dev_port_collides_with_the_k3d_loadbalancer(self) -> None:
         reserved = set(local_dev._required_host_ports())
         for deployment in _deployments():
-            for site, port in self._dev_ports(deployment).items():
+            for site, port in _declared_ports(deployment).items():
                 assert port not in reserved, (
                     f"{deployment.name}/{site} wants dev port {port}, which "
                     "k3d's loadbalancer binds"
@@ -193,21 +211,25 @@ class TestMFEDevServerPorts:
 
     def test_sites_in_a_deployment_do_not_share_a_dev_port(self) -> None:
         for deployment in _deployments():
-            ports = self._dev_ports(deployment)
+            ports = _declared_ports(deployment)
             assert len(set(ports.values())) == len(ports), (
                 f"{deployment.name} has duplicate dev ports: {ports}"
             )
 
-    def test_every_site_declares_a_dev_config_with_a_port(self) -> None:
-        # An absent or port-less baseUrl fails the Tiltfile at load, so catch
-        # it here rather than at `tilt up`.
+    def test_a_base_url_that_names_a_port_agrees_with_the_declared_one(
+        self,
+    ) -> None:
+        # Only applies when the site owns a host; a sub-path baseUrl carries
+        # the LMS origin and has nothing to reconcile.
         for deployment in _deployments():
-            sites = {
-                d.name
-                for d in (deployment / "mfe_slot_config" / "frontend").iterdir()
-                if d.is_dir() and d.name not in {"shared", "src"}
-            }
-            assert set(self._dev_ports(deployment)) == sites
+            declared = _declared_ports(deployment)
+            for site, base_port in _base_url_ports(deployment).items():
+                if base_port is None:
+                    continue
+                assert base_port == declared[site], (
+                    f"{deployment.name}/{site}: baseUrl points at {base_port} "
+                    f"but dev-ports.yaml declares {declared[site]}"
+                )
 
 
 class TestMFEDevHostnames:
