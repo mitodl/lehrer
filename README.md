@@ -61,9 +61,16 @@ operators rather than only the application.
 > **Existing clusters:** the MariaDB CR used to carry its own root-password
 > Secret, and `spec.rootPasswordSecretKeyRef` is immutable. A cluster created
 > before that change rejects the new manifest and `lehrer dev start` fails on
-> the `mysql` resource. `lehrer dev setup` detects this and prints the fix:
-> `kubectl -n openedx delete mariadb mysql`, which drops the edxapp databases
-> and lets the migrate and provision Jobs rebuild them.
+> the `mysql` resource. Both `lehrer dev setup` and `lehrer dev start` detect
+> this and print the fix:
+>
+> ```bash
+> kubectl --context k3d-lehrer-dev -n openedx delete mariadb mysql
+> ```
+>
+> which drops the edxapp databases and lets the migrate and provision Jobs
+> rebuild them. Keep the `--context`: an unqualified delete lands on whichever
+> cluster your kubeconfig currently points at.
 
 #### Provisioning
 

@@ -176,7 +176,10 @@ def _warn_on_stale_mariadb_secret_ref() -> None:
         "    is immutable — `lehrer dev start` will fail on the mysql resource.\n"
         "    Recreate the instance (this drops the edxapp databases; the\n"
         "    migrate and provision Jobs rebuild them):\n"
-        f"        kubectl -n {NAMESPACE} delete mariadb mysql\n"
+        # --context is not optional in a command this destructive: a kubeconfig
+        # usually carries real clusters too, and an unqualified delete lands on
+        # whichever one happens to be current.
+        f"        kubectl --context {CONTEXT} -n {NAMESPACE} delete mariadb mysql\n"
     )
 
 
@@ -323,6 +326,12 @@ def start(
     stream
         Stream Tilt logs to the terminal instead of only the web UI.
     """
+    # Also checked here, not just in setup(): setup is documented as a one-off,
+    # so a developer who already has a cluster and pulls a manifest change
+    # reaches Tilt through this command and would otherwise hit the raw
+    # immutable-field admission error with no idea what to do about it.
+    _warn_on_stale_mariadb_secret_ref()
+
     tilt_args: list[str] = []
     if deployment_config is not None:
         # Resolve to an absolute path relative to the current working directory

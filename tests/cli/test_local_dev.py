@@ -187,10 +187,80 @@ class TestOperatorSecretRefs:
             assert secrets == [], f"{name} still defines its own Secret"
 
 
-class TestSetupContract:
-    """Every key the Tiltfile passes to setup() must be read by lehrer-core."""
+class TestStaleMariaDBSecretRefWarning:
+    """The guard steering developers off the immutable-field admission error.
 
-    def test_tiltfile_passes_no_keys_lehrer_core_ignores(self) -> None:
+    Its output tells them to delete a database, so the quiet branches have to
+    stay quiet and the loud one has to stay context-qualified.
+    """
+
+    @staticmethod
+    def _run(
+        monkeypatch: pytest.MonkeyPatch, ref: str
+    ) -> tuple[str, list[tuple[str, ...]]]:
+        calls: list[tuple[str, ...]] = []
+
+        def fake_capture(*argv: str, **_kwargs: object) -> str:
+            calls.append(argv)
+            return ref
+
+        printed: list[str] = []
+        monkeypatch.setattr(local_dev, "capture", fake_capture)
+        monkeypatch.setattr("builtins.print", lambda *a: printed.append(" ".join(a)))
+        local_dev._warn_on_stale_mariadb_secret_ref()
+        return "\n".join(printed), calls
+
+    def test_silent_when_no_mariadb_cr_exists(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # `kubectl get` on a missing CR (or an unreachable cluster) captures
+        # empty output under check=False.
+        output, _ = self._run(monkeypatch, "")
+        assert output == ""
+
+    def test_silent_when_ref_is_already_current(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output, _ = self._run(monkeypatch, "openedx-secrets")
+        assert output == ""
+
+    def test_warns_and_names_the_stale_secret(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output, _ = self._run(monkeypatch, "mariadb-root-secret")
+        assert "mariadb-root-secret" in output
+        assert "immutable" in output
+
+    def test_recovery_command_is_pinned_to_the_local_context(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Unqualified, this deletes from whatever cluster is current — a
+        # kubeconfig normally holds real ones alongside k3d.
+        output, _ = self._run(monkeypatch, "mariadb-root-secret")
+        assert (
+            f"kubectl --context {local_dev.CONTEXT} -n {local_dev.NAMESPACE} "
+            "delete mariadb mysql"
+        ) in output
+
+    def test_probe_targets_the_local_context(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _, calls = self._run(monkeypatch, "openedx-secrets")
+        assert len(calls) == 1
+        assert "--context" in calls[0]
+        assert calls[0][calls[0].index("--context") + 1] == local_dev.CONTEXT
+
+
+class TestSetupContract:
+    """The Tiltfile and lehrer-core.star must agree on setup()'s key set.
+
+    Every ``cfg[...]`` access is unconditional, so the two directions fail
+    differently and both matter: an extra key is dead config that looks
+    tunable, while a missing one is a KeyError the moment Tilt loads.
+    """
+
+    @staticmethod
+    def _key_sets() -> tuple[set[str], set[str]]:
         local_dev_dir = _paths.local_dev_dir()
         passed = set(
             re.findall(
@@ -202,5 +272,16 @@ class TestSetupContract:
                 r'cfg\["([a-z_]+)"\]', (local_dev_dir / "lehrer-core.star").read_text()
             )
         )
+        return passed, read
+
+    def test_tiltfile_passes_no_keys_lehrer_core_ignores(self) -> None:
+        passed, read = self._key_sets()
         assert passed, "no setup() keys parsed out of the Tiltfile"
         assert passed - read == set(), f"dead setup() keys: {sorted(passed - read)}"
+
+    def test_tiltfile_passes_every_key_lehrer_core_reads(self) -> None:
+        passed, read = self._key_sets()
+        assert read, "no cfg[...] reads parsed out of lehrer-core.star"
+        assert read - passed == set(), (
+            f"setup() keys read but never passed: {sorted(read - passed)}"
+        )
