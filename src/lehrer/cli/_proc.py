@@ -84,6 +84,27 @@ def capture(*argv: str, check: bool = True, input: str | None = None) -> str:
     return completed.stdout.strip()
 
 
+def capture_result(*argv: str, input: str | None = None) -> tuple[int, str, str]:
+    """Run ``argv`` and return ``(returncode, stdout, stderr)``, stripped.
+
+    :func:`capture` collapses a failure into empty stdout, which is fine when
+    the caller only wants a value and treats "missing" and "failed" alike. Use
+    this where they are different answers — a query that legitimately returns
+    no rows says something a query that never ran does not.
+    """
+    completed = subprocess.run(  # noqa: S603 - argv is an explicit token list
+        argv,
+        capture_output=True,
+        text=True,
+        input=input,
+    )
+    return (
+        completed.returncode,
+        completed.stdout.strip(),
+        completed.stderr.strip(),
+    )
+
+
 def pipe(producer: Sequence[str], consumer: Sequence[str]) -> None:
     """Run ``producer | consumer`` and raise if either side fails.
 

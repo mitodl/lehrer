@@ -175,6 +175,7 @@ def setup(cfg):
             new_name="mysql",
             objects=[
                 "mysql:MariaDB:openedx",
+                "mysql-database:Database:openedx",
                 "notes:Database:openedx",
                 "edxapp-csmh:Database:openedx",
                 "edxapp-grant-edxapp:Grant:openedx",

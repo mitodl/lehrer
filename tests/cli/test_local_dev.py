@@ -249,6 +249,32 @@ class TestSchemaCollation:
         assert spec["passwordSecretKeyRef"]["name"] == "openedx-secrets"
 
 
+class TestMariaDBTiltGrouping:
+    """Every CR in mariadb.yaml must join the `mysql` resource group.
+
+    That group is what carries ``resource_deps=["mariadb-operator"]``. A CR left
+    out of it becomes its own Tilt resource with no dependency, so on a fresh
+    cluster Tilt can apply it before the chart has installed the CRDs and it
+    fails with "no matches for kind". Nothing in the manifest hints that the
+    Starlark has to be edited alongside it, so pin the two together here.
+    """
+
+    def test_every_mariadb_cr_is_in_the_resource_group(self) -> None:
+        path = _paths.local_dev_dir() / "manifests" / "infra" / "mariadb.yaml"
+        declared = {
+            f"{doc['metadata']['name']}:{doc['kind']}:{doc['metadata']['namespace']}"
+            for doc in yaml.safe_load_all(path.read_text())
+            if doc
+        }
+        star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
+        grouped = set(re.findall(r'"([\w-]+:(?:MariaDB|Database|Grant):[\w-]+)"', star))
+        assert declared == grouped
+
+    def test_the_group_depends_on_the_operator(self) -> None:
+        star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
+        assert 'resource_deps=["mariadb-operator"]' in star
+
+
 class TestMigrationJobsDoNotRetry:
     """MariaDB DDL is not transactional, so a Job-level retry compounds damage.
 
@@ -402,9 +428,12 @@ class TestUncollatedEdxappDatabaseWarning:
     """
 
     @staticmethod
-    def _run(monkeypatch: pytest.MonkeyPatch, character_set: str) -> str:
+    def _run(
+        monkeypatch: pytest.MonkeyPatch, character_set: str, collate: str = ""
+    ) -> str:
         printed: list[str] = []
-        monkeypatch.setattr(local_dev, "capture", lambda *a, **k: character_set)
+        declared = f"{character_set}\t{collate}" if character_set else ""
+        monkeypatch.setattr(local_dev, "capture", lambda *a, **k: declared)
         monkeypatch.setattr("builtins.print", lambda *a: printed.append(" ".join(a)))
         local_dev._warn_on_uncollated_edxapp_database()
         return "\n".join(printed)
@@ -414,15 +443,39 @@ class TestUncollatedEdxappDatabaseWarning:
     ) -> None:
         assert self._run(monkeypatch, "") == ""
 
-    def test_silent_when_already_on_utf8mb4(
+    def test_silent_when_both_fields_already_match(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        assert self._run(monkeypatch, local_dev.EXPECTED_CHARACTER_SET) == ""
+        assert (
+            self._run(
+                monkeypatch,
+                local_dev.EXPECTED_CHARACTER_SET,
+                local_dev.EXPECTED_COLLATION,
+            )
+            == ""
+        )
+
+    def test_warns_when_only_the_collation_differs(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Either field alone is immutable, so charset agreeing is not enough."""
+        output = self._run(
+            monkeypatch, local_dev.EXPECTED_CHARACTER_SET, "utf8mb4_general_ci"
+        )
+        assert "utf8mb4_general_ci" in output
+        assert "delete database" in output
+
+    def test_reports_both_declared_values(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = self._run(monkeypatch, "utf8", "utf8_general_ci")
+        assert "utf8_general_ci" in output
+        assert local_dev.EXPECTED_COLLATION in output
 
     def test_detaches_the_finalizer_before_deleting(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        output = self._run(monkeypatch, "utf8")
+        output = self._run(monkeypatch, "utf8", "utf8_general_ci")
         patch = output.index("patch database")
         delete = output.index("delete database")
         assert patch < delete, "deleting first drops edxapp"
@@ -432,7 +485,7 @@ class TestUncollatedEdxappDatabaseWarning:
     def test_recovery_commands_are_pinned_to_the_local_context(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        output = self._run(monkeypatch, "utf8")
+        output = self._run(monkeypatch, "utf8", "utf8_general_ci")
         for line in output.splitlines():
             if "kubectl" in line:
                 assert f"--context {local_dev.CONTEXT}" in line
@@ -500,32 +553,35 @@ class TestMysqlExec:
     """
 
     @staticmethod
-    def _call(
+    def _stub(
         monkeypatch: pytest.MonkeyPatch,
-    ) -> tuple[tuple[str, ...], dict[str, Any]]:
+        result: tuple[int, str, str] = (0, "edxapp\tutf8mb4_unicode_ci", ""),
+    ) -> dict[str, Any]:
         seen: dict[str, Any] = {}
 
-        def fake_capture(*argv: str, **kwargs: Any) -> str:
+        def fake_capture_result(*argv: str, **kwargs: Any) -> tuple[int, str, str]:
             seen["argv"] = argv
             seen["kwargs"] = kwargs
-            return "edxapp\tutf8mb4_unicode_ci"
+            return result
 
         monkeypatch.setattr(local_dev, "_stored_secret_value", lambda _key: "hunter2")
-        monkeypatch.setattr(local_dev, "capture", fake_capture)
-        local_dev._mysql("SELECT 1")
-        return seen["argv"], seen["kwargs"]
+        monkeypatch.setattr(local_dev, "capture_result", fake_capture_result)
+        return seen
 
     def test_password_travels_on_stdin_only(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        argv, kwargs = self._call(monkeypatch)
-        assert kwargs["input"] == "hunter2\n"
-        assert not any("hunter2" in arg for arg in argv)
+        seen = self._stub(monkeypatch)
+        local_dev._mysql("SELECT 1")
+        assert seen["kwargs"]["input"] == "hunter2\n"
+        assert not any("hunter2" in arg for arg in seen["argv"])
 
     def test_exec_is_pinned_to_the_local_context(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        argv, _ = self._call(monkeypatch)
+        seen = self._stub(monkeypatch)
+        local_dev._mysql("SELECT 1")
+        argv = seen["argv"]
         assert "--context" in argv
         assert argv[argv.index("--context") + 1] == local_dev.CONTEXT
         assert local_dev.NAMESPACE in argv
@@ -536,10 +592,103 @@ class TestMysqlExec:
         monkeypatch.setattr(local_dev, "_stored_secret_value", lambda _key: "")
         monkeypatch.setattr(
             local_dev,
-            "capture",
+            "capture_result",
             lambda *a, **k: pytest.fail("must not exec without a password"),
         )
         assert local_dev._mysql("SELECT 1") is None
+
+    def test_a_failed_statement_is_none_not_empty_output(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The distinction the whole audit rests on: failed != found nothing."""
+        self._stub(monkeypatch, (1, "", "ERROR 1049: Unknown database"))
+        assert local_dev._mysql("SELECT 1") is None
+
+    def test_a_successful_statement_matching_nothing_is_empty_not_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._stub(monkeypatch, (0, "", ""))
+        assert local_dev._mysql("SELECT 1") == ""
+
+    def test_the_server_error_is_surfaced(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        printed: list[str] = []
+        self._stub(monkeypatch, (1, "", "ERROR 1049: Unknown database"))
+        monkeypatch.setattr("builtins.print", lambda *a: printed.append(" ".join(a)))
+        local_dev._mysql("SELECT 1")
+        assert "ERROR 1049" in "\n".join(printed)
+
+
+class TestCollationRepairReportsFailure:
+    """A repair that did not run must never print as though it did."""
+
+    @staticmethod
+    def _alter(monkeypatch: pytest.MonkeyPatch, result: str | None) -> str:
+        printed: list[str] = []
+        monkeypatch.setattr(local_dev, "_mysql", lambda *a, **k: result)
+        monkeypatch.setattr("builtins.print", lambda *a: printed.append(" ".join(a)))
+        ran = local_dev._alter_collation("edxapp")
+        return f"{ran}\n" + "\n".join(printed)
+
+    def test_a_successful_alter_reports_the_new_collation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = self._alter(monkeypatch, "")
+        assert output.startswith("True")
+        assert "FAILED" not in output
+        assert local_dev.EXPECTED_COLLATION in output
+
+    def test_a_failed_alter_says_so(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        output = self._alter(monkeypatch, None)
+        assert output.startswith("False")
+        assert "FAILED" in output
+
+
+class TestCorruptTableScanReportsFailure:
+    """ "None reporting an error" has to mean the check actually ran."""
+
+    @staticmethod
+    def _scan(monkeypatch: pytest.MonkeyPatch, responses: list[str | None]) -> str:
+        printed: list[str] = []
+        remaining = list(responses)
+        monkeypatch.setattr(local_dev, "_mysql", lambda *a, **k: remaining.pop(0))
+        monkeypatch.setattr("builtins.print", lambda *a: printed.append(" ".join(a)))
+        local_dev._report_corrupt_tables(["edxapp"])
+        return "\n".join(printed)
+
+    def test_a_failed_listing_is_not_a_clean_bill_of_health(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = self._scan(monkeypatch, [None])
+        assert "not checked" in output
+        assert "none reporting an error" not in output
+
+    def test_a_failed_check_counts_as_unchecked(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Table listing succeeds; the CHECK TABLE over them does not.
+        output = self._scan(monkeypatch, ["auth_user\ncourse_overviews", None])
+        assert "could not be checked" in output
+        assert "0 tables, none reporting an error" in output
+
+    def test_a_clean_scan_reads_clean(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        output = self._scan(
+            monkeypatch,
+            ["auth_user", "edxapp.auth_user\tcheck\tstatus\tOK"],
+        )
+        assert "1 tables, none reporting an error" in output
+        assert "could not be checked" not in output
+
+    def test_a_corrupt_table_is_reported_without_a_repair_suggestion(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = self._scan(
+            monkeypatch,
+            ["auth_user", "edxapp.auth_user\tcheck\terror\tIndex is corrupted"],
+        )
+        assert "Index is corrupted" in output
+        assert "inspect them before running" in output
 
 
 class TestSetupContract:
