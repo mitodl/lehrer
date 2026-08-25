@@ -93,7 +93,33 @@ If a name does not resolve, map it to `127.0.0.1` in `/etc/hosts`.
 
 Secret values are read from the environment (`MYSQL_ROOT_PASSWORD`,
 `DJANGO_SECRET_KEY`, `MONGO_PASSWORD`, `PROVISION_SUPERUSER_PASSWORD`, ...) and
-fall back to safe local-dev defaults.
+fall back to safe local-dev defaults. They all land in the `openedx-secrets`
+Secret, which the MariaDB and MongoDB CRs read too — so an override reaches the
+operators rather than only the application.
+
+> **Existing clusters:** the MariaDB CR used to carry its own root-password
+> Secret, and `spec.rootPasswordSecretKeyRef` is immutable. A cluster created
+> before that change rejects the new manifest and `lehrer dev start` fails on
+> the `mysql` resource. Both `lehrer dev setup` and `lehrer dev start` detect
+> this and print the fix:
+>
+> ```bash
+> kubectl --context k3d-lehrer-dev -n openedx delete mariadb mysql
+> kubectl --context k3d-lehrer-dev -n openedx delete pvc storage-mysql-0
+> ```
+>
+> which drops the edxapp databases and lets the migrate and provision Jobs
+> rebuild them. Both lines matter: the PVC is retained when the CR goes, and a
+> replacement that reattaches it keeps the old databases *and* the old root
+> password. Keep the `--context` too — an unqualified delete lands on whichever
+> cluster your kubeconfig currently points at.
+
+`MYSQL_ROOT_PASSWORD` is init-only. MariaDB sets root's password when it
+initializes an empty datadir and never rotates it, so an override has to be set
+before the **first** `lehrer dev setup`; changing it later moves the Secret but
+not the server. `lehrer dev setup` notices and prints the same recreate steps.
+`MONGO_PASSWORD` has no such limitation — the MongoDB operator rotates SCRAM
+credentials when the referenced Secret changes.
 
 #### Provisioning
 

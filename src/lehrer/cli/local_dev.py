@@ -11,6 +11,7 @@ shell scripts.  The cluster lifecycle is:
 
 from __future__ import annotations
 
+import base64
 import glob
 import json
 import os
@@ -147,6 +148,120 @@ def _preflight_host_ports() -> None:
     )
 
 
+def _warn_on_stale_mariadb_secret_ref() -> None:
+    """Warn when an existing MariaDB CR predates the openedx-secrets root ref.
+
+    ``spec.rootPasswordSecretKeyRef`` is immutable, so a cluster created before
+    the CR pointed at ``openedx-secrets`` rejects the new manifest and Tilt
+    fails the ``mysql`` resource with an admission error that says nothing
+    about what to do. Recreating the CR drops the databases with it, so the
+    call is the developer's, not ours.
+    """
+    ref = capture(
+        "kubectl",
+        "--context",
+        CONTEXT,
+        "-n",
+        NAMESPACE,
+        "get",
+        "mariadb",
+        "mysql",
+        "-o",
+        "jsonpath={.spec.rootPasswordSecretKeyRef.name}",
+        check=False,
+    )
+    if not ref or ref == "openedx-secrets":
+        return
+    print(
+        f"\n!!! The existing MariaDB CR reads its root password from '{ref}',\n"
+        "    but the manifest now reads it from openedx-secrets, and the field\n"
+        "    is immutable — `lehrer dev start` will fail on the mysql resource.\n"
+        "    Recreate the instance (this drops the edxapp databases; the\n"
+        "    migrate and provision Jobs rebuild them):\n"
+        f"{_RECREATE_MARIADB}"
+    )
+
+
+# Deleting the CR alone is not enough. The operator has no MariaDB finalizer
+# and the CR sets no pvcRetentionPolicy, so storage-mysql-0 is retained (the
+# CRD's default is "retained until manually deleted"); the replacement mounts
+# the same datadir, MariaDB skips initialization on a non-empty one, and both
+# the databases and the *old* root password survive. Dropping the claim is
+# what makes the promise above true.
+#
+# --context is not optional in commands this destructive: a kubeconfig usually
+# carries real clusters too, and an unqualified delete lands on whichever one
+# happens to be current.
+_RECREATE_MARIADB = (
+    f"        kubectl --context {CONTEXT} -n {NAMESPACE} delete mariadb mysql\n"
+    f"        kubectl --context {CONTEXT} -n {NAMESPACE} delete pvc storage-mysql-0\n"
+)
+
+
+def _stored_secret_value(key: str) -> str:
+    """Return ``key``'s current value in openedx-secrets, or "" if unset."""
+    encoded = capture(
+        "kubectl",
+        "--context",
+        CONTEXT,
+        "-n",
+        NAMESPACE,
+        "get",
+        "secret",
+        "openedx-secrets",
+        "-o",
+        f"jsonpath={{.data.{key}}}",
+        check=False,
+    )
+    if not encoded:
+        return ""
+    return base64.b64decode(encoded).decode()
+
+
+def _mariadb_datadir_exists() -> bool:
+    """Return ``True`` when MariaDB's PVC — and so its datadir — already exists."""
+    return bool(
+        capture(
+            "kubectl",
+            "--context",
+            CONTEXT,
+            "-n",
+            NAMESPACE,
+            "get",
+            "pvc",
+            "storage-mysql-0",
+            "-o",
+            "jsonpath={.metadata.name}",
+            check=False,
+        )
+    )
+
+
+def _warn_on_init_only_root_password(previous: str, current: str) -> None:
+    """Warn when a changed MYSQL_ROOT_PASSWORD cannot reach an existing server.
+
+    MariaDB sets root's password once, when it initializes an empty datadir,
+    and nothing rotates it afterwards. Pointing the CR at openedx-secrets makes
+    an override work on a *fresh* cluster but silently not on an initialized
+    one: the Secret changes, the CR stays valid so no admission error fires,
+    and the operator then authenticates as root with a value the server has
+    never heard of — surfacing later as failed Grant/Database reconciliation
+    that names no cause.
+    """
+    if not previous or previous == current or not _mariadb_datadir_exists():
+        return
+    print(
+        "\n!!! MYSQL_ROOT_PASSWORD changed, but MariaDB only ever sets root's\n"
+        "    password when it initializes an empty datadir — this cluster's is\n"
+        "    already initialized, so the server keeps the old one while the\n"
+        "    operator starts presenting the new one. Either put the previous\n"
+        "    value back, or recreate the instance to re-initialize with it\n"
+        "    (this drops the edxapp databases; the migrate and provision Jobs\n"
+        "    rebuild them):\n"
+        f"{_RECREATE_MARIADB}"
+    )
+
+
 def mfe_dev_hostnames(deployment_config: Path) -> dict[str, str]:
     """Map each Site Project to the ``baseUrl`` hostname its dev server serves.
 
@@ -271,6 +386,11 @@ def setup() -> None:
         run("helm", "repo", "add", name, url, check=False)
     run("helm", "repo", "update")
 
+    # Read before the Secret is overwritten: comparing the stored value with
+    # the one about to replace it is what distinguishes a changed override from
+    # a re-run with the same value.
+    previous_root_password = _stored_secret_value("MYSQL_ROOT_PASSWORD")
+
     print("==> Creating openedx-secrets Secret...")
     secret_args = [
         f"--from-literal={key}={os.environ.get(key, default)}"
@@ -295,6 +415,12 @@ def setup() -> None:
             "yaml",
         ],
         ["kubectl", "apply", "-f", "-"],
+    )
+
+    _warn_on_stale_mariadb_secret_ref()
+    _warn_on_init_only_root_password(
+        previous_root_password,
+        os.environ.get("MYSQL_ROOT_PASSWORD", "openedx-dev"),
     )
 
     local_dev = _paths.local_dev_dir()
@@ -349,6 +475,12 @@ def start(
     stream
         Stream Tilt logs to the terminal instead of only the web UI.
     """
+    # Also checked here, not just in setup(): setup is documented as a one-off,
+    # so a developer who already has a cluster and pulls a manifest change
+    # reaches Tilt through this command and would otherwise hit the raw
+    # immutable-field admission error with no idea what to do about it.
+    _warn_on_stale_mariadb_secret_ref()
+
     tilt_args: list[str] = []
     if deployment_config is not None:
         # Resolve to an absolute path relative to the current working directory

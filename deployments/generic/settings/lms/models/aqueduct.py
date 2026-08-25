@@ -55,7 +55,7 @@ class AqueductSettings(BaseSettings):
     )
     ACE_ROUTING_KEY: Any = Field(
         default_factory=lambda: ace_common_settings.ACE_ROUTING_KEY
-    )  # TODO: refine type
+    )  # refine type
     ACTIVATION_EMAIL_FROM_ADDRESS: str = Field(
         default="", description="Account activation email sender address"
     )
@@ -88,30 +88,30 @@ class AqueductSettings(BaseSettings):
         default=3600,
         description="cache timeout in seconds for Mobile App Version Upgrade",
     )
-    AUTHN_MICROFRONTEND_DOMAIN: Any = Field(default=None)  # TODO: refine type
-    AUTHN_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
+    AUTHN_MICROFRONTEND_DOMAIN: Any = Field(default=None)  # refine type
+    AUTHN_MICROFRONTEND_URL: Any = Field(default=None)  # refine type
     AUTOMATIC_VERIFY_STUDENT_IDENTITY_FOR_TESTING: bool = Field(
         default=False,
         description="Automatically approve student identity verification attempts\n.. toggle_name: settings.AUTOMATIC_VERIFY_STUDENT_IDENTITY_FOR_TESTING\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: If set to True, then we want to skip posting anything to Software Secure. Bypass posting\nanything to Software Secure if the auto verify feature for testing is enabled. We actually don't even create\nthe message because that would require encryption and message signing that rely on settings.VERIFY_STUDENT\nvalues that aren't set in dev. So we just pretend like we successfully posted and automatically approve student\nidentity verification attempts.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2013-10-03\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/1184",  # noqa: E501
     )
     AVAILABLE_DISCUSSION_TOURS: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: []
+        default_factory=list
     )
     AWS_QUERYSTRING_EXPIRE: Any = Field(
         default_factory=lambda: 10 * 365 * 24 * 60 * 60,
         description="The number of seconds that a generated URL is valid for.",
-    )  # TODO: refine type
+    )  # refine type
     BADGES_ENABLED: bool = Field(
         default=False,
         description=".. toggle_name: settings.BADGES_ENABLED\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to enable badges functionality.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2024-04-02\n.. toggle_target_removal_date: None",  # noqa: E501
     )
-    BRANCH_IO_KEY: Any = Field(default=None)  # TODO: refine type
+    BRANCH_IO_KEY: Any = Field(default=None)  # refine type
     BROKER_USE_SSL: bool = Field(default=False)
     BUGS_EMAIL: str = Field(default="bugs@example.com")
     BULK_COURSE_EMAIL_LAST_LOGIN_ELIGIBILITY_PERIOD: Any = Field(
         default=None,
         description="If set, recipients of bulk course email messages will be filtered based on the last_login date of their User account.\nThe expected value is an Integer representing the cutoff point (in months) for inclusion to the message. Example:\na value of `3` would include learners who have logged in within the past 3 months.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     BULK_EMAIL_DEFAULT_RETRY_DELAY: int = Field(
         default=30,
         description="Initial delay used for retrying tasks.  Additional retries use\nlonger delays.  Value is in seconds.",  # noqa: E501
@@ -143,7 +143,7 @@ class AqueductSettings(BaseSettings):
     CATALOG_MICROFRONTEND_URL: Any = Field(
         default=None,
         description=".. setting_name: CATALOG_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based course catalog page.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     CCX_MAX_STUDENTS_ALLOWED: int = Field(
         default=200,
         description=".. setting_name: CCX_MAX_STUDENTS_ALLOWED\n.. setting_default: 200\n.. setting_description: Maximum number of students allowed in a CCX (Custom Courses for edX), This is an arbitrary\nhard limit, chosen so that a CCX does not compete with public MOOCs.",  # noqa: E501
@@ -152,13 +152,13 @@ class AqueductSettings(BaseSettings):
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     CELERYBEAT_SCHEDULE: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {}
+        default_factory=dict
     )
     CELERYD_HIJACK_ROOT_LOGGER: bool = Field(
         default=False, description="let logging work as configured:"
     )
     CELERY_EXTRA_IMPORTS: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: [],
+        default_factory=list,
         description=".. setting_name: CELERY_EXTRA_IMPORTS\n.. setting_default: []\n.. setting_description: Adds extra packages that don't get auto-imported (Example: XBlocks).\nThese packages are added in addition to those added by CELERY_IMPORTS.",  # noqa: E501
     )
     CELERY_IMPORTS: Annotated[list[Any], NoDecode] = Field(
@@ -193,7 +193,7 @@ class AqueductSettings(BaseSettings):
     COMMUNICATIONS_MICROFRONTEND_URL: Any = Field(
         default=None,
         description=".. setting_name: COMMUNICATIONS_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based communications app.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     COMPLETION_BY_VIEWING_DELAY_MS: int = Field(default=5000)
     CONTACT_EMAIL: str = Field(default="info@example.com")
     CONTACT_MAILING_ADDRESS: str = Field(
@@ -215,9 +215,9 @@ class AqueductSettings(BaseSettings):
             )
         ),
         description="Set CORS_ALLOW_HEADERS regardless of whether we've enabled ENABLE_CORS_HEADERS\nbecause that decision might happen in a later config file. (The headers to\nallow is an application logic, and not site policy.)",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     COUNTRIES_FIRST: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: [],
+        default_factory=list,
         description="django-countries provides an option to make the desired countries come up in\nselection forms, if left empty countries will come up in ascending order as before.\nThis accepts a list of ISO3166-1 two letter country code, For example,\nCOUNTRIES_FIRST = ['SA', 'BH', 'QA'] will display these countries on top of the list\nhttps://github.com/SmileyChris/django-countries#show-certain-countries-first",  # noqa: E501
     )
     COUNTRIES_OVERRIDE: Any = Field(
@@ -227,22 +227,20 @@ class AqueductSettings(BaseSettings):
             "XK": _("Kosovo"),
         },
         description="Country code overrides\nUsed by django-countries",
-    )  # TODO: refine type
+    )  # refine type
     COURSES_API_CACHE_TIMEOUT: int = Field(default=3600)
     COURSES_ARE_BROWSABLE: bool = Field(
         default=True,
         description="Can be turned off if course lists need to be hidden. Effects views and templates.\n.. toggle_name: settings.COURSES_ARE_BROWSABLE\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: When this is set to True, all the courses will be listed on the /courses page and Explore\nCourses link will be visible. Set to False if courses list and Explore Courses link need to be hidden.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2013-09-28\n.. toggle_warning: This Effects views and templates.\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/1073",  # noqa: E501
     )
     COURSE_BLOCKS_API_EXTRA_FIELDS: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: [],
+        default_factory=list,
         description='Specifies extra XBlock fields that should available when requested via the Course Blocks API\nShould be a list of tuples of (block_type, field_name), where block_type can also be "*" for all block types.\ne.g. COURSE_BLOCKS_API_EXTRA_FIELDS = [  (\'course\', \'other_course_settings\'), ("problem", "weight")  ]',  # noqa: E501
     )
     COURSE_BULK_EMAIL_HELP_URL: str = Field(
         default="https://docs.openedx.org/en/latest/educators/references/communication/bulk_email.html",  # noqa: E501
     )
-    COURSE_LISTINGS: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {}
-    )
+    COURSE_LISTINGS: Annotated[dict[str, Any], NoDecode] = Field(default_factory=dict)
     COURSE_MEMBER_API_ENROLLMENT_LIMIT: int = Field(
         default=1000,
         description=".. setting_name: COURSE_MEMBER_API_ENROLLMENT_LIMIT\n.. setting_implementation: DjangoSetting\n.. setting_default: 1000\n.. setting_description: This limits the response size of the `get_course_members` API, throwing an exception\nif the number of Enrolled users is greater than this number. This is needed to limit the dataset size\nsince the API does most of the calculation in Python to avoid expensive database queries.\n.. setting_use_cases: open_edx\n.. setting_creation_date: 2021-05-18\n.. setting_tickets: https://openedx.atlassian.net/browse/TNL-7330",  # noqa: E501
@@ -262,7 +260,7 @@ class AqueductSettings(BaseSettings):
     CREDIT_NOTIFICATION_CACHE_TIMEOUT: Any = Field(
         default_factory=lambda: 5 * 60 * 60,
         description="Credit api notification cache timeout",
-    )  # TODO: refine type
+    )  # refine type
     CUSTOM_CERTIFICATE_TEMPLATES_ENABLED: bool = Field(
         default=False,
         description=".. toggle_name: settings.CUSTOM_CERTIFICATE_TEMPLATES_ENABLED\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to enable custom certificate templates which are configured via Django admin.\n.. toggle_warning: None\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-08-13\n.. toggle_target_removal_date: None\n.. toggle_tickets: https://openedx.atlassian.net/browse/SOL-1044",  # noqa: E501
@@ -270,10 +268,10 @@ class AqueductSettings(BaseSettings):
     DASHBOARD_COURSE_LIMIT: Any = Field(
         default=None,
         description="To limit the number of courses displayed on learner dashboard",
-    )  # TODO: refine type
+    )  # refine type
     DATA_CONSENT_SHARE_CACHE_TIMEOUT: Any = Field(
         default_factory=lambda: 8 * 60 * 60
-    )  # TODO: refine type
+    )  # refine type
     DATA_DIR: str = Field(default="/edx/var/edxapp/data")
     DEBUG_TRACK_LOG: bool = Field(default=False)
     DEFAULT_ENTERPRISE_API_URL: Any = Field(
@@ -285,7 +283,7 @@ class AqueductSettings(BaseSettings):
     DEFAULT_FEEDBACK_EMAIL: str = Field(default="feedback@example.com")
     DEFAULT_FROM_EMAIL: str = Field(default="registration@example.com")
     DEFAULT_GROUPS: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: [], description="Used for A/B testing"
+        default_factory=list, description="Used for A/B testing"
     )
     DEFAULT_PRIORITY_QUEUE: Any = Field(
         default=None
@@ -295,7 +293,7 @@ class AqueductSettings(BaseSettings):
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     DEV_CONTENT: bool = Field(default=True)
     DISABLED_ORGS_FOR_PROGRAM_NUDGE: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: [],
+        default_factory=list,
         description=".. setting_name: DISABLED_ORGS_FOR_PROGRAM_NUDGE\n.. setting_default: []\n.. setting_description: List of organization codes that should be disabled\n.. for program nudge emails.\n.. eg ['BTDx', 'MYTx']",  # noqa: E501
     )
     DISABLE_ALLOWED_ENROLLMENT_IF_ENROLLMENT_CLOSED: bool = Field(
@@ -319,7 +317,7 @@ class AqueductSettings(BaseSettings):
             "off-topic": _("Post is off-topic"),
         },
         description="Provide a list of reason codes for moderators to close posts, as a mapping\nfrom the internal reason code representation, to  an internationalizable label\nto be shown to moderators in the form UI.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     DISCUSSION_MODERATION_EDIT_REASON_CODES: Any = Field(
         default_factory=lambda: {
             "grammar-spelling": _("Has grammar / spelling issues"),
@@ -332,9 +330,9 @@ class AqueductSettings(BaseSettings):
             "violates-guidelines": _("Violates community guidelines"),
         },
         description="Provide a list of reason codes for moderators editing posts and\ncomments, as a mapping from the internal reason code representation,\nto an internationalizable label to be shown to moderators in the form UI.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     DISCUSSION_SPAM_URLS: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: [],
+        default_factory=list,
         description=".. setting_name: DISCUSSION_SPAM_URLS\n.. setting_default: []\n.. setting_description: Urls to filter from discussion content to avoid spam",  # noqa: E501
     )
     DISPLAY_DEBUG_INFO_TO_STAFF: bool = Field(
@@ -632,22 +630,22 @@ class AqueductSettings(BaseSettings):
             "mailing_address",
             "year_of_birth",
         },
-    )  # TODO: refine type
+    )  # refine type
     ENTERPRISE_INTEGRATIONS_EMAIL: str = Field(
         default="enterprise-integrations@edx.org"
     )
     ENTERPRISE_MANUAL_REPORTING_CUSTOMER_UUIDS: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: []
+        default_factory=list
     )
     ENTERPRISE_PLATFORM_WELCOME_TEMPLATE: Any = Field(
         default_factory=lambda: _("Welcome to {platform_name}.")
-    )  # TODO: refine type
+    )  # refine type
     ENTERPRISE_PROXY_LOGIN_WELCOME_TEMPLATE: Any = Field(
         default_factory=lambda: _(
             "{start_bold}{enterprise_name}{end_bold} has partnered with {start_bold}{platform_name}{end_bold} "  # noqa: E501
             "to offer you high-quality learning opportunities from the world's best institutions and universities."  # noqa: E501
         ),
-    )  # TODO: refine type
+    )  # refine type
     ENTERPRISE_PUBLIC_ENROLLMENT_API_URL: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
@@ -662,7 +660,7 @@ class AqueductSettings(BaseSettings):
             "{line_break}Please note that {platform_name} has a different {privacy_policy_link_start}Privacy Policy"  # noqa: E501
             "{privacy_policy_link_end} from {enterprise_name}."
         ),
-    )  # TODO: refine type
+    )  # refine type
     ENTERPRISE_SUPPORT_URL: str = Field(default="")
     ENTERPRISE_TAGLINE: str = Field(default="")
     ENTERPRISE_VSF_UUID: str = Field(default="e815503343644ac7845bc82325c34460")
@@ -675,21 +673,21 @@ class AqueductSettings(BaseSettings):
     EXAMS_DASHBOARD_MICROFRONTEND_URL: Any = Field(
         default=None,
         description=".. setting_name: EXAMS_DASHBOARD_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the exams dashboard micro-frontend for instructors.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     EXEC_ED_LANDING_PAGE: str = Field(default="https://www.getsmarter.com/account")
     EXPOSE_CACHE_PROGRAMS_ENDPOINT: bool = Field(
         default=False,
         description="For caching programs in contexts where the LMS can only\nbe reached over HTTP.",  # noqa: E501
     )
-    FACEBOOK_API_VERSION: Any = Field(default=None)  # TODO: refine type
-    FACEBOOK_APP_ID: Any = Field(default=None)  # TODO: refine type
+    FACEBOOK_API_VERSION: Any = Field(default=None)  # refine type
+    FACEBOOK_APP_ID: Any = Field(default=None)  # refine type
     FACEBOOK_APP_SECRET: str | None = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     FEATURES: Any = Field(
         default_factory=lambda: FeaturesProxy(globals()),
         description="A proxy for feature flags stored in the settings namespace",
-    )  # TODO: refine type
+    )  # refine type
     FIELDS_STORED_IN_SESSION: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: ["auth_entry", "next"],
         description="Whitelisted URL query parameters retained in the pipeline session.",  # noqa: E501
@@ -697,7 +695,7 @@ class AqueductSettings(BaseSettings):
     FIELD_OVERRIDE_PROVIDERS: tuple[Any, ...] = Field(
         default=(),
         description="For the fields override feature\nIf using settings.INDIVIDUAL_DUE_DATES, you should add\n'lms.djangoapps.courseware.student_field_overrides.IndividualStudentOverrideProvider' to\nthis setting.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     FINANCE_EMAIL: str = Field(default="")
     FINANCIAL_ASSISTANCE_APPLICATION_STATUS_URL: str = Field(
         default="/core/api/financial_assistance_application/status/"
@@ -714,11 +712,11 @@ class AqueductSettings(BaseSettings):
     FOOTER_BROWSER_CACHE_MAX_AGE: Any = Field(
         default_factory=lambda: 5 * 60,
         description="Max age cache control header for the footer (controls browser caching).",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     FOOTER_CACHE_TIMEOUT: Any = Field(
         default_factory=lambda: 30 * 60,
         description="Cache expiration for the version of the footer served\nby the branding API.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     FOOTER_CSS: Annotated[dict[str, Any], NoDecode] = Field(
         default_factory=lambda: {
             "openedx": {"ltr": "style-lms-footer", "rtl": "style-lms-footer-rtl"},
@@ -735,20 +733,20 @@ class AqueductSettings(BaseSettings):
         description="URL for Open edX displayed in the footer",
     )
     FRONTEND_SITE_CONFIG: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {},
+        default_factory=dict,
         description='.. setting_name: FRONTEND_SITE_CONFIG\n.. setting_implementation: DjangoSetting\n.. setting_default: {}\n.. setting_description: Frontend site configuration in frontend-base\'s native camelCase\nformat.  Unlike MFE_CONFIG, values here require no translation and are passed through\nto the /api/frontend_site_config/v1/ endpoint as-is, at the highest precedence (overriding any\nvalues translated from MFE_CONFIG).\nSee https://github.com/openedx/frontend-base/blob/main/types.ts for the expected\nSiteConfig schema.\nExample: {\n"externalRoutes": [\n{"role": "learnerDashboard", "url": "https://courses.example.com/dashboard"}\n"logoutUrl": "https://courses.example.com/logout"\n.. setting_use_cases: open_edx\n.. setting_creation_date: 2026-04-04',  # noqa: E501
     )
     GENERAL_RECOMMENDATION: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {},
+        default_factory=dict,
         description="Keeping this for back compatibility with learner dashboard api",
     )
     GITHUB_REPO_ROOT: str = Field(default="/edx/var/edxapp/data")
     GOAL_REMINDER_BANNER_URL: str = Field(default="")
     GOAL_REMINDER_PROFILE_URL: str = Field(default="")
-    GOOGLE_ANALYTICS_4_ID: Any = Field(default=None)  # TODO: refine type
-    GOOGLE_ANALYTICS_LINKEDIN: Any = Field(default=None)  # TODO: refine type
-    GOOGLE_ANALYTICS_TRACKING_ID: Any = Field(default=None)  # TODO: refine type
-    GOOGLE_SITE_VERIFICATION_ID: Any = Field(default=None)  # TODO: refine type
+    GOOGLE_ANALYTICS_4_ID: Any = Field(default=None)  # refine type
+    GOOGLE_ANALYTICS_LINKEDIN: Any = Field(default=None)  # refine type
+    GOOGLE_ANALYTICS_TRACKING_ID: Any = Field(default=None)  # refine type
+    GOOGLE_SITE_VERIFICATION_ID: Any = Field(default=None)  # refine type
     GRADEBOOK_FREEZE_DAYS: int = Field(
         default=30,
         description=".. setting_name: GRADEBOOK_FREEZE_DAYS\n.. setting_default: 30\n.. setting_description: Sets the number of days after which the gradebook will freeze following the course's end.",  # noqa: E501
@@ -780,9 +778,9 @@ class AqueductSettings(BaseSettings):
         default=None,
         description="Name the exchange and queues w.r.t the SERVICE_VARIANT",
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
-    HOMEPAGE_COURSE_MAX: Any = Field(default=None)  # TODO: refine type
+    HOMEPAGE_COURSE_MAX: Any = Field(default=None)  # refine type
     HOSTNAME_MODULESTORE_DEFAULT_MAPPINGS: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {}
+        default_factory=dict
     )
     HOTJAR_SITE_ID: int = Field(default=0)
     INDIVIDUAL_DUE_DATES: bool = Field(
@@ -1032,11 +1030,11 @@ class AqueductSettings(BaseSettings):
             *openedx_content_backcompat_apps_to_install(),
         ],
         description="The order of INSTALLED_APPS is important, when adding new apps here remember to check that you are not creating new\nRemovedInDjango19Warnings in the test logs.\nIf you want to add a new djangoapp that isn't suitable for everyone, you have some options:\n- Add it to OPTIONAL_APPS below (registered if importable)\n- Add it to the ADDL_INSTALLED_APPS configuration variable (acts like EXTRA_APPS in other IDAs)\n- Make it a plugin (which are auto-registered) and add it to the EDXAPP_PRIVATE_REQUIREMENTS configuration variable\n(See https://github.com/openedx/edx-django-utils/tree/master/edx_django_utils/plugins)",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     INSTRUCTOR_MICROFRONTEND_URL: Any = Field(
         default=None,
         description=".. setting_name: INSTRUCTOR_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based instructor app.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     INVOICE_CORP_ADDRESS: str = Field(
         default="Please place your corporate address\nin this configuration",
         description="REGISTRATION CODES DISPLAY INFORMATION SUBTITUTIONS IN THE INVOICE ATTACHMENT",  # noqa: E501
@@ -1050,10 +1048,10 @@ class AqueductSettings(BaseSettings):
     LMS_BASE: str = Field(default="localhost:18000", description="LMS base")
     LMS_COMM_DEFAULT_FROM_EMAIL: str = Field(default="no-reply@example.com")
     LMS_MIGRATION_ALLOWED_IPS: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: [],
+        default_factory=list,
         description="IP addresses that are allowed to reload the course, etc.\nTODO (vshnayder): Will probably need to change as we get real access control in.",  # noqa: E501
     )
-    LMS_SEGMENT_KEY: Any = Field(default=None)  # TODO: refine type
+    LMS_SEGMENT_KEY: Any = Field(default=None)  # refine type
     LOGIN_REDIRECT_URL: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
@@ -1066,9 +1064,9 @@ class AqueductSettings(BaseSettings):
     LTI_AGGREGATE_SCORE_PASSBACK_DELAY: Any = Field(
         default_factory=lambda: 15 * 60,
         description="An aggregate score is one derived from multiple problems (such as the\ncumulative score for a vertical element containing many problems). Sending\naggregate scores immediately introduces two issues: one is a race condition\nbetween the view method and the Celery task where the updated score may not\nyet be visible to the database if the view has not yet returned (and committed\nits transaction). The other is that the student is likely to receive a stream\nof notifications as the score is updated with every problem. Waiting a\nreasonable period of time allows the view transaction to end, and allows us to\ncollapse multiple score updates into a single message.\nThe time value is in seconds.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     LTI_CUSTOM_PARAMS: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: [],
+        default_factory=list,
         description=".. setting_name: LTI_CUSTOM_PARAMS\n.. setting_default: []\n.. setting_description: This expands the list of optional LTI parameters that the\nplatform accepts. These parameters are not used by the platform, but can then\nbe used by other plugins.\n.. setting_creation_date: 2025-08-22\n.. setting_tickets:",  # noqa: E501
     )
     LTI_USER_EMAIL_DOMAIN: str = Field(
@@ -1076,7 +1074,7 @@ class AqueductSettings(BaseSettings):
         description="Default domain for the e-mail address associated with users who are created\nvia the LTI Provider feature. Note that the generated e-mail addresses are\nnot expected to be active; this setting simply allows administrators to\nroute any messages intended for LTI users to a common domain.",  # noqa: E501
     )
     MAILCHIMP_NEW_USER_LIST_ID: str = Field(default="")
-    MAINTENANCE_BANNER_TEXT: Any = Field(default=None)  # TODO: refine type
+    MAINTENANCE_BANNER_TEXT: Any = Field(default=None)  # refine type
     MAKO_TEMPLATE_DIRS_BASE: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
@@ -1087,15 +1085,15 @@ class AqueductSettings(BaseSettings):
         description="Maximum number of rows to include in the csv file for downloading problem responses.",  # noqa: E501
     )
     MFE_CONFIG: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {},
+        default_factory=dict,
         description='.. setting_name: MFE_CONFIG\n.. setting_implementation: DjangoSetting\n.. setting_default: {}\n.. setting_description: Is a configuration that will be exposed by the MFE Config API to be consumed by the MFEs.\nContains configuration common to all MFEs. When a specific MFE\'s configuration is requested, these values\nwill be treated as a base and then overriden/supplemented by those in `MFE_CONFIG_OVERRIDES`.\nExample: {\n"BASE_URL": "https://name_of_mfe.example.com",\n"LANGUAGE_PREFERENCE_COOKIE_NAME": "example-language-preference",\n"CREDENTIALS_BASE_URL": "https://credentials.example.com",\n"DISCOVERY_API_BASE_URL": "https://discovery.example.com",\n"LMS_BASE_URL": "https://courses.example.com",\n"LOGIN_URL": "https://courses.example.com/login",\n"LOGOUT_URL": "https://courses.example.com/logout",\n"STUDIO_BASE_URL": "https://studio.example.com",\n"LOGO_URL": "https://courses.example.com/logo.png"\n.. setting_use_cases: open_edx\n.. setting_creation_date: 2022-08-05',  # noqa: E501
     )
     MFE_CONFIG_API_CACHE_TIMEOUT: Any = Field(
         default_factory=lambda: 60 * 5,
         description=".. setting_name: MFE_CONFIG_API_CACHE_TIMEOUT\n.. setting_default: 60*5\n.. setting_description: The MFE Config API response will be cached during the\nspecified time",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     MFE_CONFIG_OVERRIDES: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {},
+        default_factory=dict,
         description='.. setting_name: MFE_CONFIG_OVERRIDES\n.. setting_implementation: DjangoSetting\n.. setting_default: {}\n.. setting_description: Overrides or additions to `MFE_CONFIG` for when a specific MFE is requested\nby the MFE Config API. Top-level keys are APP_IDs, a.k.a. the name of the MFE (for example,\nfor an MFE named "frontend-app-xyz", the top-level key would be "xyz").\nExample: {\n"gradebook": {\n"BASE_URL": "https://gradebook.example.com",\n"profile": {\n"BASE_URL": "https://profile.example.com",\n"ENABLE_LEARNER_RECORD_MFE": "true",\n.. setting_use_cases: open_edx\n.. setting_creation_date: 2022-08-05',  # noqa: E501
     )
     MIDDLEWARE: Annotated[list[Any], NoDecode] = Field(
@@ -1182,8 +1180,8 @@ class AqueductSettings(BaseSettings):
             "openedx.features.content_type_gating.field_override.ContentTypeGatingFieldOverride",  # noqa: E501
         ),
         description="Modulestore-level field override providers. These field override providers don't\nrequire student context.",  # noqa: E501
-    )  # TODO: refine type
-    MONGODB_LOG: Annotated[dict[str, Any], NoDecode] = Field(default_factory=lambda: {})
+    )  # refine type
+    MONGODB_LOG: Annotated[dict[str, Any], NoDecode] = Field(default_factory=dict)
     NODE_MODULES_ROOT: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
@@ -1206,7 +1204,7 @@ class AqueductSettings(BaseSettings):
             "profile": _("Know your name and username"),
         },
         description="Scope description strings are presented to the user\non the application authorization page. See\nlms/templates/oauth2_provider/authorize.html for details.\nNon-default scopes should be added directly to OAUTH2_PROVIDER['SCOPES'] below.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     OAUTH2_PROVIDER: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
@@ -1222,15 +1220,15 @@ class AqueductSettings(BaseSettings):
     )  # REDACTED: name looks secret-like — set via a source, not here
     ORA2_FILE_PREFIX: Any = Field(
         default=None, description="By default, don't use a file prefix"
-    )  # TODO: refine type
+    )  # refine type
     ORA_GRADING_MICROFRONTEND_URL: Any = Field(
         default=None,
         description=".. setting_name: ORA_GRADING_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based openassessment grading page.\nThis is will be show in the open response tab list data.\n.. setting_warning: Also set site's openresponseassessment.enhanced_staff_grader\nwaffle flag.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     ORA_MICROFRONTEND_URL: Any = Field(
         default=None,
         description=".. setting_name: ORA_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL for modern openassessment app.\nThis is will be show in the open response tab list data.\n.. setting_warning: Also set site's openresponseassessment.mfe_views\nwaffle flag.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     ORA_PEER_LEASE_EXPIRATION_HOURS: int = Field(
         default=8,
         description=".. setting_name: ORA_PEER_LEASE_EXPIRATION_HOURS\n.. setting_default: 8\n.. setting_description: Amount of time before a lease on a peer submission expires",  # noqa: E501
@@ -1242,7 +1240,7 @@ class AqueductSettings(BaseSettings):
     ORA_WORKFLOW_UPDATE_ROUTING_KEY: str = Field(
         default="edx.lms.core.ora_workflow_update"
     )
-    ORDER_HISTORY_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
+    ORDER_HISTORY_MICROFRONTEND_URL: Any = Field(default=None)  # refine type
     OUTCOME_SURVEYS_EVENTS_ENABLED: bool = Field(default=True)
     PAID_COURSE_REGISTRATION_CURRENCY: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: ["usd", "$"],
@@ -1283,7 +1281,7 @@ class AqueductSettings(BaseSettings):
     PROFILE_EXTENSION_FORM: Any = Field(
         default=None,
         description="PROFILE_EXTENSION_FORM is a Django ModelForm class used for extending user profiles\nbeyond the default fields. This setting enables new capabilities for profile management:\n- Data is stored in a dedicated model (not just UserProfile.meta)\n- Users can update their extended profile fields via the account settings API\nThis setting supersedes REGISTRATION_EXTENSION_FORM and provides more accurate naming\nfor profile extension functionality.\nExample: PROFILE_EXTENSION_FORM = 'myapp.forms.ExtendedProfileForm'\nThe custom form's model should have:\n- A OneToOneField to User (typically named 'user')\n- Additional fields for extended profile data\nMIGRATION NOTE: If you're currently using REGISTRATION_EXTENSION_FORM (deprecated),\nyour custom fields will continue working as before (data in meta field).\nTo get the new capabilities, migrate to PROFILE_EXTENSION_FORM.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     PROFILE_INFORMATION_REPORT_PRIVATE_FIELDS: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: ["year_of_birth"],
         description='.. setting_name: PROFILE_INFORMATION_REPORT_PRIVATE_FIELDS\n.. setting_default: ["year_of_birth"]\n.. setting_description: List of private fields that will be hidden from the profile information report.\n.. setting_use_cases: open_edx\n.. setting_creation_date: 2025-07-07\n.. setting_tickets: https://github.com/openedx/edx-platform/pull/36688',  # noqa: E501
@@ -1291,11 +1289,11 @@ class AqueductSettings(BaseSettings):
     PROFILE_MICROFRONTEND_URL: Any = Field(
         default=None,
         description=".. setting_name: PROFILE_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based profile page.\n.. setting_warning: Also set site's ENABLE_PROFILE_MICROFRONTEND and\nlearner_profile.redirect_to_microfrontend waffle flag",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     PROGRAM_CERTIFICATES_ROUTING_KEY: Any = Field(
         default=None, description="Queue to use for award program certificates"
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
-    PROGRAM_CONSOLE_MICROFRONTEND_URL: Any = Field(default=None)  # TODO: refine type
+    PROGRAM_CONSOLE_MICROFRONTEND_URL: Any = Field(default=None)  # refine type
     PROJECT_ROOT: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
@@ -1319,7 +1317,7 @@ class AqueductSettings(BaseSettings):
     RECAPTCHA_PROJECT_ID: Any = Field(
         default=None,
         description=".. setting_name: RECAPTCHA_PROJECT_ID\n.. setting_default: None\n.. setting_description: Add recaptcha project id to use captcha feature in discussion app.\n.. setting_warning: This setting is used to configure the reCAPTCHA project ID for the discussion app.\nThe project ID is used to identify the reCAPTCHA project in the Google Cloud Console\nand is required for the reCAPTCHA service to function correctly.\nThe project ID should be obtained from the Google Cloud Console when creating a reCAPTCHA",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     RECAPTCHA_SITE_KEYS: Annotated[dict[str, Any], NoDecode] = Field(
         default_factory=lambda: {"web": None, "ios": None, "android": None},
         description=".. setting_name: RECAPTCHA_SITE_KEYS\n.. setting_default: empty dictionary\n.. setting_description: Add recaptcha site keys to use captcha feature in discussion app.\n.. setting_warning: This setting is used to configure the reCAPTCHA keys for web,\niOS, and Android platforms.\nThe keys are expected to be in the format:\n'web': 'your-web-site-key',\n'ios': 'your-ios-site-key',\n'android': 'your-android-site-key',",  # noqa: E501
@@ -1328,7 +1326,7 @@ class AqueductSettings(BaseSettings):
     REGISTRATION_EXTENSION_FORM: Any = Field(
         default=None,
         description="Only used if combined login/registration is enabled.\nThis can be used to add fields to the registration page.\nIt must be a path to a valid form, in dot-separated syntax.\nIE: custom_form_app.forms.RegistrationExtensionForm\nNote: If you want to use a model to store the results of the form, you will\nneed to add the model's app to the ADDL_INSTALLED_APPS array in your\nlms.yml file.\nREGISTRATION_EXTENSION_FORM is deprecated but will continue to work for backward compatibility.\nSites using this setting will maintain the old behavior:\n- Data is stored in UserProfile.meta JSON field\n- No ability to update extended fields after registration via account settings API\nTo get new capabilities (model-based storage), migrate to PROFILE_EXTENSION_FORM.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     REGISTRATION_FIELD_ORDER: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: [
             "name",
@@ -1409,7 +1407,7 @@ class AqueductSettings(BaseSettings):
     SECURITY_PAGE_URL: Any = Field(
         default=None,
         description=".. setting_name: SECURITY_PAGE_URL\n.. setting_default: None\n.. setting_description: A link to the site's security disclosure/reporting policy,\nto display in the site footer. This will only appear for sites using themes that\nuse the links produced by ``lms.djangoapps.branding.api.get_footer``.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     SELF_PACED_BANNER_URL: str = Field(default="")
     SELF_PACED_CLOUD_URL: str = Field(default="")
     SEND_ACTIVATION_EMAIL_URL: str = Field(default="")
@@ -1422,7 +1420,7 @@ class AqueductSettings(BaseSettings):
     SHOW_BUMPER_PERIODICITY: Any = Field(
         default_factory=lambda: 7 * 24 * 3600,
         description="How many seconds to show the bumper again, default is 7 days:",
-    )  # TODO: refine type
+    )  # refine type
     SIMPLE_WIKI_REQUIRE_LOGIN_EDIT: bool = Field(default=True)
     SIMPLE_WIKI_REQUIRE_LOGIN_VIEW: bool = Field(default=False)
     SKIP_EMAIL_VALIDATION: bool = Field(
@@ -1570,7 +1568,7 @@ class AqueductSettings(BaseSettings):
             },
         },
         description="The display dictionary defines the title\nand icon class for each social media link.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     SOCIAL_MEDIA_FOOTER_NAMES: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: [
             "facebook",
@@ -1640,7 +1638,7 @@ class AqueductSettings(BaseSettings):
     )
     STUDENT_FILEUPLOAD_MAX_SIZE: Any = Field(
         default_factory=lambda: 4 * 1000 * 1000
-    )  # TODO: refine type
+    )  # refine type
     STUDIO_NAME: str = Field(default="Studio", description="Studio name")
     STUDIO_SHORT_NAME: str = Field(default="Studio")
     SUPPORT_HOW_TO_UNENROLL_LINK: str = Field(default="")
@@ -1657,7 +1655,7 @@ class AqueductSettings(BaseSettings):
         description=".. setting_name: SURVEY_REPORT_ENDPOINT\n.. setting_default: Open edX organization endpoint\n.. setting_description: Endpoint where the report will be sent.",  # noqa: E501
     )
     SURVEY_REPORT_EXTRA_DATA: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {},
+        default_factory=dict,
         description=".. setting_name: SURVEY_REPORT_EXTRA_DATA\n.. setting_default: empty dictionary\n.. setting_description: Dictionary with additional information that you want to share in the report.",  # noqa: E501
     )
     SWAGGER_SETTINGS: Annotated[dict[str, Any], NoDecode] = Field(
@@ -1692,7 +1690,7 @@ class AqueductSettings(BaseSettings):
                 PROVISIONING_PENDING_ENTERPRISE_CUSTOMER_ADMIN_ROLE,
             ],
         },
-    )  # TODO: refine type
+    )  # refine type
     TECH_SUPPORT_EMAIL: str = Field(default="technical@example.com")
     TIME_ZONE_DISPLAYED_FOR_DEADLINES: str = Field(default="UTC")
     TOKEN_SIGNING: str | None = Field(
@@ -1709,7 +1707,7 @@ class AqueductSettings(BaseSettings):
     )
     TRACKING_SEGMENTIO_DISALLOWED_SUBSTRING_NAMES: Annotated[list[Any], NoDecode] = (
         Field(  # noqa: E501
-            default_factory=lambda: []
+            default_factory=list
         )
     )
     TRACKING_SEGMENTIO_SOURCE_MAP: Annotated[dict[str, Any], NoDecode] = Field(
@@ -1751,16 +1749,16 @@ class AqueductSettings(BaseSettings):
     )
     WIKI_CAN_ASSIGN: Any = Field(
         default_factory=lambda: course_wiki_settings.CAN_ASSIGN
-    )  # TODO: refine type
+    )  # refine type
     WIKI_CAN_CHANGE_PERMISSIONS: Any = Field(
         default_factory=lambda: course_wiki_settings.CAN_CHANGE_PERMISSIONS
-    )  # TODO: refine type
+    )  # refine type
     WIKI_CAN_DELETE: Any = Field(
         default_factory=lambda: course_wiki_settings.CAN_DELETE
-    )  # TODO: refine type
+    )  # refine type
     WIKI_CAN_MODERATE: Any = Field(
         default_factory=lambda: course_wiki_settings.CAN_MODERATE
-    )  # TODO: refine type
+    )  # refine type
     WIKI_EDITOR: str = Field(default="lms.djangoapps.course_wiki.editors.CodeMirror")
     WIKI_LINK_DEFAULT_LEVEL: int = Field(default=2)
     WIKI_LINK_LIVE_LOOKUPS: bool = Field(
@@ -1775,15 +1773,15 @@ class AqueductSettings(BaseSettings):
     WRITABLE_GRADEBOOK_URL: Any = Field(
         default=None,
         description="If running a Gradebook container locally,\nmodify lms/envs/private.py to give it a non-null value",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     XDOMAIN_PROXY_CACHE_TIMEOUT: Any = Field(
         default_factory=lambda: 60 * 15,
         description="Default cache expiration for the cross-domain proxy HTML page.\nThis is a static page that can be iframed into an external page\nto simulate cross-domain requests.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     ZENDESK_API_KEY: str | None = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
-    ZENDESK_USER: Any = Field(default=None)  # TODO: refine type
+    ZENDESK_USER: Any = Field(default=None)  # refine type
     # <<< aqueduct:generated:fields
 
     # >>> aqueduct:generated:container_decoders

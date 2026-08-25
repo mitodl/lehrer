@@ -2,12 +2,18 @@
 #
 # Usage: load this file and call setup(cfg) with a configuration dict.
 #
+# Every key below is read by setup(); there are no optional ones, and a key
+# that stops having a consumer should be deleted here and in the callers
+# rather than left as decoration that looks configurable but is not.
+#
 #   load("./lehrer-core.star", "setup")
 #   setup({
 #     "deploy_config":   "/abs/path/to/deployments/generic",
 #     "registry":        "localhost:5100",         # host-side push URL
 #     "registry_k8s":    "k3d-lehrer-registry:5000", # cluster-side pull URL
-#     "redis_host":      "redis-master.openedx.svc.cluster.local",
+#     # Host for the notes ConfigMap. The platform's own OpenSearch/Redis/URL
+#     # settings come from the platform configmaps, which a caller running on
+#     # different infrastructure supplies itself (apply_platform_configmaps).
 #     "opensearch_host": "opensearch-cluster-master.openedx.svc.cluster.local",
 #     "namespace":       "openedx",
 #     "manage_infra":    True,   # install MySQL/MongoDB/Redis/OpenSearch via Helm
@@ -95,6 +101,7 @@ def setup(cfg):
     release_name = cfg["release_name"]
     deploy_name = cfg["deploy_name"]
     settings_ns = cfg["settings_ns"]
+    opensearch_host = cfg["opensearch_host"]
     notes_repo = cfg["notes_repo"]
     helm_override_dir = cfg["helm_override_dir"]
     local_dev = cfg["local_dev_dir"]
@@ -167,7 +174,6 @@ def setup(cfg):
         k8s_resource(
             new_name="mysql",
             objects=[
-                "mariadb-root-secret:Secret:openedx",
                 "mysql:MariaDB:openedx",
                 "notes:Database:openedx",
                 "edxapp-csmh:Database:openedx",
@@ -196,7 +202,6 @@ def setup(cfg):
         k8s_resource(
             new_name="mongodb-cr",
             objects=[
-                "mongodb-edxapp-secret:Secret:openedx",
                 "mongodb:MongoDBCommunity:openedx",
             ],
             resource_deps=["mongodb-operator"],
@@ -204,8 +209,10 @@ def setup(cfg):
         )
 
     if manage_infra:
-        # Valkey (Redis-compatible fork) — standalone, release name "redis" keeps
-        # the service name "redis-master" as expected by the platform configmap.
+        # Valkey (Redis-compatible fork), standalone. The chart names its
+        # Service "<release>-valkey", so release "redis" yields "redis-valkey"
+        # — the host CELERY_BROKER_HOSTNAME points at in the platform
+        # configmaps.
         helm_repo("valkey", "https://valkey.io/valkey-helm/", labels=["infra"])
         helm_resource(
             "redis",
@@ -556,14 +563,20 @@ def setup(cfg):
     # ------------------------------------------------------------------ #
 
     notes_configmap = local_dev + "/manifests/notes/configmap.yaml"
-    k8s_yaml(notes_configmap)
+    k8s_yaml(blob(str(read_file(notes_configmap)).replace(
+        "__OPENSEARCH_HOST__", opensearch_host
+    )))
     k8s_yaml(local_dev + "/manifests/notes/job-migrate.yaml")
 
     # Stamp the ConfigMap's hash into the notes pod template. Without it a
     # config edit re-runs notes-migrate against the new values while the
     # running pod keeps the old ones — envFrom does not trigger a rollout.
+    # Hashed over the file *and* the substituted host, so changing either
+    # rolls the pod; hashing the file alone would miss an opensearch_host
+    # change.
     notes_config_checksum = str(local(
-        "sha256sum " + notes_configmap + " | cut -c1-16",
+        "{ cat " + notes_configmap + "; printf '%s' '" + opensearch_host +
+        "'; } | sha256sum | cut -c1-16",
         quiet=True,
     )).strip()
     k8s_yaml(blob(str(read_file(
