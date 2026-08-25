@@ -1,14 +1,4 @@
 ---
-# Password secret for MongoDB users.
-# MongoDB Community Operator expects a secret per user with key "password".
-apiVersion: v1
-kind: Secret
-metadata:
-  name: mongodb-edxapp-secret
-  namespace: openedx
-stringData:
-  password: "openedx-dev"  # pragma: allowlist secret
----
 # MongoDBCommunity instance managed by the mongodb community-operator.
 # Single-member replica set (the only mode supported by the operator).
 # The operator creates Service "mongodb-svc" in the openedx namespace.
@@ -31,8 +21,13 @@ spec:
   users:
   - name: edxapp
     db: admin
+    # Read from openedx-secrets rather than a secret of its own, so a
+    # MONGO_PASSWORD override reaches the operator too. Otherwise the operator
+    # creates the user with the hardcoded password while edx-platform
+    # authenticates with the override, and every Mongo connection fails auth.
     passwordSecretRef:
-      name: mongodb-edxapp-secret
+      name: openedx-secrets
+      key: MONGO_PASSWORD
     scramCredentialsSecretName: mongodb-edxapp-scram  # pragma: allowlist secret
     roles:
     - name: dbOwner
