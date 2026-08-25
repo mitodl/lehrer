@@ -77,20 +77,20 @@ class AqueductSettings(BaseSettings):
     CMS_BASE: Any = Field(
         default=None,
         description="Public domain name of Studio (should be resolvable from the end-user's browser)",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     CMS_ROOT: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
-    CMS_ROOT_URL: Any = Field(default=None)  # TODO: refine type
+    CMS_ROOT_URL: Any = Field(default=None)  # refine type
     CMS_SEGMENT_KEY: Any = Field(
         default=None, description="Segment - must explicitly turn it on for production"
-    )  # TODO: refine type
+    )  # refine type
     COMMENTS_SERVICE_KEY: str = Field(default="password")
     COMMENTS_SERVICE_URL: str = Field(default="http://localhost:18080")
     CONTACT_EMAIL: str = Field(default="info@example.com")
     CONTACT_MAILING_ADDRESS: Any = Field(
         default_factory=lambda: _("Your Contact Mailing Address Here")
-    )  # TODO: refine type
+    )  # refine type
     CORS_ALLOW_HEADERS: Any = Field(
         default_factory=lambda: (
             corsheaders_default_headers
@@ -101,7 +101,7 @@ class AqueductSettings(BaseSettings):
             )
         ),
         description="Set CORS_ALLOW_HEADERS regardless of whether we've enabled ENABLE_CORS_HEADERS\nbecause that decision might happen in a later config file. (The headers to\nallow is an application logic, and not site policy.)",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     COURSE_EXPORT_DOWNLOAD_CHUNK_SIZE: int = Field(
         default=8192,
         description="Course exports streamed in blocks of this size. 8192 or 8kb is the default\nsetting for the FileWrapper class used to iterate over the export file data.\nSee: https://docs.python.org/2/library/wsgiref.html#wsgiref.util.FileWrapper",  # noqa: E501
@@ -157,7 +157,7 @@ class AqueductSettings(BaseSettings):
     DISABLE_LIBRARY_CREATION: Any = Field(
         default=None,
         description='.. setting_name: DISABLE_LIBRARY_CREATION\n.. setting_default: None\n.. setting_description: If set to True, disables library creation for users without a staff role and hides the\n"New Library" button in Studio. If set to False, enables library creation independently of DISABLE_COURSE_CREATION.\nIf None (the default), DISABLE_COURSE_CREATION is used to decide whether library creation is disabled.',  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     DISCUSSIONS_INCONTEXT_FEEDBACK_URL: str = Field(
         default="",
         description="Feedback link in upgraded discussion notification alert",
@@ -170,9 +170,7 @@ class AqueductSettings(BaseSettings):
         default=True,
         description=".. toggle_name: settings.EDITABLE_SHORT_DESCRIPTION\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: This feature flag allows editing of short descriptions on the Schedule & Details page in\nOpen edX Studio. Set to False if you want to disable the editing of the course short description.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2014-02-13\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/2334",  # noqa: E501
     )
-    EDXAPP_PARSE_KEYS: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {}
-    )
+    EDXAPP_PARSE_KEYS: Annotated[dict[str, Any], NoDecode] = Field(default_factory=dict)
     ELASTIC_FIELD_MAPPINGS: Annotated[dict[str, Any], NoDecode] = Field(
         default_factory=lambda: {"start_date": {"type": "date"}}
     )
@@ -255,11 +253,11 @@ class AqueductSettings(BaseSettings):
     EXAMS_SERVICE_URL: str = Field(default="http://localhost:18740/api/v1")
     EXAMS_SERVICE_USERNAME: str = Field(default="edx_exams_worker")
     EXTENDED_VIDEO_TRANSCRIPT_LANGUAGES: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: [],
+        default_factory=list,
         description="Additional languages that should be supported for video transcripts, not included in ALL_LANGUAGES",  # noqa: E501
     )
     EXTRA_MIDDLEWARE_CLASSES: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: []
+        default_factory=list
     )
     FACEBOOK_API_VERSION: str = Field(default="v2.1")
     FACEBOOK_APP_ID: str = Field(default="FACEBOOK_APP_ID")
@@ -269,7 +267,7 @@ class AqueductSettings(BaseSettings):
     FEATURES: Any = Field(
         default_factory=lambda: FeaturesProxy(globals()),
         description="A proxy for feature flags stored in the settings namespace",
-    )  # TODO: refine type
+    )  # refine type
     FILES_AND_UPLOAD_TYPE_FILTERS: Annotated[dict[str, Any], NoDecode] = Field(
         default_factory=lambda: {
             "Images": [
@@ -350,7 +348,7 @@ class AqueductSettings(BaseSettings):
     FRONTEND_APP_PUBLISHER_URL: Any = Field(
         default=None,
         description='.. setting_name: FRONTEND_APP_PUBLISHER_URL\n.. setting_default: None\n.. setting_description: Base URL of the publisher frontend app. When set (globally here or per-org via\nsite configuration), the course "settings" page in Studio links out to the publisher app. Left unset\n(None) by default, in which case no publisher link is shown.',  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     FRONTEND_LOGIN_URL: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
@@ -589,7 +587,7 @@ class AqueductSettings(BaseSettings):
             *openedx_content_backcompat_apps_to_install(),
         ],
         description="The order of INSTALLED_APPS is important, when adding new apps here\nremember to check that you are not creating new\nRemovedInDjango19Warnings in the test logs.",  # noqa: E501
-    )  # TODO: refine type
+    )  # refine type
     IN_CONTEXT_DISCUSSION_ENABLED_DEFAULT: bool = Field(
         default=True,
         description=".. toggle_name: settings.IN_CONTEXT_DISCUSSION_ENABLED_DEFAULT\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: Set to False to disable in-context discussion for units by default.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2024-09-02",  # noqa: E501
@@ -625,7 +623,7 @@ class AqueductSettings(BaseSettings):
         ],
         description=".. setting_name: LIBRARY_ENABLED_BLOCKS\n.. setting_default: ['problem', 'video', 'html', 'drag-and-drop-v2']\n.. setting_description: List of block types that are ready/enabled to be created/used\n.. in libraries. Both basic blocks and advanced blocks can be included.\n.. In the future, we will support individual configuration per library - see\n.. openedx/core/djangoapps/content_libraries/api.py::get_allowed_block_types()",  # noqa: E501
     )
-    LMS_BASE: Any = Field(default=None)  # TODO: refine type
+    LMS_BASE: Any = Field(default=None)  # refine type
     LMS_ROOT: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
@@ -649,7 +647,7 @@ class AqueductSettings(BaseSettings):
     MAX_FAILED_LOGIN_ATTEMPTS_ALLOWED: int = Field(default=6)
     MAX_FAILED_LOGIN_ATTEMPTS_LOCKOUT_PERIOD_SECS: Any = Field(
         default_factory=lambda: 30 * 60
-    )  # TODO: refine type
+    )  # refine type
     MEILISEARCH_API_KEY: str | None = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
@@ -725,14 +723,14 @@ class AqueductSettings(BaseSettings):
         default=True,
         description='.. toggle_name: ORGANIZATIONS_AUTOCREATE\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: When enabled, creating a course run or content library with\nan "org slug" that does not map to an Organization in the database will trigger the\ncreation of a new Organization, with its name and short_name set to said org slug.\nWhen disabled, creation of such content with an unknown org slug will instead\nresult in a validation error.\nIf you want the Organization table to be an authoritative information source in\nStudio, then disable this; however, if you want the table to just be a reflection of\nthe orgs referenced in Studio content, then leave it enabled.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2020-11-02\n.. toggle_tickets: https://github.com/openedx/edx-organizations/blob/master/docs/decisions/0001-phase-in-db-backed-organizations-to-all.rst',  # noqa: E501
     )
-    PARSE_KEYS: Annotated[dict[str, Any], NoDecode] = Field(default_factory=lambda: {})
+    PARSE_KEYS: Annotated[dict[str, Any], NoDecode] = Field(default_factory=dict)
     PAYMENT_SUPPORT_EMAIL: str = Field(default="billing@example.com")
     PRESS_EMAIL: str = Field(default="press@example.com")
     PREVENT_CONCURRENT_LOGINS: bool = Field(
         default=False, description="Prevent concurrent logins per user"
     )
     PROCTORING_SETTINGS: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {}
+        default_factory=dict
     )
     PROJECT_ROOT: Any = Field(
         default=None
@@ -777,14 +775,12 @@ class AqueductSettings(BaseSettings):
     STATIC_URL: str = Field(default="/static/studio/", description="Static content")
     STUDIO_NAME: Any = Field(
         default_factory=lambda: _("Your Platform Studio")
-    )  # TODO: refine type
+    )  # refine type
     STUDIO_REQUEST_EMAIL: str = Field(
         default="",
         description="email address for studio staff (eg to request course creation)",
     )
-    STUDIO_SHORT_NAME: Any = Field(
-        default_factory=lambda: _("Studio")
-    )  # TODO: refine type
+    STUDIO_SHORT_NAME: Any = Field(default_factory=lambda: _("Studio"))  # refine type
     SWIFT_USE_TEMP_URLS: bool = Field(default=False)
     TECH_SUPPORT_EMAIL: str = Field(default="technical@example.com")
     UNIVERSITY_EMAIL: str = Field(default="university@example.com")
@@ -805,7 +801,7 @@ class AqueductSettings(BaseSettings):
     )
     VIDEO_IMAGE_ASPECT_RATIO: Any = Field(
         default_factory=lambda: 16 / 9.0
-    )  # TODO: refine type
+    )  # refine type
     VIDEO_IMAGE_ASPECT_RATIO_ERROR_MARGIN: float = Field(default=0.1)
     VIDEO_IMAGE_ASPECT_RATIO_TEXT: str = Field(default="16:9")
     VIDEO_IMAGE_DEFAULT_FILENAME: str = Field(
@@ -834,8 +830,8 @@ class AqueductSettings(BaseSettings):
     VIDEO_TRANSCRIPT_MIGRATIONS_JOB_QUEUE: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
-    XBLOCK_FS_STORAGE_BUCKET: Any = Field(default=None)  # TODO: refine type
-    XBLOCK_FS_STORAGE_PREFIX: Any = Field(default=None)  # TODO: refine type
+    XBLOCK_FS_STORAGE_BUCKET: Any = Field(default=None)  # refine type
+    XBLOCK_FS_STORAGE_PREFIX: Any = Field(default=None)  # refine type
     XBLOCK_MIXINS: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
