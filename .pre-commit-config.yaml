@@ -61,7 +61,7 @@ repos:
   rev: v2.3.0
   hooks:
   - id: mypy
-    exclude: ^deployments/
+    exclude: ^(deployments|local-dev/provision)/
     args:
     - --config-file=pyproject.toml
     - --warn-unused-configs

@@ -1,0 +1,15 @@
+---
+# Waffle flags applied by the edxapp-provision Job, via the set_waffle_flags.py
+# that lehrer bakes into the platform image. Each entry is an argv list for
+# edx-platform's `waffle_flag` management command: [flag_name, *flags].
+#
+# Same file format as the `edxapp:waffle_flags` Pulumi config driving the same
+# script in ol-infrastructure, so a flag can be copied between them verbatim.
+#
+# Deliberately small. The generic local-dev stack runs only the shell, header
+# and footer MFE apps and has no discussions/forum service, so the larger flag
+# sets ol-infrastructure applies to the residential and mitxonline deployments
+# do not carry over.
+waffles:
+- ["course_experience.relative_dates", "--create", "--everyone"]
+- ["notifications.enable_notifications", "--create", "--everyone"]

@@ -13,6 +13,13 @@ spec:
     metadata:
       labels:
         app: notes
+      annotations:
+        # Kubernetes does not restart pods when a ConfigMap they read through
+        # envFrom changes, so an edit to notes-config would re-run
+        # notes-migrate against the new values while this pod kept the old
+        # ones. lehrer-core.star substitutes the ConfigMap's hash here, which
+        # changes the pod template and forces a rollout.
+        lehrer.mit.edu/notes-config-checksum: "__NOTES_CONFIG_CHECKSUM__"
     spec:
       containers:
       - name: notes
@@ -20,9 +27,13 @@ spec:
         ports:
         - containerPort: 8000
         envFrom:
+        - configMapRef:
+            name: notes-config
         - secretRef:
             name: openedx-secrets
         env:
+        # env_config.py reads the OAuth pair under unprefixed names; the
+        # Secret stores them under NOTES_*.
         - name: OAUTH_CLIENT_ID
           valueFrom:
             secretKeyRef:
@@ -33,26 +44,6 @@ spec:
             secretKeyRef:
               name: openedx-secrets
               key: NOTES_OAUTH_CLIENT_SECRET
-        - name: DJANGO_SETTINGS_MODULE
-          value: "notesserver.settings.env_config"
-        - name: DB_HOST
-          value: "mysql.openedx.svc.cluster.local"
-        - name: DB_NAME
-          value: "notes"
-        - name: DB_USER
-          value: "edxapp"
-        - name: DB_PORT
-          value: "3306"
-        - name: ELASTICSEARCH_DSL_HOST
-          value: "opensearch-cluster-master.openedx.svc.cluster.local"
-        - name: ELASTICSEARCH_DSL_PORT
-          value: "9200"
-        - name: ELASTICSEARCH_DSL_USE_SSL
-          value: "false"
-        - name: ELASTICSEARCH_DSL_VERIFY_CERTS
-          value: "false"
-        - name: ALLOWED_HOSTS
-          value: "*"
         readinessProbe:
           httpGet:
             path: /heartbeat/

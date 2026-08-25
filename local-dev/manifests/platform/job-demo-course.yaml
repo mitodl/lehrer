@@ -1,0 +1,95 @@
+---
+# Imports the Open edX demo course so a fresh stack has something to browse.
+#
+# Kept out of edxapp-provision and wired as a manual Tilt trigger
+# (lehrer-core.star) because it clones ~70MB over the network, which is not
+# something every `tilt up` should pay for.
+# Trigger it from the Tilt UI, or with `tilt trigger edxapp-demo-course`.
+#
+# Re-running overwrites the existing course in place.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: edxapp-demo-course
+  namespace: openedx
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: edxapp-demo-course
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: import
+        # Image tag is managed by Tilt via custom_build (same ref as the
+        # platform deployments).
+        image: lehrer-registry:5000/openedx-platform:dev
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+
+          rm -rf /tmp/demo
+          mkdir -p /tmp/demo
+
+          # openedx-demo-course has used three branch naming schemes across
+          # its history: release/<name> for Teak onward, open-release/
+          # <name>.master before that, and master tracking edx-platform
+          # master. Rather than encode a mapping that goes stale, probe for
+          # the first ref that exists for the release this stack was built
+          # from. DEMO_COURSE_GIT_BRANCH short-circuits the probe.
+          if [ -z "$DEMO_COURSE_GIT_BRANCH" ]; then
+            for ref in "release/$RELEASE_NAME" \
+                       "open-release/$RELEASE_NAME.master" \
+                       "$RELEASE_NAME"; do
+              if git ls-remote --exit-code --heads \
+                   "$DEMO_COURSE_GIT_REPO" "$ref" > /dev/null 2>&1; then
+                DEMO_COURSE_GIT_BRANCH="$ref"
+                break
+              fi
+            done
+          fi
+
+          if [ -z "$DEMO_COURSE_GIT_BRANCH" ]; then
+            echo "==> No openedx-demo-course branch found for release" \
+                 "'$RELEASE_NAME'. Set DEMO_COURSE_GIT_BRANCH explicitly."
+            exit 1
+          fi
+
+          echo "==> Cloning $DEMO_COURSE_GIT_REPO ($DEMO_COURSE_GIT_BRANCH)"
+          git clone --depth 1 --branch "$DEMO_COURSE_GIT_BRANCH" \
+            "$DEMO_COURSE_GIT_REPO" /tmp/demo/demo-course
+
+          # `import` takes a data directory plus course sub-directory names
+          # relative to it. Course assets land in the MongoDB contentstore,
+          # not on disk, so /tmp is fine as the staging directory.
+          echo "==> Importing into the CMS modulestore"
+          python manage.py cms import /tmp/demo demo-course --settings=aqueduct
+
+          echo "==> Imported. Open it in Studio at $CMS_BASE_URL/home"
+        env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: "cms.envs.aqueduct"
+        - name: DEMO_COURSE_GIT_REPO
+          value: "https://github.com/openedx/openedx-demo-course"
+        # Substituted by lehrer-core.star from the release this stack was
+        # built from, so the demo course matches the platform.
+        - name: RELEASE_NAME
+          value: "__RELEASE_NAME__"
+        # Empty means "probe for the branch matching RELEASE_NAME"; set a
+        # branch here to pin one instead.
+        - name: DEMO_COURSE_GIT_BRANCH
+          value: ""
+        envFrom:
+        - configMapRef:
+            name: cms-config
+        - secretRef:
+            name: openedx-secrets
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "250m"
+          limits:
+            memory: "3Gi"

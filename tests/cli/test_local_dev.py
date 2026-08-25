@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import ast
 import json
 import socket
+from typing import Any
 
 import pytest
+import yaml
 
-from lehrer.cli import local_dev
+from lehrer.cli import _paths, local_dev
 
 
 def _cluster_json(nodes_running: list[bool]) -> str:
@@ -107,3 +110,44 @@ class TestPreflightHostPorts:
         monkeypatch.setattr(local_dev, "_required_host_ports", lambda: [8000, 8090])
         monkeypatch.setattr(local_dev, "_port_in_use", lambda port: False)
         local_dev._preflight_host_ports()
+
+
+def _manifest(name: str) -> dict[str, Any]:
+    path = _paths.local_dev_dir() / "manifests" / "platform" / name
+    return yaml.safe_load(path.read_text())
+
+
+class TestProvisioningManifests:
+    """Guard the CLI<->manifest coupling the provisioning Job depends on.
+
+    The superuser username lives in job-provision.yaml while its password comes
+    from the Secret the CLI bootstraps.  Nothing at runtime would notice those
+    drifting apart, so pin them here.
+    """
+
+    def test_superuser_username_matches_the_manifest(self) -> None:
+        container = _manifest("job-provision.yaml")["spec"]["template"]["spec"][
+            "containers"
+        ][0]
+        env = {item["name"]: item["value"] for item in container["env"]}
+        assert env["PROVISION_SUPERUSER_USERNAME"] == local_dev._SUPERUSER_USERNAME
+
+    def test_secret_supplies_every_env_var_the_job_requires(self) -> None:
+        provisioned = {key for key, _ in local_dev._SECRET_DEFAULTS}
+        # provision.py indexes these directly rather than defaulting them.
+        assert {
+            "PROVISION_SUPERUSER_PASSWORD",
+            "NOTES_OAUTH_CLIENT_ID",
+            "NOTES_OAUTH_CLIENT_SECRET",
+        } <= provisioned
+
+    def test_provision_script_is_valid_python(self) -> None:
+        script = _paths.local_dev_dir() / "provision" / "provision.py"
+        ast.parse(script.read_text())
+
+    def test_waffle_flags_match_the_set_waffle_flags_schema(self) -> None:
+        path = _paths.local_dev_dir() / "provision" / "waffle-flags.yaml"
+        waffles = yaml.safe_load(path.read_text())["waffles"]
+        assert waffles
+        for argument_set in waffles:
+            assert all(isinstance(argument, str) for argument in argument_set)

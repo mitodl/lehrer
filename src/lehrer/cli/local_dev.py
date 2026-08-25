@@ -60,7 +60,14 @@ _SECRET_DEFAULTS: tuple[tuple[str, str], ...] = (
     ("MONGO_PASSWORD", "openedx-dev"),
     ("NOTES_OAUTH_CLIENT_ID", "notes"),
     ("NOTES_OAUTH_CLIENT_SECRET", "notes-dev-secret"),
+    # Consumed by the edxapp-provision Job; the username and email it pairs
+    # with live in job-provision.yaml, since neither is secret.
+    ("PROVISION_SUPERUSER_PASSWORD", "edx"),
 )
+
+# Matches PROVISION_SUPERUSER_USERNAME in
+# local-dev/manifests/platform/job-provision.yaml.
+_SUPERUSER_USERNAME = "edx"
 
 
 ClusterState = Literal["absent", "stopped", "partial", "running"]
@@ -229,12 +236,25 @@ def setup() -> None:
     )
 
     local_dev = _paths.local_dev_dir()
+    # Report where the credential came from, never the value — a custom one
+    # would otherwise land in terminal scrollback and captured setup logs.
+    # Only ever one of the two literals below; naming it for the secret it
+    # deliberately does not hold also trips CodeQL's name heuristic.
+    credential_origin = (
+        "$PROVISION_SUPERUSER_PASSWORD"
+        if "PROVISION_SUPERUSER_PASSWORD" in os.environ
+        else "the local-dev default"
+    )
     print(
         "\n==> Setup complete!\n\n"
         "Start the dev environment with:\n"
         "    lehrer dev start\n\n"
         "Use a custom deployment config:\n"
         f"    lehrer dev start --deployment-config {local_dev}/../deployments/mit-ol\n\n"
+        "The edxapp-provision Job creates a superuser once the stack is up:\n"
+        f"    username {_SUPERUSER_USERNAME}, password from {credential_origin}\n"
+        "Import the demo course by triggering edxapp-demo-course in the Tilt UI\n"
+        "(or `tilt trigger edxapp-demo-course`).\n\n"
         "Tear down with:\n"
         "    lehrer dev teardown"
     )

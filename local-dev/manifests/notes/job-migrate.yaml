@@ -1,0 +1,85 @@
+---
+# Creates the edx-notes-api schema and its OpenSearch index.
+#
+# The MariaDB CR creates the `notes` database and grants edxapp on it, but
+# nothing creates the tables, so every annotator request 500s on
+# `Table 'notes.v1_note' doesn't exist` even once LMS<->notes OAuth is wired
+# up. `search_index --rebuild -f` is the notes Makefile's create-index target.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: notes-migrate
+  namespace: openedx
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app: notes-migrate
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: migrate
+        # Image tag is managed by Tilt via custom_build (same ref as the notes
+        # Deployment). The image entrypoint is gunicorn, so `command`
+        # overrides it.
+        image: lehrer-registry:5000/openedx-notes:dev
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          echo "==> notes migrations"
+          python manage.py migrate --noinput
+
+          # `search_index --rebuild -f` (the notes Makefile's create-index
+          # target) deletes the index first, which would throw away every
+          # annotation each time Tilt re-runs this Job on an image change, so
+          # use the non-destructive --create.
+          #
+          # The index is not optional. notesserver/settings/common.py sets
+          # ELASTICSEARCH_DSL_SIGNAL_PROCESSOR to RealTimeSignalProcessor and
+          # env_config.py does not override it, so every Note save
+          # synchronously writes to the index — without one, creating an
+          # annotation 500s, not just searching. Failing here keeps the notes
+          # Deployment down rather than bringing up a service that looks
+          # healthy and cannot be written to. An already-existing index is the
+          # one tolerated outcome, since this Job re-runs on image changes.
+          echo "==> notes search index"
+          if python manage.py search_index --create > /tmp/index.log 2>&1; then
+            cat /tmp/index.log
+          else
+            cat /tmp/index.log
+            grep -q resource_already_exists_exception /tmp/index.log || {
+              echo "==> Could not create the notes search index." \
+                   "Annotation writes would fail, so this Job fails instead." \
+                   "A full disk trips OpenSearch's high-watermark" \
+                   "create-index block and is the likeliest cause."
+              exit 1
+            }
+            echo "==> search index already exists; left in place"
+          fi
+        envFrom:
+        - configMapRef:
+            name: notes-config
+        - secretRef:
+            name: openedx-secrets
+        env:
+        # env_config.py reads the OAuth pair under unprefixed names; the
+        # Secret stores them under NOTES_*.
+        - name: OAUTH_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: openedx-secrets
+              key: NOTES_OAUTH_CLIENT_ID
+        - name: OAUTH_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: openedx-secrets
+              key: NOTES_OAUTH_CLIENT_SECRET
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"

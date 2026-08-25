@@ -353,6 +353,27 @@ def setup(cfg):
         k8s_yaml(local_dev + "/manifests/platform/configmap-cms.yaml")
 
     k8s_yaml(local_dev + "/manifests/platform/job-migrate.yaml")
+
+    # The edxapp-provision Job's payload — a Django script and a waffle flag
+    # list — is kept as real files rather than inlined into a ConfigMap
+    # manifest, so provision.py stays lintable and readable. kubectl renders
+    # them into the ConfigMap; --dry-run=client never contacts the cluster.
+    provision_dir = local_dev + "/provision"
+    watch_file(provision_dir)
+    k8s_yaml(local(
+        "kubectl create configmap edxapp-provision --namespace " + namespace +
+        " --from-file=" + provision_dir + "/provision.py" +
+        " --from-file=" + provision_dir + "/waffle-flags.yaml" +
+        " --dry-run=client -o yaml",
+        quiet=True,
+    ))
+    k8s_yaml(local_dev + "/manifests/platform/job-provision.yaml")
+
+    # The demo course repo branches per Open edX release, so the Job is told
+    # which release this stack was built from and resolves the branch itself.
+    k8s_yaml(blob(str(read_file(
+        local_dev + "/manifests/platform/job-demo-course.yaml"
+    )).replace("__RELEASE_NAME__", release_name)))
     k8s_yaml(local_dev + "/manifests/platform/service-lms.yaml")
     k8s_yaml(local_dev + "/manifests/platform/service-cms.yaml")
     k8s_yaml(local_dev + "/manifests/platform/deployment-lms.yaml")
@@ -367,9 +388,30 @@ def setup(cfg):
         labels=["platform"],
     )
 
-    # The platform services depend on a migrated schema, so they wait for the
-    # migration Job to complete (in addition to the infra services).
-    platform_deps = infra_deps + ["edxapp-migrate"]
+    # Superuser, notes OAuth client and waffle flags. Needs the schema, so it
+    # follows the migration Job; the LMS/CMS do not need it to boot, but the
+    # stack is not usable until it has run, so it gates them too.
+    k8s_resource(
+        "edxapp-provision",
+        objects=["edxapp-provision:ConfigMap:openedx"],
+        resource_deps=["edxapp-migrate"],
+        labels=["platform"],
+    )
+
+    # Demo course import — opt-in. It clones the course repo over the network,
+    # so it is left for the developer to trigger from the Tilt UI rather than
+    # added to the critical path of every `tilt up`.
+    k8s_resource(
+        "edxapp-demo-course",
+        resource_deps=["edxapp-provision"],
+        trigger_mode=TRIGGER_MODE_MANUAL,
+        auto_init=False,
+        labels=["platform"],
+    )
+
+    # The platform services depend on a migrated and provisioned schema, so
+    # they wait for both Jobs to complete (in addition to the infra services).
+    platform_deps = infra_deps + ["edxapp-migrate", "edxapp-provision"]
     # LMS and CMS are exposed on host ports 8000/8010 via the k3d load
     # balancer → Traefik ingress.  Port-forwards are omitted here to avoid
     # conflicting with that binding ("address already in use").
@@ -411,12 +453,36 @@ def setup(cfg):
     # K8s manifests — notes
     # ------------------------------------------------------------------ #
 
-    k8s_yaml(local_dev + "/manifests/notes/deployment.yaml")
+    notes_configmap = local_dev + "/manifests/notes/configmap.yaml"
+    k8s_yaml(notes_configmap)
+    k8s_yaml(local_dev + "/manifests/notes/job-migrate.yaml")
+
+    # Stamp the ConfigMap's hash into the notes pod template. Without it a
+    # config edit re-runs notes-migrate against the new values while the
+    # running pod keeps the old ones — envFrom does not trigger a rollout.
+    notes_config_checksum = str(local(
+        "sha256sum " + notes_configmap + " | cut -c1-16",
+        quiet=True,
+    )).strip()
+    k8s_yaml(blob(str(read_file(
+        local_dev + "/manifests/notes/deployment.yaml"
+    )).replace("__NOTES_CONFIG_CHECKSUM__", notes_config_checksum)))
+
     k8s_yaml(local_dev + "/manifests/notes/service.yaml")
+
+    # The notes database and grant come from the MariaDB CR, but the schema and
+    # the search index do not — the service 500s on every annotator request
+    # until this Job has run.
+    k8s_resource(
+        "notes-migrate",
+        objects=["notes-config:ConfigMap:openedx"],
+        resource_deps=infra_deps,
+        labels=["notes"],
+    )
 
     k8s_resource(
         "notes",
-        resource_deps=infra_deps,
+        resource_deps=infra_deps + ["notes-migrate"],
         port_forwards=["8001:8000"],
         labels=["notes"],
     )

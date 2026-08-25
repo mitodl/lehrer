@@ -53,8 +53,44 @@ lehrer dev start --deployment-config ./deployments/mit-ol --mfe-hot-reload
 ```
 
 Secret values are read from the environment (`MYSQL_ROOT_PASSWORD`,
-`DJANGO_SECRET_KEY`, `MONGO_PASSWORD`, ...) and fall back to safe local-dev
-defaults.
+`DJANGO_SECRET_KEY`, `MONGO_PASSWORD`, `PROVISION_SUPERUSER_PASSWORD`, ...) and
+fall back to safe local-dev defaults.
+
+#### Provisioning
+
+`edxapp-migrate` creates the edxapp schema; three more Jobs turn that into a
+usable stack:
+
+| Job | Trigger | What it does |
+|---|---|---|
+| `edxapp-provision`  | automatic | Superuser, notes OAuth client, waffle flags |
+| `notes-migrate`     | automatic | edx-notes-api schema and search index |
+| `edxapp-demo-course`| manual    | Imports the Open edX demo course |
+
+`edxapp-provision` creates the `edx` / `edx` superuser (override the password
+with `PROVISION_SUPERUSER_PASSWORD` before `lehrer dev setup`), the DOT OAuth
+Application that LMS↔notes SSO signs its tokens with, and the waffle flags in
+`local-dev/provision/waffle-flags.yaml`. It is idempotent, so Tilt re-runs it
+whenever the platform image changes. Add OAuth clients in
+`local-dev/provision/provision.py`; both files are mounted into the Job as a
+ConfigMap.
+
+`notes-migrate` creates the tables in the `notes` database (the MariaDB CR
+creates the database and the grant, but nothing creates the schema) and the
+OpenSearch index. Both are required: edx-notes-api indexes on every save via
+`RealTimeSignalProcessor`, so a missing index breaks annotation writes and not
+just search. The Job fails rather than leave a notes service running that
+cannot be written to.
+
+`edxapp-demo-course` resolves the demo course branch matching the release the
+stack was built from, so a named-release stack does not import master content.
+Set `DEMO_COURSE_GIT_BRANCH` in the Job to pin a branch instead. It is left off
+the critical path because it clones the course repo over the network. Trigger
+it from the Tilt UI, or:
+
+```bash
+tilt trigger edxapp-demo-course
+```
 
 ### Builds
 
