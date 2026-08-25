@@ -19,6 +19,7 @@ import shutil
 import socket
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 import cyclopts
 
@@ -146,9 +147,57 @@ def _preflight_host_ports() -> None:
     )
 
 
+def mfe_dev_hostnames(deployment_config: Path) -> dict[str, str]:
+    """Map each Site Project to the ``baseUrl`` hostname its dev server serves.
+
+    The dev config is the source of truth for where an MFE expects to be
+    reached; lehrer-core.star reads the port out of the same value.
+    """
+    frontend = deployment_config / "mfe_slot_config" / "frontend"
+    hostnames: dict[str, str] = {}
+    for config in sorted(frontend.glob("*/site.config.dev.tsx")):
+        match = re.search(r'baseUrl:\s*"([^"]+)"', config.read_text())
+        if match is None:
+            continue
+        host = urlsplit(match.group(1)).hostname
+        if host:
+            hostnames[config.parent.name] = host
+    return hostnames
+
+
+def _check_mfe_hostnames(deployment_config: Path) -> int:
+    """Report Site Project hostnames that do not resolve. Returns the count.
+
+    mit-ol's dev configs use ``*.local.openedx.io``, which upstream Open edX
+    publishes as a public wildcard A record pointing at 127.0.0.1 — so this
+    normally needs no ``/etc/hosts`` entry and no setup at all. It does mean
+    hot reload depends on public DNS: offline, or behind a resolver that
+    filters or rewrites the name, it stops resolving and the dev server ends up
+    running behind a name the browser cannot look up.
+    """
+    unresolved = 0
+    for site, host in mfe_dev_hostnames(deployment_config).items():
+        try:
+            socket.gethostbyname(host)
+        except OSError:
+            print(f"MISSING: {host} (MFE site '{site}') does not resolve")
+            unresolved += 1
+        else:
+            print(f"OK:      {host} — resolves (MFE site '{site}')")
+    return unresolved
+
+
 @app.command(name="check")
-def check_deps() -> None:
-    """Verify that all required CLI tools are installed."""
+def check_deps(*, deployment_config: str | None = None) -> None:
+    """Verify that all required CLI tools are installed.
+
+    Parameters
+    ----------
+    deployment_config
+        Also check that the MFE dev hostnames in this deployment config
+        resolve. Skipped when omitted, since the hostnames are deployment
+        specific and the generic config only uses localhost.
+    """
     missing = 0
     for cmd, minimum, flag in _DEPENDENCIES:
         if not have(cmd):
@@ -159,10 +208,23 @@ def check_deps() -> None:
         first = version[0] if version else "installed"
         print(f"OK:      {cmd} — {first}")
 
+    unresolved = 0
+    if deployment_config is not None:
+        unresolved = _check_mfe_hostnames(Path(deployment_config).resolve())
+
     if missing:
         raise SystemExit(
             f"\n{missing} missing dependency/ies. Install them before "
             "`lehrer dev setup`."
+        )
+    if unresolved:
+        raise SystemExit(
+            f"\n{unresolved} MFE hostname(s) do not resolve. `lehrer dev start "
+            "--mfe-hot-reload` will serve them, but nothing will be able to "
+            "reach them.\n*.local.openedx.io normally resolves to 127.0.0.1 "
+            "over public DNS, so this usually means you are offline or your "
+            "resolver filters it; map the name to 127.0.0.1 in /etc/hosts to "
+            "work without it."
         )
     print("\nAll dependencies present.")
 

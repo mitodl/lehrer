@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import socket
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 import yaml
@@ -151,3 +154,73 @@ class TestProvisioningManifests:
         assert waffles
         for argument_set in waffles:
             assert all(isinstance(argument, str) for argument in argument_set)
+
+
+def _deployments() -> list[Path]:
+    root = _paths.repo_root() / "deployments"
+    return [d for d in sorted(root.iterdir()) if (d / "mfe_slot_config").is_dir()]
+
+
+class TestMFEDevServerPorts:
+    """Every Site Project's dev server needs a host port it can actually bind.
+
+    lehrer-core.star takes the port from each site's own site.config.dev.tsx
+    baseUrl, so the committed configs are what decides whether hot reload
+    works: k3d's loadbalancer holds its ports for the life of the cluster, and
+    two sites naming the same port cannot both listen.
+    """
+
+    @staticmethod
+    def _dev_ports(deployment: Path) -> dict[str, int]:
+        ports: dict[str, int] = {}
+        frontend = deployment / "mfe_slot_config" / "frontend"
+        for config in sorted(frontend.glob("*/site.config.dev.tsx")):
+            match = re.search(r'baseUrl:\s*"([^"]+)"', config.read_text())
+            assert match is not None, f"{config} has no baseUrl"
+            port = urlsplit(match.group(1)).port
+            assert port is not None, f"{config} baseUrl declares no port"
+            ports[config.parent.name] = port
+        return ports
+
+    def test_no_dev_port_collides_with_the_k3d_loadbalancer(self) -> None:
+        reserved = set(local_dev._required_host_ports())
+        for deployment in _deployments():
+            for site, port in self._dev_ports(deployment).items():
+                assert port not in reserved, (
+                    f"{deployment.name}/{site} wants dev port {port}, which "
+                    "k3d's loadbalancer binds"
+                )
+
+    def test_sites_in_a_deployment_do_not_share_a_dev_port(self) -> None:
+        for deployment in _deployments():
+            ports = self._dev_ports(deployment)
+            assert len(set(ports.values())) == len(ports), (
+                f"{deployment.name} has duplicate dev ports: {ports}"
+            )
+
+    def test_every_site_declares_a_dev_config_with_a_port(self) -> None:
+        # An absent or port-less baseUrl fails the Tiltfile at load, so catch
+        # it here rather than at `tilt up`.
+        for deployment in _deployments():
+            sites = {
+                d.name
+                for d in (deployment / "mfe_slot_config" / "frontend").iterdir()
+                if d.is_dir() and d.name not in {"shared", "src"}
+            }
+            assert set(self._dev_ports(deployment)) == sites
+
+
+class TestMFEDevHostnames:
+    def test_hostnames_are_parsed_per_site(self) -> None:
+        hostnames = local_dev.mfe_dev_hostnames(
+            _paths.repo_root() / "deployments/mit-ol"
+        )
+        assert hostnames
+        assert set(hostnames.values()) == {"apps.local.openedx.io"}
+
+    def test_generic_stays_on_localhost(self) -> None:
+        # The generic deployment must not depend on any name resolution.
+        hostnames = local_dev.mfe_dev_hostnames(
+            _paths.repo_root() / "deployments/generic"
+        )
+        assert set(hostnames.values()) == {"localhost"}

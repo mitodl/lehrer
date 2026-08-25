@@ -26,6 +26,33 @@
 
 load("ext://helm_resource", "helm_resource", "helm_repo")
 
+def _dev_server_address(site_dir, site_name):
+    """Return the host port an OEP-65 Site Project's dev config serves on.
+
+    Parsed out of the ``baseUrl`` in ``site.config.dev.tsx`` — the value the
+    MFE itself builds asset and route URLs from — so the dev server and the
+    site it serves cannot end up on different ports.
+    """
+    config_path = site_dir + "/site.config.dev.tsx"
+    config = str(read_file(config_path))
+
+    start = config.find("baseUrl:")
+    if start == -1:
+        fail("MFE site '" + site_name + "': no baseUrl in " + config_path)
+
+    quote = config.find('"', start)
+    url = config[quote + 1:config.find('"', quote + 1)]
+
+    authority = url.split("://")[-1].split("/")[0]
+    parts = authority.split(":")
+    if len(parts) != 2 or not parts[1].isdigit():
+        fail(
+            "MFE site '" + site_name + "': baseUrl '" + url + "' in " +
+            config_path + " needs an explicit host and port for hot reload, " +
+            "e.g. http://localhost:8100."
+        )
+    return parts[1]
+
 def setup(cfg):
     """Deploy the full Open edX local dev stack from the given configuration."""
 
@@ -296,9 +323,15 @@ def setup(cfg):
         if p
     ]
 
+    # Hot-reload serves the MFEs from host dev servers instead of from the
+    # cluster, so the compiled image, Deployment and ingress route are all
+    # skipped for the duration — building them would cost a dagger run per site
+    # to produce something nothing routes to.
+    compiled_sites = [] if mfe_hot_reload else site_projects
+
     mfe_images = {}
 
-    for site_name in site_projects:
+    for site_name in compiled_sites:
         site_dir = frontend_dir + "/" + site_name
         mfe_ref = img("openedx-mfe-" + site_name)
         mfe_images[site_name] = mfe_ref
@@ -329,16 +362,49 @@ def setup(cfg):
         )
 
     if mfe_hot_reload:
+        # Each dev server binds its own host port, taken from the port in that
+        # site's own site.config.dev.tsx baseUrl. Reading it from the config
+        # rather than assigning one here keeps the two from disagreeing: the
+        # MFE builds its asset and route URLs from baseUrl, so a server that
+        # listens anywhere else serves a site that points at nothing.
+        #
+        # The port must also stay clear of the ones k3d's loadbalancer binds
+        # (see k3d-config.yaml). It holds those for as long as the cluster is
+        # up, so a dev server can never have one.
+        reserved = {}
+        for match in str(read_file(local_dev + "/k3d-config.yaml")).split("- port: ")[1:]:
+            reserved[match.split(":")[0].strip()] = True
+
+        claimed = {}
         for site_name in site_projects:
             site_dir = frontend_dir + "/" + site_name
+            port = _dev_server_address(site_dir, site_name)
+
+            if port in reserved:
+                fail(
+                    "MFE site '" + site_name + "' asks for dev-server port " +
+                    port + ", which k3d's loadbalancer binds for the cluster " +
+                    "ingress. Pick a free port in " + site_dir +
+                    "/site.config.dev.tsx (baseUrl)."
+                )
+            if port in claimed:
+                fail(
+                    "MFE sites '" + claimed[port] + "' and '" + site_name +
+                    "' both ask for dev-server port " + port + ". Give each " +
+                    "one its own port in its site.config.dev.tsx (baseUrl)."
+                )
+            claimed[port] = site_name
+
+            # A baseUrl host that does not resolve is checked by
+            # `lehrer dev check --deployment-config ...`, not here: a Tiltfile
+            # print() only lands in the Tilt log, mixed in with build output.
             local_resource(
                 name="mfe-dev-" + site_name,
                 serve_cmd=(
                     "dagger --progress=plain call mfe watch-site" +
                     " --site-project " + site_dir +
                     shared_src_flag +
-                    # Host 8090 (matches k3d-config MFE ingress) -> container 8080.
-                    " up --ports 8090:8080"
+                    " up --ports " + port + ":8080"
                 ),
                 deps=[site_dir] + mfe_deps_base,
                 labels=["mfe"],
@@ -491,7 +557,7 @@ def setup(cfg):
     # K8s manifests — MFE nginx deployments (generated inline)
     # ------------------------------------------------------------------ #
 
-    for site_name in site_projects:
+    for site_name in compiled_sites:
         k8s_yaml(blob(
             "apiVersion: apps/v1\n" +
             "kind: Deployment\n" +
@@ -593,7 +659,7 @@ def setup(cfg):
             "            port:\n" +
             "              number: 8000\n"
         )
-        for site_name in site_projects:
+        for site_name in compiled_sites:
             ingress_yaml += (
                 "  - host: " + site_name + ".localhost\n" +
                 "    http:\n" +

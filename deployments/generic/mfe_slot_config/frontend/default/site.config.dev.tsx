@@ -16,7 +16,7 @@ import {
 const siteConfig: SiteConfig = {
   siteId: "openedx",
   siteName: "Open edX",
-  baseUrl: "http://localhost:8090",
+  baseUrl: "http://localhost:8100",
   lmsBaseUrl: "http://localhost:8000",
   loginUrl: "http://localhost:8000/login",
   logoutUrl: "http://localhost:8000/logout",
