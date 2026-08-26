@@ -1,5 +1,5 @@
 import React, { useState, useRef, useLayoutEffect, useEffect, useCallback } from 'react';
-import { useSelector } from 'react-redux';
+import { useParams } from 'react-router-dom';
 import { Dropdown } from '@openedx/paragon';
 import { useIntl, FormattedMessage } from '@edx/frontend-platform/i18n';
 import { useModel } from './src/generic/model-store';
@@ -15,9 +15,10 @@ const ResponsiveCourseTabs = ({ activeTabSlug }) => {
   const intl = useIntl();
   const moreLabel = intl.formatMessage(moreMessage);
 
-  const courseId = useSelector(
-    state => state.courseHome?.courseId || state.courseware?.courseId
-  );
+  // Course-home tabs (outline, dates, progress, ...) no longer populate
+  // state.courseHome.courseId now that they're on React Query (frontend-app-learning
+  // #1997 and siblings) — read the route param directly instead, like those tabs do.
+  const { courseId } = useParams();
   const courseHomeMeta = useModel('courseHomeMeta', courseId);
   const tabs = courseHomeMeta?.tabs;
 
