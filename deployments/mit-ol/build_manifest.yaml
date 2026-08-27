@@ -28,7 +28,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitxonline-theme
   theme_branch: main
   packages:
-  - granian==2.8.1
+  - granian==2.8.2
   - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.3
   - edx-sysadmin==0.4.2
@@ -83,7 +83,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitx-theme
   theme_branch: master
   packages:
-  - granian==2.8.1
+  - granian==2.8.2
   - django-redis==7.0.0
   - edx-sga==0.29.0
   - edx-sysadmin==0.4.2
@@ -125,7 +125,7 @@ cells:
   theme_branch: master
   packages:
   - django-redis==7.0.0
-  - granian==2.8.1
+  - granian==2.8.2
   - edx-sga==0.29.0
   - edx-sysadmin==0.4.2
   - invideoquiz-xblock==2.0.0
@@ -165,7 +165,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitxpro-theme
   theme_branch: ulmo
   packages:
-  - granian==2.8.1
+  - granian==2.8.2
   - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.3
   - edx-sysadmin==0.4.2
@@ -204,7 +204,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitx-theme
   theme_branch: verawood
   packages:
-  - granian==2.8.1
+  - granian==2.8.2
   - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.3
   - edx-sysadmin==0.4.2
@@ -246,7 +246,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitx-theme
   theme_branch: verawood
   packages:
-  - granian==2.8.1
+  - granian==2.8.2
   - django-redis==7.0.0
   - edx-sysadmin==0.4.2
   - invideoquiz-xblock==2.0.0
@@ -287,7 +287,7 @@ cells:
   theme_repo: https://github.com/mitodl/mitxpro-theme
   theme_branch: verawood
   packages:
-  - granian==2.8.1
+  - granian==2.8.2
   - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.8.3
   - edx-sysadmin==0.4.2
