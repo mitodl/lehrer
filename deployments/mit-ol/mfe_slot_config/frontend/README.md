@@ -77,7 +77,27 @@ Currently contains:
 |---|---|---|
 | mitxonline | `@openedx/frontend-app-instructor-dashboard` | `^1.1.0-alpha` |
 | mitx | `@openedx/frontend-app-instructor-dashboard` | `^1.1.0-alpha` |
-| xpro | `@openedx/frontend-app-instructor-dashboard` | `^1.0.0-alpha` |
+| xpro | `@openedx/frontend-app-instructor-dashboard` | `mitodl/…#verawood` (see below) |
+
+### Temporary pin: xpro instructor-dashboard
+
+xpro builds the instructor dashboard from `mitodl/frontend-app-instructor-dashboard@verawood`
+instead of npm. That branch is `v1.2.0` (what the npm pin resolved to) plus two Course Team
+fixes needed to unblock Verawood CI testing:
+
+- inactive accounts are reported instead of silently skipped
+- failures with no reason attached raise an alert instead of closing the modal quietly
+
+Upstream PR: https://github.com/openedx/frontend-app-instructor-dashboard/pull/234
+Issue: https://github.com/mitodl/hq/issues/13068
+
+The branch also carries a `prepare` script, which the published package does not need: npm runs
+`prepare` rather than `prepack` for a git dependency, and without it the install produces no
+`dist/` and the site build fails on the package's `"."` export.
+
+**Revert once #234 merges and a release containing it is published** — restore the
+`^1.0.0-alpha` range, re-run `npm install` in `xpro/` to regenerate the lock, and delete this
+section.
 
 ## Deployment prerequisites
 
