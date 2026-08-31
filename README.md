@@ -213,9 +213,12 @@ each common one has a `lehrer build` shortcut per the table above.
 ## Architecture
 
 `build-platform` is a two-base build, the way a multi-stage Dockerfile would
-be. Dependencies are resolved on one base and only the resulting directories
-are copied onto a fresh one, so the build toolchain never reaches the shipped
-image:
+be. Dependencies are resolved on one base, and only `/openedx/venv`,
+`/openedx/edx-platform` and `/openedx/nodeenv` are copied onto a fresh one —
+so the intermediate state of the dependency resolution (uv and npm caches,
+build artifacts, discarded layers) never reaches the shipped image. The
+compilers and `-dev` headers do: the second base is another `apt-base`, which
+installs the same toolchain the first one did.
 
 1. **apt-base** - Base Python container with system dependencies and uv
 2. **get-code** - Get edx-platform source (local or Git) and create the venv
@@ -709,10 +712,19 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy --config-file=pyproject.toml src/lehrer tests
 uv run pytest tests/ -v
-uv run pre-commit run --all-files
 ```
 
-`ci.yml` runs exactly that set on every push and pull request. The other
+`ci.yml` runs exactly those four on every push and pull request, then three
+named pre-commit hooks rather than the whole suite:
+
+```bash
+uv run pre-commit run build-config-schema --all-files
+uv run pre-commit run build-manifest-schema --all-files
+uv run pre-commit run lehrer-core-boundary --all-files
+```
+
+The rest of the hooks run on commit, so `uv run pre-commit run --all-files`
+locally is a superset of the PR gate, not the same thing. The other
 workflows cover what needs a Dagger engine or a schedule: `settings-verify.yml`
 boots each cell's committed aqueduct settings, `plugin-compat.yml` installs and
 imports each cell's pinned requirements, `canary.yml` runs full platform builds

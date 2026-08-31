@@ -108,7 +108,7 @@ a supported lower-level alternative.
 | `packages_to_remove` | `list[str]` | `[]` | Python packages to uninstall after base install |
 | `extra_npm_packages` | `list[str]` | `[]` | Additional npm packages to install (e.g. private git packages) |
 | `verify_boot` | `bool` | `True` | Run Django system checks for LMS and CMS against the finished image. Set `false` to skip while iterating |
-| `strict_translations` | `bool` | `False` | Fail the build when `atlas pull` cannot fetch a language, instead of warning |
+| `strict_translations` | `bool` | `False` | Fail the build when any tolerated translation step fails, instead of warning and continuing. Covers the plugin/xblock pulls *and* compiles as well as `atlas pull` — every step `_tolerant` wraps. `compilemessages`/`compilejsi18n` are unwrapped and fail the build either way |
 | `include_dev_dependencies` | `bool` | `False` | Also install the cell's development requirements (used by `test`) |
 
 Parameters marked `None` → cell take their value from the matching
@@ -164,7 +164,7 @@ the image. `models/base.py` comes from lehrer's own
 | `translations_repository` | `str` | **required** | Translations GitHub repository (no default — must be explicit) |
 | `settings_namespace` | `str` | `"production"` | Django settings sub-package for `DJANGO_SETTINGS_MODULE` |
 | `translations_branch` | `str` | `"main"` | Translations branch |
-| `strict` | `bool` | `False` | Fail the build when a pull/compile step fails, instead of warning and continuing. `build_platform` drives this with `--strict-translations` |
+| `strict` | `bool` | `False` | Fail the build when any tolerated pull or compile step fails, instead of warning to stderr and continuing. `build_platform` drives this with `--strict-translations` |
 
 ### `build_static_assets`
 
@@ -284,7 +284,7 @@ Serves a legacy MFE from a local checkout with hot reload. Returns a
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `mfe_source` | `Directory` | **required** | Local MFE checkout |
-| `slot_config` | `Directory` | `None` | Slot config directory |
+| `slot_config` | `Directory` | **required** | Slot config directory. Declared `None` in the signature but rejected at runtime, same as `build_legacy` |
 | `node_version` | `str` | `"20"` | Node.js version |
 | `deployment_name` | `str` | `"default"` | Deployment name |
 | `mfe_name` | `str` | `"learning"` | MFE name |

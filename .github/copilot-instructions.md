@@ -118,9 +118,14 @@ operator-specific belongs under `deployments/<group>/`, not in `lehrer.core`.
 
 This is enforced, not just conventional: the `lehrer-core-boundary` pre-commit
 hook fails on `deployments`, `mitol`, `mitxonline`, `mitodl`, `github.mit.edu`,
-`verificient` or `proctortrack` appearing anywhere under `src/lehrer/core/` or
+`verificient` or `proctortrack` appearing under `src/lehrer/core/` or
 `src/lehrer/infra/` — docstrings, comments and Markdown included. Write
 examples in those modules with placeholder names.
+
+The two package `__init__.py` files are excluded from the hook
+(`.pre-commit-config.yaml`), so the policy holds there by convention only.
+Treat them as covered anyway; the exclusion is not a licence to put operator
+names in them.
 
 **`build_manifest.yaml`**: Per-deployment-group declarative source of truth
 (e.g. `deployments/mit-ol/build_manifest.yaml`) — one cell per
