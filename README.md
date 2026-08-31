@@ -29,8 +29,9 @@ Top-level command groups:
 
 | Command | Purpose |
 |---|---|
-| `lehrer dev`   | Manage the local k3d Open edX dev environment |
-| `lehrer build` | Run the Dagger build pipelines |
+| `lehrer dev`    | Manage the local k3d Open edX dev environment |
+| `lehrer build`  | Run the Dagger build pipelines |
+| `lehrer compat` | Enumerate the build cells a diff affects, for the CI matrices |
 
 ### Local development
 
@@ -211,19 +212,32 @@ each common one has a `lehrer build` shortcut per the table above.
 
 ## Architecture
 
-The build pipeline follows these stages:
+`build-platform` is a two-base build, the way a multi-stage Dockerfile would
+be. Dependencies are resolved on one base, and only `/openedx/venv`,
+`/openedx/edx-platform` and `/openedx/nodeenv` are copied onto a fresh one —
+so the intermediate state of the dependency resolution (uv and npm caches,
+build artifacts, discarded layers) never reaches the shipped image. The
+compilers and `-dev` headers do: the second base is another `apt-base`, which
+installs the same toolchain the first one did.
 
 1. **apt-base** - Base Python container with system dependencies and uv
-2. **locales** - Download OpenEdx i18n locale files
-3. **get-code** - Get edx-platform source (local or Git)
-4. **install-deps** - Install Python and Node.js dependencies using uv
+2. **get-code** - Get edx-platform source (local or Git) and create the venv
+3. **install-deps** - Install Python (uv) and Node.js (nodeenv) dependencies
+
+then, on a second `apt-base`, with the venv and source copied across:
+
+4. **locales** - openedx-i18n locale files (skipped by `--include-locales false`)
 5. **themes** - Get theme files (local or Git)
-6. **tutor-utils** - Get utility scripts from Tutor
-7. **collected** - Assemble artifacts and configure container
-8. **fetch-translations** - Pull and compile translations
-9. **build-static-assets** - Build and collect static assets
+6. **collected** - Assemble artifacts and configure the container. Takes its
+   inputs from **tutor-utils** (Tutor's bin scripts) and **dockerize**
+7. **fetch-translations** - Pull and compile translations
+8. **build-static-assets** - Build and collect static assets
+9. **inject-aqueduct-settings** - Install the aqueduct settings models
 10. **docker-image** - Finalize for deployment
-11. **publish-platform** - Publish to container registry
+
+Unless `--verify-boot false`, the finished image is then started and Django's
+system checks are run for both LMS and CMS. `publish-platform` chains onto the
+returned `Container` to push it.
 
 ### Key Optimizations
 
@@ -244,7 +258,7 @@ would: it first builds dependencies on one base (`apt-base` → `get-code` →
 `install-deps`), then starts a **fresh** clean base and copies only the needed
 directories across, conditionally applies `locales` (unless
 `--include-locales false`) and `themes`, and finishes with `collected` →
-`inject-aqueduct-settings` → `fetch-translations` → `build-static-assets` →
+`fetch-translations` → `build-static-assets` → `inject-aqueduct-settings` →
 `docker-image`, then verifies the finished image can actually start by running
 Django's system checks for both services (`--verify-boot false` to skip while
 iterating). The other functions are those individual stages, plus
@@ -304,55 +318,61 @@ dagger call platform build-platform \
 
 ## Required Inputs
 
-### Directory Structures
-
-#### `pip_package_lists/`
-Contains pip requirements files organized by release and deployment:
-
-```
-pip_package_lists/
-├── sumac/
-│   ├── mitx.txt
-│   └── mitxonline.txt
-└── redwood/
-    ├── mitx.txt
-    └── mitxonline.txt
-```
-
-#### `pip_package_overrides/`
-Contains pip override requirements (e.g., for lxml/xmlsec fixes):
+Everything the pipelines need is operator-owned and lives under
+`deployments/<group>/`. Nothing is picked up implicitly from the repo root, and
+the generic pipelines never fall back to MIT OL's directories — `slot_config`,
+`codejail_config` and `notes_config` are all required, and omitting one fails
+with an error naming the flag.
 
 ```
-pip_package_overrides/
-├── sumac/
-│   ├── mitx.txt
-│   └── mitxonline.txt
-└── redwood/
-    ├── mitx.txt
-    └── mitxonline.txt
+deployments/mit-ol/
+├── build_manifest.yaml          # one cell per (release, deployment)
+├── settings/                    # → --custom-settings
+├── mfe_slot_config/
+│   ├── legacy/                  # → --slot-config for webpack MFEs
+│   └── frontend/                # → --site-project for OEP-65 Site Projects
+├── codejail_config/             # → --codejail-config (01-sandbox)
+└── notes_config/                # → --notes-config (env_config.py)
 ```
 
-#### `custom_settings/`
-Contains custom Django settings and configuration files:
+### `build_manifest.yaml`
+
+The declarative source of truth for a deployment group: one cell per
+`(release, deployment)` pair naming the platform/theme/translations repos and
+branches, the Python and Node versions, and the pinned requirement lines. It
+replaces the older `pip_package_lists/` + `pip_package_overrides/` directories,
+which remain supported as a lower-level alternative
+(`{release_name}/{deployment_name}.txt` under each). See
+`src/lehrer/core/build_manifest.py` and `plans/06-build-manifest.md`.
+
+### `custom_settings/` (`settings/`)
 
 ```
-custom_settings/
+settings/
 ├── lms.env.yml
 ├── cms.env.yml
 ├── lms/
 │   ├── assets.py
-│   └── i18n.py
+│   ├── i18n.py
+│   ├── aqueduct.py
+│   └── models/
+│       └── aqueduct.py
 ├── cms/
 │   ├── assets.py
-│   └── i18n.py
-├── lms_settings.py
-├── cms_settings.py
-├── models.py
-├── utils.py
+│   ├── i18n.py
+│   ├── aqueduct.py
+│   └── models/
+│       └── aqueduct.py
 ├── set_waffle_flags.py
 ├── process_scheduled_emails.py
 └── saml_pull.py
 ```
+
+Every file is required. There is deliberately no top-level `models/base.py`:
+`inject-aqueduct-settings` supplies that from lehrer's own
+`src/lehrer/settings/base.py`, keeping the `ProductionSettingsMixin` a single
+implementation rather than a per-operator copy. The full contract is in
+[docs/creating-a-deployment.md](docs/creating-a-deployment.md).
 
 ## Examples
 
@@ -457,12 +477,16 @@ The module provides functions for building Open edX Micro-Frontends with deploym
 
 ### MFE Build Features
 
-- Build any Open edX MFE from source
-- Support for slot configuration files (Footer.jsx, env.config.jsx, etc.)
-- Deployment-specific styling (mitx-styles.scss, mitxonline-styles.scss)
-- Learning MFE special handling (smoot-design, AI drawer components)
-- Translation support via openedx-atlas
-- Local development with watch container
+- Build any Open edX MFE from source, or from a local checkout (`--mfe-source`)
+- Slot configuration files (`Footer.jsx`, `env.config.jsx`, and any file named
+  by `--extra-slot-files`)
+- Deployment-specific styling (`--styles-file`)
+- Extra npm packages packed as static bundles (`--extra-npm-bundles`), which is
+  how the learning MFE gets smoot-design and its AI-drawer components
+- Build-time configuration via repeatable `--env-vars`
+- Translation pulls via `--pre-build-commands` (openedx-atlas)
+- Per-deployment customizations declared once in `build_config.yaml`
+- Local development with hot reload
 
 ### Basic MFE Build
 
@@ -546,17 +570,22 @@ uv run lehrer build call mfe watch-site \
 
 ### Slot Configuration Files
 
-The `mfe_slot_config` directory contains:
+`mfe_slot_config/legacy/` holds what `--slot-config` points at for a webpack
+MFE build. Two files are looked up by name on every build:
 
-- `Footer.jsx` - Custom footer component (all MFEs)
-- `learning-mfe-config.env.jsx` - Learning MFE config
-- `{deployment}/common-mfe-config.env.jsx` - Common config per deployment
-- `AIDrawerManagerSidebar.jsx` - AI drawer sidebar (learning MFE)
-- `SidebarAIDrawerCoordinator.jsx` - AI drawer coordinator (learning MFE)
-- `mitx-styles.scss` - MITx Residential styles
-- `mitxonline-styles.scss` - MITx Online styles
+- `Footer.jsx` — custom footer component (all MFEs)
+- `{deployment}/common-mfe-config.env.jsx` — per-deployment config, installed as
+  `env.config.jsx`. The learning MFE additionally picks up
+  `learning-mfe-config.env.jsx`
 
-These files are copied into the MFE build to customize behavior per deployment.
+Everything else in the directory is opt-in, named by `--extra-slot-files`,
+`--styles-file` and `--extra-npm-bundles` (or resolved from `build_config.yaml`
+by `build-legacy-configured`). MIT OL's directory currently supplies AI-drawer
+and feedback slot components, `ResponsiveCourseTabs.jsx`, and the
+`mitx-styles.scss` / `mitxonline-styles.scss` deployment stylesheets.
+
+`mfe_slot_config/frontend/` is the OEP-65 side: one Site Project per deployment
+plus a `shared/` component directory and `dev-ports.yaml`.
 
 ### Config-driven legacy builds (`build-legacy-configured`)
 
@@ -672,12 +701,53 @@ dagger call platform build-platform --help
 dagger call platform apt-base stdout
 ```
 
+### Tests and checks
+
+`tests/` covers the parts of `src/lehrer/` that run without a Dagger engine —
+argument and manifest resolution, config parsing, JUnit report generation, the
+CLI wrappers:
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy --config-file=pyproject.toml src/lehrer tests
+uv run pytest tests/ -v
+```
+
+`ci.yml` runs exactly those four on every push and pull request, then three
+named pre-commit hooks rather than the whole suite:
+
+```bash
+uv run pre-commit run build-config-schema --all-files
+uv run pre-commit run build-manifest-schema --all-files
+uv run pre-commit run lehrer-core-boundary --all-files
+```
+
+The rest of the hooks run on commit, so `uv run pre-commit run --all-files`
+locally is a superset of the PR gate, not the same thing. The other
+workflows cover what needs a Dagger engine or a schedule: `settings-verify.yml`
+boots each cell's committed aqueduct settings, `plugin-compat.yml` installs and
+imports each cell's pinned requirements, `canary.yml` runs full platform builds
+on a schedule, and `actions-static-analysis.yml` lints the workflows themselves
+with zizmor.
+
 ### Adding New Functions
 
-1. Add function to `src/lehrer/main.py`
-2. Follow naming convention (snake_case becomes kebab-case in CLI)
+`src/lehrer/main.py` is only the Dagger entry point — a thin `Lehrer` root type
+whose methods return the per-service objects. The pipelines themselves live in
+`src/lehrer/core/`, one module per service.
+
+1. Add the `@function` method to the service object it belongs to —
+   `core/platform.py`, `core/mfe.py`, `core/codejail.py` or `core/notes.py`.
+   Only a *new service* needs a new accessor on `Lehrer` in `main.py`
+2. Follow the naming convention (snake_case becomes kebab-case in the CLI)
 3. Add docstrings with Args and Returns sections
-4. Update this README with examples
+4. If it is a routine operation, add a wrapper to `src/lehrer/cli/build.py` so
+   it gets a `lehrer build` shortcut
+5. Add tests under `tests/core/` (or `tests/cli/`) for any logic that can be
+   exercised without a Dagger engine — argument resolution, config parsing,
+   report generation
+6. Update this README and `docs/creating-a-deployment.md` with the parameters
 
 ## License
 

@@ -1,8 +1,8 @@
 """``lehrer dev`` — manage the local k3d-based Open edX dev environment.
 
-This sub-app replaces the old ``local-dev/scripts/{check-deps,setup,teardown}.sh``
-shell scripts.  The cluster lifecycle is:
+The cluster lifecycle is:
 
+    lehrer dev check       # verify the required CLI tools are installed
     lehrer dev setup       # create the k3d cluster + bootstrap secrets (once)
     lehrer dev start       # tilt up — build & deploy the services
     lehrer dev stop        # tilt down — remove deployed resources, keep cluster

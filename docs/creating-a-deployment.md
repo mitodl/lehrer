@@ -25,8 +25,6 @@ my-deployment/
 ├── settings/
 │   ├── lms.env.yml
 │   ├── cms.env.yml
-│   ├── models/
-│   │   └── base.py
 │   ├── lms/
 │   │   ├── assets.py
 │   │   ├── i18n.py
@@ -50,15 +48,24 @@ my-deployment/
 │   └── {release_name}/
 │       └── {deployment_name}.txt
 ├── mfe_slot_config/
-│   ├── Footer.jsx
-│   ├── learning-mfe-config.env.jsx
-│   └── {deployment_name}/
-│       └── common-mfe-config.env.jsx
+│   ├── legacy/                  # webpack MFEs — see build_legacy below
+│   │   ├── Footer.jsx
+│   │   ├── learning-mfe-config.env.jsx
+│   │   ├── build_config.yaml    # optional; drives build_legacy_configured
+│   │   └── {deployment_name}/
+│   │       └── common-mfe-config.env.jsx
+│   └── frontend/                # OEP-65 Site Projects — see build_site below
+│       └── {deployment_name}/
 ├── codejail_config/
 │   └── 01-sandbox
 └── notes_config/
     └── env_config.py
 ```
+
+`settings/` contains no top-level `models/base.py`. That file is supplied by
+lehrer itself (`src/lehrer/settings/base.py`) and injected by
+`inject_aqueduct_settings`; see the [`custom_settings` directory
+contract](#custom_settings-directory-contract) below.
 
 ---
 
@@ -84,22 +91,30 @@ a supported lower-level alternative.
 | `build_manifest` | `File` | `None` | `build_manifest.yaml` (see above). Materializes `pip_package_lists`/`pip_package_overrides` and supplies defaults for the fields below |
 | `pip_package_lists` | `Directory` | `None` | Directory with pip requirements. Must contain `{release_name}/{deployment_name}.txt`. Required unless `build_manifest` is given |
 | `pip_package_overrides` | `Directory` | `None` | Directory with pip build overrides. Must contain `{release_name}/{deployment_name}.txt`. Required unless `build_manifest` is given |
-| `translations_repo` | `str` | `"openedx/openedx-translations"` | GitHub repository for translations (e.g. `"myorg/my-translations"`) |
+| `translations_repo` | `str` | `None` → cell, else `"openedx/openedx-translations"` | GitHub repository for translations (e.g. `"myorg/my-translations"`) |
 | `source` | `Directory` | `None` | Local edx-platform source (overrides `platform_repo`/`platform_branch`) |
-| `platform_repo` | `str` | `"https://github.com/openedx/edx-platform"` | Git URL for edx-platform |
-| `platform_branch` | `str` | `"master"` | Git branch / tag for edx-platform |
+| `platform_repo` | `str` | `None` → cell, else `"https://github.com/openedx/edx-platform"` | Git URL for edx-platform |
+| `platform_branch` | `str` | `None` → cell, else `"master"` | Git branch / tag for edx-platform |
 | `theme_source` | `Directory` | `None` | Local theme source (overrides `theme_repo`/`theme_branch`) |
-| `theme_repo` | `str` | `None` | Git URL for theme repository |
-| `theme_branch` | `str` | `None` | Git branch / tag for theme |
-| `python_version` | `str` | `None` | Python version. Auto-detected: `3.12` for `master`, `3.11` for others |
-| `node_version` | `str` | `"20.18.0"` | Node.js version |
+| `theme_repo` | `str` | `None` → cell | Git URL for theme repository |
+| `theme_branch` | `str` | `None` → cell | Git branch / tag for theme |
+| `python_version` | `str` | `None` → cell, else auto | Python version. Auto-detected: `3.12` for `master`, `3.11` for others |
+| `node_version` | `str` | `None` → cell, else `"20.18.0"` | Node.js version |
 | `locale_version` | `str` | `"master"` | openedx-i18n ref (archived repo) |
-| `translations_branch` | `str` | `"main"` | Branch for translations repo |
+| `translations_branch` | `str` | `None` → cell, else `"main"` | Branch for translations repo |
 | `include_locales` | `bool` | `True` | Include openedx-i18n locale files |
-| `settings_namespace` | `str` | `"production"` | Django settings sub-package. Files go into `lms/envs/{namespace}/` and `cms/envs/{namespace}/`. MIT OL uses `"mitol"` |
+| `settings_namespace` | `str` | `None` → cell, else `"production"` | Django settings sub-package. Files go into `lms/envs/{namespace}/` and `cms/envs/{namespace}/`. MIT OL uses `"mitol"` |
 | `extra_ssh_hosts` | `list[str]` | `[]` | Additional SSH hosts beyond `github.com` for `known_hosts` (e.g. `["github.mit.edu"]`) |
 | `packages_to_remove` | `list[str]` | `[]` | Python packages to uninstall after base install |
 | `extra_npm_packages` | `list[str]` | `[]` | Additional npm packages to install (e.g. private git packages) |
+| `verify_boot` | `bool` | `True` | Run Django system checks for LMS and CMS against the finished image. Set `false` to skip while iterating |
+| `strict_translations` | `bool` | `False` | Fail the build when any tolerated translation step fails, instead of warning and continuing. Covers the plugin/xblock pulls *and* compiles as well as `atlas pull` — every step `_tolerant` wraps. `compilemessages`/`compilejsi18n` are unwrapped and fail the build either way |
+| `include_dev_dependencies` | `bool` | `False` | Also install the cell's development requirements (used by `test`) |
+
+Parameters marked `None` → cell take their value from the matching
+`build_manifest.yaml` cell when `--build-manifest` is passed. The fallback
+after the arrow applies only when neither a cell nor an explicit flag supplies
+one. Passing the flag always wins over the cell.
 
 ### `install_deps`
 
@@ -113,6 +128,20 @@ a supported lower-level alternative.
 | `node_version` | `str` | `"20.18.0"` | Node.js version |
 | `packages_to_remove` | `list[str]` | `[]` | Packages to uninstall post-install |
 | `extra_npm_packages` | `list[str]` | `[]` | Extra npm packages to install |
+| `install_node` | `bool` | `True` | Install Node.js via nodeenv. `False` for verification-only builds that never compile assets |
+| `include_dev_dependencies` | `bool` | `False` | Also install the cell's development requirements |
+
+### `inject_aqueduct_settings`
+
+Runs after `build_static_assets` and installs the aqueduct settings models into
+the image. `models/base.py` comes from lehrer's own
+`src/lehrer/settings/base.py`; everything else comes from `custom_settings`.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `container` | `Container` | **required** | Container with static assets built |
+| `custom_settings` | `Directory` | **required** | Settings directory |
+| `settings_namespace` | `str` | `"production"` | Django settings sub-package name |
 
 ### `collected`
 
@@ -135,6 +164,7 @@ a supported lower-level alternative.
 | `translations_repository` | `str` | **required** | Translations GitHub repository (no default — must be explicit) |
 | `settings_namespace` | `str` | `"production"` | Django settings sub-package for `DJANGO_SETTINGS_MODULE` |
 | `translations_branch` | `str` | `"main"` | Translations branch |
+| `strict` | `bool` | `False` | Fail the build when any tolerated pull or compile step fails, instead of warning to stderr and continuing. `build_platform` drives this with `--strict-translations` |
 
 ### `build_static_assets`
 
@@ -152,6 +182,32 @@ a supported lower-level alternative.
 | `deployment_name` | `str` | **required** | Deployment name |
 | `release_name` | `str` | **required** | Release name |
 | `extra_ssh_hosts` | `list[str]` | `[]` | Additional SSH hosts for `known_hosts` |
+
+### Verification and publishing
+
+Beyond the pipeline stages, `OpenedxPlatform` exposes:
+
+| Function | Purpose |
+|---|---|
+| `check_deployment` | Cheapest tier — install a cell's pinned requirements and import every plugin. Python-only (`install_node=False`), no asset build |
+| `verify_settings` | Boot a cell's committed aqueduct settings and run Django's system checks. `--drift` also reports settings that have drifted from the generated model |
+| `test` | Run the edx-platform and installed-plugin test suites inside a built image |
+| `test_report` | The same run, returning an exportable JUnit XML plus a per-plugin summary |
+| `regenerate_aqueduct_settings` | Regenerate a deployment's `{lms,cms}/models/aqueduct.py` from the platform source |
+| `publish_platform` | Push a built `Container` to a registry. Chain it onto `build_platform` |
+
+```bash
+dagger call platform build-platform \
+  --build-manifest ./my-deployment/build_manifest.yaml \
+  --release-name master --deployment-name mydeployment \
+  --custom-settings ./my-deployment/settings \
+  publish-platform \
+  --registry ghcr.io \
+  --repository myorg/openedx-mydeployment \
+  --tag master-latest \
+  --username "$GITHUB_USER" \
+  --password env:GITHUB_TOKEN
+```
 
 ---
 
@@ -176,14 +232,66 @@ guidance and `plans/04-concourse-fastly-deployment.md` for deployment infrastruc
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `mfe_name` | `str` | **required** | MFE name (e.g. `"learning"`, `"account"`) |
-| `mfe_repo` | `str` | **required** | Git URL for the MFE |
+| `slot_config` | `Directory` | **required** | Slot config directory. There is no fallback — omitting it raises a `ValueError` naming the flag |
+| `mfe_repo` | `str` | `""` | Git URL for the MFE. Required unless `mfe_source` is given |
+| `mfe_source` | `Directory` | `None` | Local MFE checkout (overrides `mfe_repo`/`mfe_branch`) |
 | `mfe_branch` | `str` | `"master"` | Git branch |
-| `node_version` | `str` | `"20.18.0"` | Node.js version |
-| `deployment_name` | `str` | `"mitxonline"` | Deployment name for config file selection |
-| `slot_config` | `Directory` | `None` | Slot config directory (defaults to MIT OL legacy config) |
-| `enable_ai_drawer` | `bool` | `False` | Include AI drawer components (learning MFE only) |
-| `styles_file` | `str` | `None` | Deployment-specific styles file name |
+| `node_version` | `str` | `"20"` | Node.js version — used as the `node:{version}-trixie-slim` base image tag |
+| `deployment_name` | `str` | `"default"` | Deployment name for config file selection |
+| `extra_slot_files` | `list[str]` | `[]` | Additional files to copy from `slot_config` into the MFE root. Each entry is `"filename"`, or `"source:dest"` to rename on copy |
+| `styles_file` | `str` | `None` | A file from `slot_config` to copy into the MFE root as the deployment's styles |
 | `extra_npm_bundles` | `list[str]` | `[]` | Extra npm packages to pack as static bundles. Format: `"pkg_spec\|target_dir"` (e.g. `"@myorg/lib@^1.0\|public/static/lib"`) |
+| `env_vars` | `list[str]` | `[]` | Build-time environment variables, repeatable. Format: `"KEY=VALUE"` |
+| `pre_build_commands` | `list[str]` | `[]` | Shell commands run after `npm install` and before `npm run build` (e.g. an `atlas` translation pull) |
+
+MFEs bake their configuration in at build time, so `env_vars` is how
+`LMS_BASE_URL`, `SITE_NAME`, `BASE_URL`, `APP_ID` and `DEPLOYMENT_NAME` reach
+the bundle.
+
+---
+
+## MFE builder parameters — `OpenedxMfe.build_legacy_configured`
+
+Rather than repeating `extra_slot_files`, `styles_file` and `extra_npm_bundles`
+on every invocation, declare them once in a `build_config.yaml` beside the slot
+configuration. `build_legacy_configured` reads that file, resolves the explicit
+`build_legacy` arguments for the given deployment and release, and runs the
+build.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `mfe_name` | `str` | **required** | MFE name |
+| `slot_config` | `Directory` | **required** | Slot config directory, containing `config_file` |
+| `mfe_repo` | `str` | `""` | Git URL for the MFE. Required unless `mfe_source` is given |
+| `mfe_source` | `Directory` | `None` | Local MFE checkout |
+| `deployment_name` | `str` | `"default"` | Deployment name |
+| `release_name` | `str` | `""` | Open edX release, for release-scoped overrides in the config |
+| `config_file` | `str` | `"build_config.yaml"` | Name of the YAML config inside `slot_config` |
+| `mfe_branch` | `str` | `"master"` | Git branch |
+| `node_version` | `str` | `"20"` | Node.js version |
+| `env_vars` | `list[str]` | `[]` | Build-time environment variables |
+| `pre_build_commands` | `list[str]` | `[]` | Commands run after `npm install` |
+
+The config schema is defined by the pydantic models in
+`src/lehrer/core/mfe_config.py` and published as `build_config.schema.json` at
+the repo root. Regenerate it with `dagger call mfe build-config-schema`.
+
+## MFE builder parameters — `OpenedxMfe.watch_legacy`
+
+Serves a legacy MFE from a local checkout with hot reload. Returns a
+`dagger.Service`.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `mfe_source` | `Directory` | **required** | Local MFE checkout |
+| `slot_config` | `Directory` | **required** | Slot config directory. Declared `None` in the signature but rejected at runtime, same as `build_legacy` |
+| `node_version` | `str` | `"20"` | Node.js version |
+| `deployment_name` | `str` | `"default"` | Deployment name |
+| `mfe_name` | `str` | `"learning"` | MFE name |
+| `port` | `int` | `8080` | Port to expose |
+
+For iterating on a whole deployment's MFEs against a running stack, prefer
+`lehrer dev start --deployment-config ./deployments/<group> --mfe-hot-reload`.
 
 ---
 
@@ -275,7 +383,7 @@ serve all environments (CI, QA, Production).
 |---|---|---|---|
 | `release_name` | `str` | `"master"` | Open edX release name |
 | `python_version` | `str` | `None` | Python version. Auto-detected: `3.12` for `master`, `3.11` for others |
-| `codejail_config` | `Directory` | `None` | Directory with `01-sandbox` sudoers file (defaults to MIT OL config) |
+| `codejail_config` | `Directory` | **required** | Directory with the `01-sandbox` sudoers file. There is no fallback — omitting it raises a `ValueError` naming the flag |
 
 ---
 
@@ -287,7 +395,7 @@ serve all environments (CI, QA, Production).
 | `python_version` | `str` | `"3.11"` | Python version |
 | `notes_code` | `Directory` | `None` | Local edx-notes-api source |
 | `notes_repo` | `str` | `None` | Git URL (required if `notes_code` not provided) |
-| `notes_config` | `Directory` | `None` | Directory with `env_config.py` (defaults to MIT OL config) |
+| `notes_config` | `Directory` | **required** | Directory with `env_config.py`. There is no fallback — omitting it raises a `ValueError` naming the flag |
 
 ---
 
@@ -346,16 +454,16 @@ The key OL-specific parameters are:
 
 ## `custom_settings` directory contract
 
-The `custom_settings` directory passed to `build_platform` / `collected`
-**must** contain the following files (all required — missing files will cause
-a container exec error with a clear message from `cp`):
+The `custom_settings` directory passed to `build_platform` is consumed by two
+stages: `collected` takes the env YAML and the assets/i18n modules,
+`inject_aqueduct_settings` takes the aqueduct models and the operator scripts.
+Every file below is required — a missing one fails the build in whichever stage
+reaches for it.
 
 ```
 custom_settings/
 ├── lms.env.yml
 ├── cms.env.yml
-├── models/
-│   └── base.py
 ├── lms/
 │   ├── assets.py
 │   ├── i18n.py
@@ -373,4 +481,10 @@ custom_settings/
 └── saml_pull.py
 ```
 
-See `deployments/mit-ol/settings/` for a worked example.
+There is deliberately no top-level `models/base.py`. `inject_aqueduct_settings`
+supplies that from lehrer's own `src/lehrer/settings/base.py`, so the
+`ProductionSettingsMixin` every deployment's `models/aqueduct.py` inherits from
+stays a single implementation rather than a per-operator copy.
+
+See `deployments/mit-ol/settings/` and `deployments/generic/settings/` for
+worked examples.

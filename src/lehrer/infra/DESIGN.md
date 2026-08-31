@@ -8,9 +8,16 @@ The `lehrer.infra` package will contain Pulumi ComponentResource classes for
 deploying the container images produced by `lehrer.core` to cloud
 infrastructure.  The goal is the same as `lehrer.core`: generic,
 parameterizable components that any Open edX operator can use, with
-This module is the Dagger entry point and contains a thin root type.  The
-generic build pipelines live in ``lehrer.core``, and operator-specific
-configuration lives separately in each operator's own config directory.
+operator-specific configuration supplied from outside the package.
+
+That split already holds for the build side.  `src/lehrer/main.py` is the
+Dagger entry point and carries only a thin root type; the generic build
+pipelines live in `lehrer.core`, and operator-specific configuration lives in
+each operator's own config directory, outside this package.  The
+`lehrer-core-boundary` pre-commit hook keeps it that way by rejecting
+operator-specific strings under `lehrer.core` and `lehrer.infra`, this file
+included.  Each package's `__init__.py` is excluded from the hook, so the
+policy holds there by convention rather than by enforcement.
 
 ## Intended scope
 
@@ -27,5 +34,8 @@ configuration lives separately in each operator's own config directory.
 
 ## Cross-references
 
-- `plans/02-pulumi-codejail-component.md` — first planned infra component
-- Operator configuration is kept outside of this package, in operator-owned config directories
+- Deployment topology lives in the operator's own infrastructure repository,
+  not here: lehrer owns build definitions, the infrastructure repo owns
+  deployment topology.
+- Operator configuration is kept outside of this package, in operator-owned
+  config directories.
