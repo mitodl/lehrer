@@ -20,7 +20,11 @@ const siteConfig: SiteConfig = {
 	siteId: "mitol",
 	siteName: "MIT Learn",
 	basename: "/",
-	baseUrl: "https://apps.mitxonline.mit.edu",
+	// The origin the Site Project is served from. Fastly serves it under
+	// /apps on the LMS host rather than giving it a host of its own, so this
+	// is the LMS origin. The apps.* host this used to name never existed
+	// (NXDOMAIN); it was a placeholder from the original scaffold.
+	baseUrl: "https://courses.learn.mit.edu",
 	lmsBaseUrl: "https://courses.learn.mit.edu",
 	loginUrl: "https://courses.learn.mit.edu/login",
 	logoutUrl: "https://courses.learn.mit.edu/logout",
