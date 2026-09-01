@@ -29,8 +29,10 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 # `scripts.build` values that mean "this tree still builds a webpack bundle".
-# frontend-base App Repositories build with `make build`, which drives
-# `openedx build:module`; the micro-frontends drive fedx-scripts/webpack.
+# A converted App Repository builds with `make build`, whose target is
+# `tsc --project tsconfig.build.json` plus a copy of SCSS and assets into
+# `dist/` (checked 2026-09-01 on authn, catalog, notifications and
+# instructor-dashboard); the micro-frontends drive fedx-scripts/webpack.
 _MICRO_FRONTEND_BUILD_MARKERS = ("fedx-scripts", "webpack")
 
 
