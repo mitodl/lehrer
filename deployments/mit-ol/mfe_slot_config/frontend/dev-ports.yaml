@@ -2,7 +2,7 @@
 # Host port each Site Project's hot-reload dev server binds, keyed by the site
 # directory name. Read by lehrer-core.star when `--mfe-hot-reload` is set.
 # See deployments/generic/mfe_slot_config/frontend/dev-ports.yaml for why this
-# is declared rather than derived from site.config.dev.tsx.
+# is declared rather than derived from the baseUrl in shared/src/dev-hosts.json.
 #
 # Ports must stay clear of the ones k3d's loadbalancer binds (see
 # k3d-config.yaml), which it holds for as long as the cluster is up.

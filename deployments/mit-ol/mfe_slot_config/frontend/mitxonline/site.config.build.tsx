@@ -14,13 +14,21 @@ import { createMITxOnlineInstructorDashboardApp } from "./src/instructor-dashboa
 import "@openedx/frontend-base/shell/style";
 import "@shared/styles/mitxonline.scss";
 
-// Production defaults — all fields are overridden at runtime by /api/frontend_site_config/v1/,
+// Production defaults — most fields are overridden at runtime by /api/frontend_site_config/v1/,
 // which reads from the FRONTEND_SITE_CONFIG Django setting in the LMS configmap.
 const siteConfig: SiteConfig = {
 	siteId: "mitol",
 	siteName: "MIT Learn",
 	basename: "/",
-	baseUrl: "https://apps.mitxonline.mit.edu",
+	// This Site Project is served as a sub-path of the LMS host, not on a host of
+	// its own, so baseUrl is the LMS origin. Fastly rewrites /apps/<app>/... to the
+	// Site Project's index.html and /apps/mitxonline-site/... to its assets (see "Handle
+	// Site Project routing" in ol-infrastructure applications/edxapp/__main__.py);
+	// the routes are nested under /apps by wrapWithAppsPath, which is why basename
+	// stays "/". FRONTEND_SITE_CONFIG sets no baseUrl, so this value is what the
+	// auth redirects fall back to; the apps.*.mit.edu host it used to name has
+	// never existed in DNS.
+	baseUrl: "https://courses.learn.mit.edu",
 	lmsBaseUrl: "https://courses.learn.mit.edu",
 	loginUrl: "https://courses.learn.mit.edu/login",
 	logoutUrl: "https://courses.learn.mit.edu/logout",

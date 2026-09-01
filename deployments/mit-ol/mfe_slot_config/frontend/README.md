@@ -8,8 +8,10 @@ MIT OL deployment, plus a `shared/` directory of common TypeScript components.
 
 ```
 frontend/
+├── dev-ports.yaml       ← host port each site's hot-reload dev server binds
 ├── shared/              ← shared TypeScript components (footer, header, styles, utils)
 │   └── src/
+│       ├── dev-hosts.json ← local-dev hostnames for every site in this deployment
 │       ├── footer/      ← createMITOLFooterApp()
 │       ├── header/      ← createMITxOnlineHeaderApp(), createMITxHeaderApp(), createXProHeaderApp()
 │       ├── styles/      ← mitxonline.scss, mitx.scss (imported directly by each site config)
@@ -62,6 +64,12 @@ TypeScript path alias declared in each project's `tsconfig.json`. No npm publish
 required — Dagger mounts the directory at `/app/site/shared` inside each Site Project.
 
 Currently contains:
+- `dev-hosts.json` — the deployment's local-dev hostnames (`lmsBaseUrl` plus a
+  `baseUrl` per site), imported by every `site.config.dev.tsx` and read by
+  `lehrer dev check` and `lehrer-core.star`. Change a local-dev domain here and
+  nowhere else. Not TypeScript, but it lives with the shared source because
+  `shared/` is the only per-deployment directory Dagger mounts into a Site
+  Project build.
 - `footer/index.tsx` — `createMITOLFooterApp()`: runtime-config-driven footer links
 - `header/index.tsx` — `createMITxOnlineHeaderApp()`, `createMITxHeaderApp()`, `createXProHeaderApp()`
 - `styles/mitxonline.scss` — mitxonline theme overrides (imported directly in each `site.config.*.tsx`)

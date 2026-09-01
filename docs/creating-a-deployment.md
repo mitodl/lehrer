@@ -361,7 +361,7 @@ my-site-project/
 ├── package.json            ← must include @openedx/frontend-base, browserslist field
 ├── site.config.build.tsx   ← production SiteConfig (read by openedx build)
 ├── site.config.dev.tsx     ← development SiteConfig (read by openedx dev)
-├── tsconfig.json
+├── tsconfig.json           ← needs "@shared/*": ["./shared/src/*"] to reach dev-hosts.json
 ├── src/
 │   └── i18n/
 │       └── index.ts            ← required; export default [];
@@ -374,6 +374,32 @@ with at minimum `siteId`, `siteName`, `baseUrl`, `lmsBaseUrl`, `loginUrl`, `logo
 `environment`, and `apps[]`. Set `runtimeConfigJsonUrl: "/api/frontend_site_config/v1/"`
 to allow the LMS to override URL and cookie fields at runtime, making one build artifact
 serve all environments (CI, QA, Production).
+
+`baseUrl` is the origin the Site Project itself is served from. ol-infrastructure
+serves Site Projects as a **sub-path of the LMS host** (`/apps/…`, rewritten by
+Fastly), not on a host of their own, so `baseUrl` is the LMS origin and `basename`
+stays `"/"`; the routes are nested under `/apps` in the app config instead. It is
+also one of the fields `FRONTEND_SITE_CONFIG` does *not* override, so whatever is
+compiled in is what the auth redirects fall back to.
+
+`site.config.dev.tsx` takes its hostnames from
+`mfe_slot_config/frontend/shared/src/dev-hosts.json`, imported as
+`@shared/dev-hosts.json`:
+
+```json
+{
+  "lmsBaseUrl": "http://local.openedx.io:8000",
+  "sites": { "my-site": "http://apps.local.openedx.io:8102" }
+}
+```
+
+That is the one place a deployment's local-dev hostnames are set, and both
+`lehrer dev check` and the Tiltfile read the same file, so the tooling and the
+bundle cannot drift apart. The port webpack-dev-server *binds* is declared
+separately in `mfe_slot_config/frontend/dev-ports.yaml`; the Tiltfile refuses to
+load when a `baseUrl` names a different one. Reaching the file from a Site Project
+requires `"@shared/*": ["./shared/src/*"]` in the project's `tsconfig.json` paths
+and `--shared-src` on the `build_site` / `watch_site` call.
 
 ---
 
