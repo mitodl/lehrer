@@ -14,7 +14,7 @@ import sys
 
 import cyclopts
 
-from lehrer.cli import build, compat, local_dev
+from lehrer.cli import build, compat, local_dev, upstream
 from lehrer.cli._paths import RepoNotFoundError
 from lehrer.cli._proc import CommandError
 
@@ -27,6 +27,7 @@ app = cyclopts.App(
 app.command(local_dev.app)
 app.command(build.app)
 app.command(compat.app)
+app.command(upstream.app)
 
 
 def main() -> None:
