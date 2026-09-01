@@ -848,9 +848,11 @@ class TestMITOLSiteProjectsAreServedFromTheLMSHost:
 
     ol-infrastructure rewrites ``/apps/<app>/...`` on the LMS domain to the
     Site Project (applications/edxapp/__main__.py, "Handle Site Project
-    routing"), and ``FRONTEND_SITE_CONFIG`` does not override ``baseUrl``, so a
-    build config naming a host of its own compiles in an address that does not
-    exist: every ``apps.*.mit.edu`` these once carried was NXDOMAIN.
+    routing"), so a build config naming a host of its own compiles in an
+    address nothing serves: every ``apps.*.mit.edu`` these once carried was
+    NXDOMAIN. ``FRONTEND_SITE_CONFIG`` supplies the per-environment origin at
+    runtime; this holds the compiled default to the same shape, since it is
+    what auth redirects use until that config lands.
 
     Deployment-specific, not universal. Vanilla Open edX gives each MFE a host,
     which is what the generic deployment's build config describes.

@@ -378,9 +378,16 @@ serve all environments (CI, QA, Production).
 `baseUrl` is the origin the Site Project itself is served from. ol-infrastructure
 serves Site Projects as a **sub-path of the LMS host** (`/apps/…`, rewritten by
 Fastly), not on a host of their own, so `baseUrl` is the LMS origin and `basename`
-stays `"/"`; the routes are nested under `/apps` in the app config instead. It is
-also one of the fields `FRONTEND_SITE_CONFIG` does *not* override, so whatever is
-compiled in is what the auth redirects fall back to.
+stays `"/"`; the routes are nested under `/apps` in the app config instead.
+
+Every origin in a build config is a default, not the deployed value. One artifact
+is promoted CI → QA → Production (and the `mitx` artifact additionally serves
+`mitx-staging`, whose LMS origins differ again), so the per-environment values come
+from `FRONTEND_SITE_CONFIG` at runtime. `baseUrl` must be among the keys the
+operator sets there: frontend-base uses it as the redirect target when auth falls
+back, and it awaits the runtime config before `configureAuth`, so the value the
+operator supplies is the one the auth service is built with. The compiled default
+matters only before that config lands, or if the config API fails.
 
 `site.config.dev.tsx` takes its hostnames from
 `mfe_slot_config/frontend/shared/src/dev-hosts.json`, imported as
