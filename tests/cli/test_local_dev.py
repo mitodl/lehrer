@@ -136,7 +136,7 @@ class TestProvisioningManifests:
         assert env["PROVISION_SUPERUSER_USERNAME"] == local_dev._SUPERUSER_USERNAME
 
     def test_secret_supplies_every_env_var_the_job_requires(self) -> None:
-        provisioned = {key for key, _ in local_dev._SECRET_DEFAULTS}
+        provisioned = {key for key, _ in local_dev._load_secret_defaults()[0]}
         # provision.py indexes these directly rather than defaulting them.
         assert {
             "PROVISION_SUPERUSER_PASSWORD",
@@ -160,7 +160,7 @@ class TestOperatorSecretRefs:
     """The infra operators must read their passwords from openedx-secrets.
 
     A CR carrying its own hardcoded password silently ignores the matching
-    environment override in ``_SECRET_DEFAULTS``, leaving the operator's
+    environment override in ``secret-defaults.yaml``, leaving the operator's
     account disagreeing with the value every other component is handed.
     """
 
@@ -173,7 +173,7 @@ class TestOperatorSecretRefs:
         mariadb = next(d for d in self._docs("mariadb.yaml") if d["kind"] == "MariaDB")
         ref = mariadb["spec"]["rootPasswordSecretKeyRef"]
         assert ref["name"] == "openedx-secrets"
-        assert ref["key"] in {key for key, _ in local_dev._SECRET_DEFAULTS}
+        assert ref["key"] in {key for key, _ in local_dev._load_secret_defaults()[0]}
 
     def test_mongodb_user_password_comes_from_openedx_secrets(self) -> None:
         mongodb = next(
@@ -181,7 +181,7 @@ class TestOperatorSecretRefs:
         )
         ref = mongodb["spec"]["users"][0]["passwordSecretRef"]
         assert ref["name"] == "openedx-secrets"
-        assert ref["key"] in {key for key, _ in local_dev._SECRET_DEFAULTS}
+        assert ref["key"] in {key for key, _ in local_dev._load_secret_defaults()[0]}
 
     def test_no_infra_manifest_ships_its_own_password_secret(self) -> None:
         for name in ("mariadb.yaml", "mongodb.yaml"):
@@ -844,3 +844,34 @@ class TestMFEDevHostnames:
             _paths.repo_root() / "deployments/generic"
         )
         assert set(hostnames.values()) == {"localhost"}
+
+
+class TestSharedSecretDefaults:
+    """secret-defaults.yaml is the one definition both consumers read.
+
+    The CLI loads it here; ``setup()``'s ``manage_secrets`` in
+    lehrer-core.star reads the same file so a Tilt caller composing this
+    stack into its own cluster creates an identical Secret. These tests pin
+    the contract between the two, since only one of them is exercised by the
+    Python suite.
+    """
+
+    def test_star_and_cli_read_the_same_file(self) -> None:
+        star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
+        assert '"/secret-defaults.yaml"' in star
+        assert _paths.secret_defaults().exists()
+
+    def test_mirrors_resolve_to_their_source_value(self) -> None:
+        defaults, mirrors = local_dev._load_secret_defaults()
+        keys = {key for key, _ in defaults}
+        for key, source in mirrors:
+            # A mirror naming a missing source would silently KeyError at
+            # cluster-creation time, long after the edit that caused it.
+            assert source in keys, f"{key} mirrors unknown key {source}"
+            assert key not in keys, f"{key} is both a default and a mirror"
+
+    def test_db_password_mirrors_mysql_password(self) -> None:
+        # Kept from the setup.sh this CLI replaced; edxapp reads DB_PASSWORD
+        # while the MariaDB Grant reads MYSQL_PASSWORD, and they must agree.
+        _, mirrors = local_dev._load_secret_defaults()
+        assert ("DB_PASSWORD", "MYSQL_PASSWORD") in mirrors

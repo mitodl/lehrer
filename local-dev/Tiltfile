@@ -54,6 +54,9 @@ setup({
     "helm_override_dir": "",
     "local_dev_dir":   config.main_dir,
     "apply_platform_configmaps": True,
+    # `lehrer dev setup` already created openedx-secrets from
+    # secret-defaults.yaml before Tilt starts, so don't create it twice.
+    "manage_secrets":  False,
     "release_name":    cfg.get("release-name") or "master",
     "deploy_name":     cfg.get("deployment-name") or "generic",
     "settings_ns":     cfg.get("settings-namespace") or "generic",
