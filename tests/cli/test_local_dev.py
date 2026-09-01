@@ -875,3 +875,79 @@ class TestSharedSecretDefaults:
         # while the MariaDB Grant reads MYSQL_PASSWORD, and they must agree.
         _, mirrors = local_dev._load_secret_defaults()
         assert ("DB_PASSWORD", "MYSQL_PASSWORD") in mirrors
+
+
+class TestConfigOverrideLayer:
+    """Each platform manifest offers an optional <variant>-config-overrides.
+
+    A caller composing this stack into a cluster it already runs supplies only
+    the keys it needs to change; without this layer it would have to copy the
+    whole ConfigMap and then track every key added here.
+    """
+
+    @staticmethod
+    def _env_from_blocks(name: str) -> list[list[dict[str, Any]]]:
+        path = _paths.local_dev_dir() / "manifests" / "platform" / name
+        docs = [d for d in yaml.safe_load_all(path.read_text()) if d]
+        blocks = []
+        for doc in docs:
+            spec = doc["spec"]["template"]["spec"]
+            for container in spec["containers"] + spec.get("initContainers", []):
+                if container.get("envFrom"):
+                    blocks.append(container["envFrom"])
+        return blocks
+
+    @pytest.mark.parametrize(
+        ("manifest", "variant"),
+        [
+            ("deployment-lms.yaml", "lms"),
+            ("deployment-cms.yaml", "cms"),
+            ("deployment-worker.yaml", "lms"),
+            ("deployment-cms-worker.yaml", "cms"),
+            ("job-migrate.yaml", "lms"),
+            ("job-provision.yaml", "lms"),
+            # Reads cms-config, so its override must be the cms one — naming it
+            # from the filename gets this wrong.
+            ("job-demo-course.yaml", "cms"),
+        ],
+    )
+    def test_override_matches_the_base_configmap(
+        self, manifest: str, variant: str
+    ) -> None:
+        for block in self._env_from_blocks(manifest):
+            names = [
+                ref["configMapRef"]["name"] for ref in block if "configMapRef" in ref
+            ]
+            if f"{variant}-config" not in names:
+                continue
+            assert f"{variant}-config-overrides" in names, (
+                f"{manifest} reads {variant}-config but offers no matching override"
+            )
+
+    @pytest.mark.parametrize(
+        "manifest",
+        [
+            "deployment-lms.yaml",
+            "deployment-cms.yaml",
+            "deployment-worker.yaml",
+            "deployment-cms-worker.yaml",
+            "job-migrate.yaml",
+            "job-provision.yaml",
+            "job-demo-course.yaml",
+        ],
+    )
+    def test_override_is_last_and_optional(self, manifest: str) -> None:
+        for block in self._env_from_blocks(manifest):
+            overrides = [
+                i
+                for i, ref in enumerate(block)
+                if ref.get("configMapRef", {}).get("name", "").endswith("-overrides")
+            ]
+            if not overrides:
+                continue
+            # envFrom resolves in order, so an override that is not last loses
+            # to the very ConfigMap it exists to override.
+            assert overrides[-1] == len(block) - 1, f"{manifest}: override not last"
+            # Without optional, every consumer of this stack would be forced to
+            # create the ConfigMap even when overriding nothing.
+            assert block[overrides[-1]]["configMapRef"]["optional"] is True
