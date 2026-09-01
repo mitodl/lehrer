@@ -65,9 +65,6 @@ cells:
   - ol-openedx-rapid-response-reports==0.5.1
   - rapid-response-xblock==0.11.0
   overrides:
-  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
-  # https://github.com/openedx/edx-django-utils/pull/549
-  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - git+https://github.com/verificient/edx-proctoring-proctortrack.git@31c6c9923a51c903ae83760ecbbac191363aa2a2#egg=edx_proctoring_proctortrack
@@ -77,6 +74,10 @@ cells:
   - ol-openedx-course-translations==0.9.0
   - ol-openedx-auto-select-language==0.1.2
   - ol-openedx-ai-static-translations==0.1.1
+  # Typesense forum search is non-functional without this: per_page above
+  # Typesense's 250 cap, and a filter naming a field the schema lacks.
+  # Remove once https://github.com/openedx/forum/pull/289 merges and releases.
+  - git+https://github.com/mitodl/forum.git@tmacey/fix-typesense-search-params#egg=openedx-forum
 - release: master
   deployment: mitx
   platform_branch: master
@@ -111,13 +112,14 @@ cells:
   - django-extensions
   - setuptools==81.0.0
   overrides:
-  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
-  # https://github.com/openedx/edx-django-utils/pull/549
-  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - lxml==6.1.2
   - xmlsec==1.3.17
+  # Typesense forum search is non-functional without this: per_page above
+  # Typesense's 250 cap, and a filter naming a field the schema lacks.
+  # Remove once https://github.com/openedx/forum/pull/289 merges and releases.
+  - git+https://github.com/mitodl/forum.git@tmacey/fix-typesense-search-params#egg=openedx-forum
 - release: master
   deployment: mitx-staging
   platform_branch: master
@@ -152,13 +154,14 @@ cells:
   - django-extensions
   - setuptools==81.0.0
   overrides:
-  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
-  # https://github.com/openedx/edx-django-utils/pull/549
-  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - lxml==6.1.2
   - xmlsec==1.3.17
+  # Typesense forum search is non-functional without this: per_page above
+  # Typesense's 250 cap, and a filter naming a field the schema lacks.
+  # Remove once https://github.com/openedx/forum/pull/289 merges and releases.
+  - git+https://github.com/mitodl/forum.git@tmacey/fix-typesense-search-params#egg=openedx-forum
 - release: ulmo
   deployment: xpro
   platform_branch: release/ulmo
@@ -191,9 +194,10 @@ cells:
   - django-extensions
   - setuptools==81.0.0
   overrides:
-  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
-  # https://github.com/openedx/edx-django-utils/pull/549
-  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
+  # edx-platform pins 8.0.1 on this release branch, which predates the
+  # OpenTelemetryBackend.create_span() fix in
+  # https://github.com/openedx/edx-django-utils/pull/549 (released in 8.0.2).
+  - edx-django-utils==8.0.2
   - openedx-forum==0.4.1
   - lxml==6.1.2
   - xmlsec==1.3.17
@@ -231,9 +235,10 @@ cells:
   - django-extensions
   - setuptools==81.0.0
   overrides:
-  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
-  # https://github.com/openedx/edx-django-utils/pull/549
-  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
+  # edx-platform pins 8.0.1 on this release branch, which predates the
+  # OpenTelemetryBackend.create_span() fix in
+  # https://github.com/openedx/edx-django-utils/pull/549 (released in 8.0.2).
+  - edx-django-utils==8.0.2
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - lxml==6.1.2
@@ -273,9 +278,10 @@ cells:
   - django-extensions
   - setuptools==81.0.0
   overrides:
-  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
-  # https://github.com/openedx/edx-django-utils/pull/549
-  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
+  # edx-platform pins 8.0.1 on this release branch, which predates the
+  # OpenTelemetryBackend.create_span() fix in
+  # https://github.com/openedx/edx-django-utils/pull/549 (released in 8.0.2).
+  - edx-django-utils==8.0.2
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - lxml==6.1.2
@@ -314,8 +320,9 @@ cells:
   - django-extensions
   - setuptools==81.0.0
   overrides:
-  # OpenTelemetryBackend.create_span() fix, pending upstream merge:
-  # https://github.com/openedx/edx-django-utils/pull/549
-  - git+https://github.com/blarghmatey/edx-django-utils.git@otel-create-span#egg=edx-django-utils
+  # edx-platform pins 8.0.1 on this release branch, which predates the
+  # OpenTelemetryBackend.create_span() fix in
+  # https://github.com/openedx/edx-django-utils/pull/549 (released in 8.0.2).
+  - edx-django-utils==8.0.2
   - lxml==6.1.2
   - xmlsec==1.3.17
