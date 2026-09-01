@@ -631,9 +631,13 @@ def setup() -> None:
 
     _warn_on_stale_mariadb_secret_ref()
     _warn_on_uncollated_edxapp_database()
+    # The value actually written above, not a second reading of the
+    # environment: re-deriving it here with its own fallback is what would let
+    # a changed default silently skip the warning (previous == current) on the
+    # very run that changes it.
     _warn_on_init_only_root_password(
         previous_root_password,
-        os.environ.get("MYSQL_ROOT_PASSWORD", "openedx-dev"),
+        resolved["MYSQL_ROOT_PASSWORD"],
     )
     _warn_on_schema_collation_drift()
 

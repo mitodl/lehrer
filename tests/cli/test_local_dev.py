@@ -951,3 +951,39 @@ class TestConfigOverrideLayer:
             # Without optional, every consumer of this stack would be forced to
             # create the ConfigMap even when overriding nothing.
             assert block[overrides[-1]]["configMapRef"]["optional"] is True
+
+
+class TestRootPasswordWarningUsesTheWrittenValue:
+    """The warning must compare against the value actually put in the Secret.
+
+    Re-deriving MYSQL_ROOT_PASSWORD from the environment at the call site gives
+    it a second source of truth. Both agree only while the environment is unset
+    *and* the YAML default is unchanged; change the default and the run that
+    changes it compares old-default against old-default, concludes nothing
+    moved, and skips the warning — on exactly the run that needed it.
+    """
+
+    @staticmethod
+    def _warn_call() -> ast.Call:
+        source = Path(local_dev.__file__).read_text()
+        for node in ast.walk(ast.parse(source)):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "_warn_on_init_only_root_password"
+            ):
+                return node
+        pytest.fail("no call to _warn_on_init_only_root_password found")
+
+    def test_current_value_comes_from_the_resolved_mapping(self) -> None:
+        current = self._warn_call().args[1]
+        assert isinstance(current, ast.Subscript), ast.dump(current)
+        assert isinstance(current.value, ast.Name)
+        assert current.value.id == "resolved"
+        assert isinstance(current.slice, ast.Constant)
+        assert current.slice.value == "MYSQL_ROOT_PASSWORD"
+
+    def test_no_hardcoded_password_default_survives_in_the_module(self) -> None:
+        # secret-defaults.yaml is the only place a default belongs now.
+        source = Path(local_dev.__file__).read_text()
+        assert "openedx-dev" not in source
