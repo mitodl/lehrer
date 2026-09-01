@@ -987,3 +987,46 @@ class TestRootPasswordWarningUsesTheWrittenValue:
         # secret-defaults.yaml is the only place a default belongs now.
         source = Path(local_dev.__file__).read_text()
         assert "openedx-dev" not in source
+
+
+class TestPlatformConfigChecksum:
+    """Platform pods must roll when their config changes.
+
+    envFrom never triggers a rollout, so without a changing pod-template
+    annotation an edit to lms-config/cms-config — or to a caller's
+    *-config-overrides — updates the ConfigMap and leaves every running pod on
+    the old values, with nothing reporting it.
+    """
+
+    PLACEHOLDER = "__PLATFORM_CONFIG_CHECKSUM__"
+    DEPLOYMENTS = (
+        "deployment-lms.yaml",
+        "deployment-cms.yaml",
+        "deployment-worker.yaml",
+        "deployment-cms-worker.yaml",
+    )
+
+    @pytest.mark.parametrize("manifest", DEPLOYMENTS)
+    def test_annotation_is_on_the_pod_template(self, manifest: str) -> None:
+        path = _paths.local_dev_dir() / "manifests" / "platform" / manifest
+        doc = next(d for d in yaml.safe_load_all(path.read_text()) if d)
+        # On the pod template, not the Deployment's own metadata — annotating
+        # the latter changes nothing about the pods.
+        annotations = doc["spec"]["template"]["metadata"]["annotations"]
+        assert annotations["lehrer.mit.edu/config-checksum"] == self.PLACEHOLDER
+
+    @pytest.mark.parametrize("manifest", DEPLOYMENTS)
+    def test_the_star_substitutes_this_manifest(self, manifest: str) -> None:
+        # A manifest carrying the placeholder that lehrer-core.star does not
+        # substitute would ship the literal string to the cluster, pinning the
+        # annotation to a constant and silently never rolling.
+        star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
+        assert self.PLACEHOLDER in star
+        assert manifest in star
+
+    def test_overrides_are_folded_into_the_checksum(self) -> None:
+        # Hashing only lehrer's own ConfigMaps would miss exactly the edits a
+        # composing caller makes most often — its override files.
+        star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
+        assert "config_override_paths" in star
+        assert "platform_config_files.extend(config_override_paths)" in star

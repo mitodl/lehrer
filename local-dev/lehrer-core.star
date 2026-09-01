@@ -28,6 +28,10 @@
 #     "helm_override_dir": "",   # path to dir with override Helm values, or ""
 #     "local_dev_dir":   "/abs/path/to/lehrer/local-dev",
 #     "apply_platform_configmaps": True,  # False when caller applies its own
+#     # Paths to any ConfigMaps the caller layers over lms-config/cms-config
+#     # (the *-config-overrides read last in envFrom). Folded into the pod
+#     # fingerprint so editing one rolls the platform pods; [] when none.
+#     "config_override_paths": [],
 #     # Create the openedx-secrets Secret from local-dev/secret-defaults.yaml.
 #     # True for a caller whose cluster does not already have it (anyone not
 #     # running `lehrer dev setup`, which creates it from the same file).
@@ -142,6 +146,7 @@ def setup(cfg):
     local_dev = cfg["local_dev_dir"]
     apply_configmaps = cfg["apply_platform_configmaps"]
     manage_secrets = cfg["manage_secrets"]
+    config_override_paths = cfg["config_override_paths"]
 
     # Lehrer core source — injected directly into the container by inject_aqueduct_settings
     # (dag.current_module().source().file("src/lehrer/settings/base.py")).
@@ -535,10 +540,42 @@ def setup(cfg):
     )).replace("__RELEASE_NAME__", release_name)))
     k8s_yaml(local_dev + "/manifests/platform/service-lms.yaml")
     k8s_yaml(local_dev + "/manifests/platform/service-cms.yaml")
-    k8s_yaml(local_dev + "/manifests/platform/deployment-lms.yaml")
-    k8s_yaml(local_dev + "/manifests/platform/deployment-cms.yaml")
-    k8s_yaml(local_dev + "/manifests/platform/deployment-worker.yaml")
-    k8s_yaml(local_dev + "/manifests/platform/deployment-cms-worker.yaml")
+
+    # Stamp a config hash into every platform pod template, same reason as the
+    # notes deployment above: envFrom does not trigger a rollout, so without
+    # this a config edit updates the ConfigMap and leaves every running pod on
+    # the old values — silently, since nothing reports it.
+    #
+    # Covers the caller's override ConfigMaps as well as ours. A composing
+    # caller applies those itself, so hashing only our files would miss exactly
+    # the edits that caller makes most often.
+    platform_config_files = []
+    if apply_configmaps:
+        platform_config_files.append(
+            local_dev + "/manifests/platform/configmap-lms.yaml")
+        platform_config_files.append(
+            local_dev + "/manifests/platform/configmap-cms.yaml")
+    platform_config_files.extend(config_override_paths)
+
+    if platform_config_files:
+        # read_file registers a Tilt watch on each path, so an edit re-runs the
+        # Tiltfile and recomputes this; `cat` alone would hash the file without
+        # ever being told it changed.
+        platform_config_checksum = str(hash("\n".join(
+            [str(read_file(path)) for path in platform_config_files]
+        )))
+    else:
+        platform_config_checksum = "none"
+
+    for name in [
+        "deployment-lms.yaml",
+        "deployment-cms.yaml",
+        "deployment-worker.yaml",
+        "deployment-cms-worker.yaml",
+    ]:
+        k8s_yaml(blob(str(read_file(
+            local_dev + "/manifests/platform/" + name
+        )).replace("__PLATFORM_CONFIG_CHECKSUM__", platform_config_checksum)))
 
     # Run DB migrations once the database is up, before the services start.
     k8s_resource(

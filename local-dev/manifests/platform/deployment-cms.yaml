@@ -11,6 +11,11 @@ spec:
       app: cms
   template:
     metadata:
+      annotations:
+        # Replaced by lehrer-core.star with a hash of the platform
+        # ConfigMaps (ours plus any caller overrides). Changing it is
+        # what rolls the pod, since envFrom alone never does.
+        lehrer.mit.edu/config-checksum: "__PLATFORM_CONFIG_CHECKSUM__"
       labels:
         app: cms
     spec:
