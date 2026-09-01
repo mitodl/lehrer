@@ -582,6 +582,8 @@ class AqueductSettings(BaseSettings):
             "openedx_events",
             # Core models to represent courses
             "openedx_catalog",
+            # Competency criteria and student progress models
+            "openedx_learning",
             # Core apps that power libraries
             "openedx_content",
             *openedx_content_backcompat_apps_to_install(),
