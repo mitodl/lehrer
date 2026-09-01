@@ -25,8 +25,9 @@ const siteConfig: SiteConfig = {
 	// ol-infrastructure applications/edxapp/__main__.py) rather than giving it a
 	// host of its own, and wrapWithAppsPath nests the routes to match, which is why
 	// basename stays "/". A default like the origins below it, replaced per
-	// environment by FRONTEND_SITE_CONFIG. It previously named apps.*.mit.edu,
-	// which has never resolved.
+	// environment by FRONTEND_SITE_CONFIG. It previously named apps.*.mit.edu, a
+	// placeholder from the original OEP-65 scaffold (5d68e40) that has never
+	// resolved.
 	baseUrl: "https://courses.learn.mit.edu",
 	lmsBaseUrl: "https://courses.learn.mit.edu",
 	loginUrl: "https://courses.learn.mit.edu/login",
