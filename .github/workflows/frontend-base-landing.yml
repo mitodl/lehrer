@@ -1,0 +1,153 @@
+---
+name: Upstream frontend-base Landing Watch
+
+# Upstream is merging each learner-facing MFE's frontend-base conversion into
+# its repository's default branch (openedx/frontend-base#243, OEP-65 ADR 0004).
+# That merge turns the default branch into an npm module library, so every OL
+# legacy MFE build tracking it stops producing a servable bundle — with no
+# change in this repo and no failing PR to notice it. mitxonline builds seven
+# MFEs from `master`, so this is a build break that arrives on upstream's
+# schedule rather than ours.
+#
+# `lehrer upstream frontend-base-status` reads the watch list in
+# deployments/<group>/upstream_watch.yaml and reports, per repo, whether the
+# conversion has LANDED, whether `legacy-mfe` has been cut (BRANCH CUT — the
+# short window in which the pin can still be made pre-emptively), or neither.
+#
+# A state change opens or comments on a single de-duplicated issue. The body
+# carries a digest of the reported stages, and a comment is only added when
+# that digest changes, so an unactioned issue does not accumulate a daily
+# comment saying the same thing.
+on:
+  schedule:
+    # Daily, 06:00 UTC. Upstream has been leaving roughly a day between cutting
+    # `legacy-mfe` and merging, so a daily poll is what it takes to catch the
+    # BRANCH CUT window while it is still open.
+  - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      deployment_group:
+        description: Deployment group whose upstream_watch.yaml to check.
+        type: string
+        default: mit-ol
+
+concurrency:
+  group: frontend-base-landing-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      with:
+        enable-cache: true
+    - run: uv sync
+
+    - name: Poll upstream
+      env:
+        # The command shells out to `gh api`, which needs a token even for
+        # public reads to avoid the 60/hour unauthenticated IP limit shared
+        # across the runner fleet.
+        GH_TOKEN: ${{ github.token }}
+        GROUP: ${{ inputs.deployment_group || 'mit-ol' }}
+      run: |
+        set -euo pipefail
+        uv run lehrer upstream frontend-base-status \
+          --deployment-config "deployments/$GROUP" --json > status.json
+        {
+          echo "### Upstream frontend-base status"
+          echo ""
+          echo '| repo | stage | advice |'
+          echo '| --- | --- | --- |'
+          jq -r '.[] | "| \(.repo) | \(.stage) | \(.advice) |"' status.json
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Open or update the landing issue
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{
+          github.run_id }}
+      run: |
+        set -euo pipefail
+
+        # Rows needing a human: anything past `legacy`. An exposed row is a
+        # build OL actually runs from that default branch, so it is the
+        # urgent kind; a non-exposed row is tracked for the Site Projects.
+        actionable="$(jq -c '[.[] | select(.stage != "legacy")]' status.json)"
+        if [ "$(jq 'length' <<<"$actionable")" -eq 0 ]; then
+          echo "Nothing past 'legacy'. No issue needed."
+          exit 0
+        fi
+
+        # Digest only repo+stage, so the issue is not re-notified for wording
+        # changes or an npm version bump — only for a real stage transition.
+        digest="$(jq -r 'sort_by(.repo) | map("\(.repo)=\(.stage)") | join(",")' \
+          <<<"$actionable" | sha256sum | cut -d' ' -f1)"
+
+        body="$(
+          printf '%s\n' \
+            "Upstream has moved on at least one MFE this repo watches." \
+            "" \
+            "| repo | stage | exposed deployments | what to do |" \
+            "| --- | --- | --- | --- |"
+          # jq's `//` will not fill an empty cell: "" is truthy, only
+          # null/false are not. Branch on the length instead.
+          jq -r '.[] | "| \(.repo) | \(.stage) | \(if (.exposed_deployments | length) == 0 then "none" else (.exposed_deployments | join(", ")) end) | \(.advice) |"' \
+            <<<"$actionable"
+          printf '%s\n' \
+            "" \
+            "\`BRANCH CUT\` is the window between upstream cutting \`legacy-mfe\`" \
+            "and merging the conversion. It is the only point at which the" \
+            "version_matrix.py pin can be made without a break in between, and" \
+            "it has been staying open for about a day." \
+            "" \
+            "\`LANDED\` with no \`legacy-mfe\` branch means the micro-frontend is" \
+            "gone: there is nothing to repoint at, so the legacy build has to be" \
+            "retired and the module library consumed from the Site Project." \
+            "" \
+            "Reproduce with \`lehrer upstream frontend-base-status\`." \
+            "" \
+            "Run: $RUN_URL" \
+            "" \
+            "<!-- digest: $digest -->"
+        )"
+
+        gh label create frontend-base-landing \
+          --color 1d76db \
+          --description "Upstream MFE landed its frontend-base conversion" \
+          --force
+
+        existing="$(gh issue list --label frontend-base-landing --state open \
+          --json number --jq '.[0].number // empty')"
+
+        if [ -z "$existing" ]; then
+          gh issue create \
+            --title "Upstream frontend-base landing detected" \
+            --label frontend-base-landing \
+            --body "$body"
+          exit 0
+        fi
+
+        # Compare against the most recent digest recorded anywhere on the
+        # issue — the body on creation, a comment on each later change.
+        last="$(gh issue view "$existing" --json body,comments \
+          --jq '[.body] + [.comments[].body] | .[]' \
+          | grep -oP '(?<=<!-- digest: )[0-9a-f]{64}' | tail -1 || true)"
+        if [ "$last" = "$digest" ]; then
+          echo "Issue #$existing already reflects this state ($digest)."
+          exit 0
+        fi
+        gh issue comment "$existing" --body "$body"
+        echo "Commented on issue #$existing (state changed to $digest)."
