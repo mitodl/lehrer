@@ -244,6 +244,10 @@ cells:
   - lxml==6.1.2
   - xmlsec==1.3.17
   - edx-sga==0.29.0
+  # Typesense forum search is non-functional without this: per_page above
+  # Typesense's 250 cap, and a filter naming a field the schema lacks.
+  # Remove once https://github.com/openedx/forum/pull/289 merges and releases.
+  - git+https://github.com/mitodl/forum.git@tmacey/fix-typesense-search-params#egg=openedx-forum
 - release: verawood
   deployment: mitx-staging
   platform_repo: https://github.com/openedx/edx-platform
@@ -287,6 +291,10 @@ cells:
   - lxml==6.1.2
   - xmlsec==1.3.17
   - edx-sga==0.29.0
+  # Typesense forum search is non-functional without this: per_page above
+  # Typesense's 250 cap, and a filter naming a field the schema lacks.
+  # Remove once https://github.com/openedx/forum/pull/289 merges and releases.
+  - git+https://github.com/mitodl/forum.git@tmacey/fix-typesense-search-params#egg=openedx-forum
 - release: verawood
   deployment: xpro
   platform_branch: release/verawood
@@ -326,3 +334,7 @@ cells:
   - edx-django-utils==8.0.2
   - lxml==6.1.2
   - xmlsec==1.3.17
+  # Typesense forum search is non-functional without this: per_page above
+  # Typesense's 250 cap, and a filter naming a field the schema lacks.
+  # Remove once https://github.com/openedx/forum/pull/289 merges and releases.
+  - git+https://github.com/mitodl/forum.git@tmacey/fix-typesense-search-params#egg=openedx-forum
