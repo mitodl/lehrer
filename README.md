@@ -45,6 +45,8 @@ lehrer dev start       # tilt up — build & deploy the services
 lehrer dev stop        # tilt down — remove deployed resources, keep the cluster
 lehrer dev teardown    # delete the cluster and clean up all local state
 lehrer dev status      # show cluster / pod state
+
+lehrer dev db-collation  # audit MariaDB schema-collation drift (see below)
 ```
 
 Use a deployment-specific config and MFE hot-reload:
@@ -157,6 +159,61 @@ it from the Tilt UI, or:
 ```bash
 tilt trigger edxapp-demo-course
 ```
+
+Neither migrate Job retries. MariaDB DDL is not transactional, so a migration
+that dies partway leaves the tables and columns it already created behind, and a
+second attempt fails on "table already exists" — burying whatever the first, real
+error was. `backoffLimit: 0` keeps the original failure on screen.
+
+#### Database collation
+
+Every schema is created as `utf8mb4` / `utf8mb4_unicode_ci`, pinned explicitly in
+`local-dev/manifests/infra/mariadb.yaml`. This is not a detail the server config
+can cover for you: a schema's default collation is stored once, at
+`CREATE DATABASE` time, and never follows a later change to `collation-server`.
+Any `CREATE TABLE` that omits an explicit `COLLATE` inherits whatever the schema
+was created with, and a foreign key between two tables on different collations is
+rejected with errno 150, "Foreign key constraint is incorrectly formed" — a
+migration failure that reads like a MariaDB bug and is really schema metadata
+drift. It is a longstanding source of migration failures in residential MITx.
+
+The mariadb-operator makes this easy to get wrong. `spec.database` on the MariaDB
+CR does not create the schema itself; the operator turns it into a `Database` CR
+named `<mariadb>-database` with no `characterSet`/`collate`, the CRD defaults
+(`utf8` / `utf8_general_ci`) get stamped on, and it issues an explicit
+`CREATE DATABASE edxapp CHARACTER SET = 'utf8' COLLATE = 'utf8_general_ci'`.
+Declaring `mysql-database` ourselves is what stops that: the reconciler only
+builds its own when that key is absent. Anything that provisions a MariaDB schema
+for a lehrer deployment needs the same treatment — set the collation at creation,
+and do not rely on a parameter group, which only reaches schemas created after it.
+
+To check an existing cluster:
+
+```bash
+lehrer dev db-collation                 # report schema and table collations
+lehrer dev db-collation --fix           # ALTER DATABASE drifted schemas
+lehrer dev db-collation --check-tables  # also CHECK TABLE for corruption
+```
+
+`--fix` only realigns the schema-level default, which is a metadata change that
+rewrites nothing — new tables land on the right collation, existing ones keep
+theirs. Converting those in place is the risky half, so it is not automated; on a
+dev cluster, recreate the instance and let the Jobs rebuild the schema.
+`--check-tables` reports and never repairs: rebuilding a corrupt unique index can
+delete the duplicate rows it was masking. This mirrors ol-infrastructure's
+`bin/mariadb-collation-guard`, which is the version to reach for against deployed
+environments.
+
+`lehrer dev setup` runs the schema-level audit on an already-initialized datadir
+and points here if it finds drift.
+
+> **Existing clusters:** if your cluster predates this, the operator already
+> generated a `mysql-database` Database resource on `utf8`, and `characterSet` /
+> `collate` are immutable — `lehrer dev start` fails on it. Both `setup` and
+> `start` detect that and print the way out. Delete the resource *after* patching
+> its `cleanupPolicy` to `Skip`: the Database finalizer runs `DROP DATABASE`, so
+> deleting it on the CRD's `Delete` default takes edxapp with it. The manifests
+> now set `cleanupPolicy: Skip` on all three databases for that reason.
 
 ### Builds
 
