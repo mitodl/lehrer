@@ -536,10 +536,6 @@ class AqueductSettings(BaseSettings):
         description=".. toggle_name: settings.ENABLE_MASQUERADE\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: None\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2013-04-13",  # noqa: E501
     )
     ENABLE_MAX_FAILED_LOGIN_ATTEMPTS: bool = Field(default=True)
-    ENABLE_MFE_CONFIG_API: bool = Field(
-        default=False,
-        description=".. toggle_name: ENABLE_MFE_CONFIG_API\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to enable MFE Config API. This is disabled by\ndefault.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2022-05-20\n.. toggle_target_removal_date: None\n.. toggle_warnings: None\n.. toggle_tickets: None",  # noqa: E501
-    )
     ENABLE_MKTG_EMAIL_OPT_IN: bool = Field(
         default=False, description="Enable organizational email opt-in"
     )
@@ -1025,6 +1021,8 @@ class AqueductSettings(BaseSettings):
             "openedx_events",
             # Core models to represent courses
             "openedx_catalog",
+            # Competency criteria and student progress models
+            "openedx_learning",
             # Core apps that power libraries
             "openedx_content",
             *openedx_content_backcompat_apps_to_install(),
