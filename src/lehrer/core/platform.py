@@ -1084,10 +1084,20 @@ class OpenedxPlatform:
             "/openedx/venv/bin:/openedx/bin:/openedx/edx-platform/node_modules/.bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin",
         )
 
-        # Install edx-platform in editable mode using uv
+        # Install edx-platform in editable mode using uv.
+        #
+        # --no-deps is load-bearing: without it this re-resolves edx-platform's
+        # own declared dependencies from the index and silently discards the
+        # deployment overrides installed earlier. master's pyproject.toml lists
+        # "openedx-forum", so a `git+...#egg=openedx-forum` override was
+        # replaced by the indexed pin and the built image carried none of the
+        # branch's code -- while release/verawood, which does not declare it,
+        # kept the override. Dependencies are already installed by
+        # _edx_base_deps_script() and then the overrides step, so nothing here
+        # needs resolving; this install only has to register the package.
         container = (
             container.with_workdir("/openedx/edx-platform")
-            .with_exec(["uv", "pip", "install", "-e", "."])
+            .with_exec(["uv", "pip", "install", "--no-deps", "-e", "."])
             .with_exec(
                 [
                     "mkdir",
@@ -1727,8 +1737,11 @@ class OpenedxPlatform:
             ]
         )
 
+        # --no-deps so this editable install cannot re-resolve, and thereby
+        # undo, the overrides applied immediately above. See the same flag in
+        # collect_artifacts for the failure it prevents.
         return container.with_workdir("/openedx/edx-platform").with_exec(
-            ["uv", "pip", "install", "-e", "."]
+            ["uv", "pip", "install", "--no-deps", "-e", "."]
         )
 
     @function
@@ -2554,9 +2567,14 @@ class OpenedxPlatform:
         # Editable install (so lms/cms and their console entry points resolve)
         # plus edx-platform's own test requirements (pytest, pytest-django,
         # factory_boy, ...).
+        #
+        # --no-deps for the same reason as the build path: install_deps above
+        # has already installed the dependency set and applied the deployment
+        # overrides, and re-resolving here would quietly revert them -- leaving
+        # the suite testing packages the shipped image does not contain.
         container = (
             container.with_workdir("/openedx/edx-platform")
-            .with_exec(["uv", "pip", "install", "-e", "."])
+            .with_exec(["uv", "pip", "install", "--no-deps", "-e", "."])
             .with_exec(["sh", "-c", _edx_testing_deps_script()])
         )
 
