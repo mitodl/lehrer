@@ -462,35 +462,44 @@ def _warn_on_schema_collation_drift() -> None:
 def mfe_dev_hostnames(deployment_config: Path) -> dict[str, str]:
     """Map each Site Project to the ``baseUrl`` hostname its dev server serves.
 
-    Raises rather than returning a partial map. A check that quietly skips
-    what it cannot parse reports success for sites it never looked at, which
-    is worse than not running it — and a mistyped ``--deployment-config``
-    would otherwise pass by matching nothing at all.
+    Read from ``mfe_slot_config/frontend/shared/src/dev-hosts.json``, the one
+    place a deployment's local-dev hostnames are set. Every
+    ``site.config.dev.tsx`` imports that same file as
+    ``@shared/dev-hosts.json``, so what this checks is what the bundle was
+    built with.
+
+    Raises rather than returning a partial map. A check that quietly skips what
+    it cannot read reports success for sites it never looked at, which is worse
+    than not running it, and a mistyped ``--deployment-config`` would otherwise
+    pass by matching nothing at all.
     """
     frontend = deployment_config / "mfe_slot_config" / "frontend"
     if not frontend.is_dir():
         raise SystemExit(f"No Site Projects found: {frontend} is not a directory.")
 
-    configs = sorted(frontend.glob("*/site.config.dev.tsx"))
-    if not configs:
-        raise SystemExit(f"No site.config.dev.tsx under {frontend}.")
+    hosts_file = frontend / "shared" / "src" / "dev-hosts.json"
+    if not hosts_file.is_file():
+        raise SystemExit(f"No dev-hosts.json at {hosts_file}.")
+
+    sites = json.loads(hosts_file.read_text()).get("sites") or {}
+    if not sites:
+        raise SystemExit(f"No sites declared in {hosts_file}.")
 
     hostnames: dict[str, str] = {}
-    for config in configs:
-        match = re.search(r'baseUrl:\s*"([^"]+)"', config.read_text())
-        if match is None:
-            raise SystemExit(f"No baseUrl in {config}.")
-        host = urlsplit(match.group(1)).hostname
+    for site, base_url in sites.items():
+        host = urlsplit(base_url).hostname
         if not host:
-            raise SystemExit(f"baseUrl '{match.group(1)}' in {config} has no host.")
-        hostnames[config.parent.name] = host
+            raise SystemExit(
+                f"baseUrl '{base_url}' for site '{site}' in {hosts_file} has no host."
+            )
+        hostnames[site] = host
     return hostnames
 
 
 def _check_mfe_hostnames(deployment_config: Path) -> int:
     """Report Site Project hostnames that do not resolve. Returns the count.
 
-    mit-ol's dev configs use ``*.local.openedx.io``, which upstream Open edX
+    mit-ol's dev hosts use ``*.local.openedx.io``, which upstream Open edX
     publishes as a public wildcard A record pointing at 127.0.0.1 — so this
     normally needs no ``/etc/hosts`` entry and no setup at all. It does mean
     hot reload depends on public DNS: offline, or behind a resolver that

@@ -746,15 +746,30 @@ def _declared_ports(deployment: Path) -> dict[str, int]:
     return yaml.safe_load(path.read_text())
 
 
+def _dev_hosts(deployment: Path) -> dict:
+    path = (
+        deployment
+        / "mfe_slot_config"
+        / "frontend"
+        / "shared"
+        / "src"
+        / "dev-hosts.json"
+    )
+    return json.loads(path.read_text())
+
+
+def _write_dev_hosts(deployment: Path, payload: dict) -> None:
+    shared = deployment / "mfe_slot_config" / "frontend" / "shared" / "src"
+    shared.mkdir(parents=True, exist_ok=True)
+    (shared / "dev-hosts.json").write_text(json.dumps(payload))
+
+
 def _base_url_ports(deployment: Path) -> dict[str, int | None]:
-    """Per site, the port in its dev baseUrl — None for a sub-path URL."""
-    frontend = deployment / "mfe_slot_config" / "frontend"
-    ports: dict[str, int | None] = {}
-    for config in sorted(frontend.glob("*/site.config.dev.tsx")):
-        match = re.search(r'baseUrl:\s*"([^"]+)"', config.read_text())
-        assert match is not None, f"{config} has no baseUrl"
-        ports[config.parent.name] = urlsplit(match.group(1)).port
-    return ports
+    """Per site, the port in its dev baseUrl. None for a sub-path URL."""
+    return {
+        site: urlsplit(base_url).port
+        for site, base_url in _dev_hosts(deployment)["sites"].items()
+    }
 
 
 class TestMFEDevServerPorts:
@@ -803,6 +818,66 @@ class TestMFEDevServerPorts:
                 )
 
 
+class TestMFEDevHostsAreTheOneSource:
+    """dev-hosts.json is what both the tooling and the bundle read.
+
+    The site configs import it as ``@shared/dev-hosts.json`` instead of
+    carrying literal hostnames, so a deployment's local-dev domain is one
+    edit rather than one per Site Project.
+    """
+
+    def test_every_site_has_a_dev_base_url(self) -> None:
+        for deployment in _deployments():
+            assert set(_dev_hosts(deployment)["sites"]) == _sites(deployment)
+
+    def test_no_site_config_hardcodes_a_hostname(self) -> None:
+        for deployment in _deployments():
+            frontend = deployment / "mfe_slot_config" / "frontend"
+            for config in sorted(frontend.glob("*/site.config.dev.tsx")):
+                body = config.read_text()
+                assert "@shared/dev-hosts.json" in body, (
+                    f"{config} does not import the deployment's dev hosts"
+                )
+                assert not re.search(r'(baseUrl|loginUrl|logoutUrl):\s*"', body), (
+                    f"{config} hardcodes a URL instead of using dev-hosts.json"
+                )
+
+
+class TestMITOLSiteProjectsAreServedFromTheLMSHost:
+    """mit-ol serves its Site Projects as a sub-path of the LMS host.
+
+    ol-infrastructure rewrites ``/apps/<app>/...`` on the LMS domain to the
+    Site Project (applications/edxapp/__main__.py, "Handle Site Project
+    routing"), so a build config naming a host of its own compiles in an
+    address nothing serves: every ``apps.*.mit.edu`` these once carried was
+    NXDOMAIN. ``FRONTEND_SITE_CONFIG`` supplies the per-environment origin at
+    runtime; this holds the compiled default to the same shape, since it is
+    what auth redirects use until that config lands.
+
+    Deployment-specific, not universal. Vanilla Open edX gives each MFE a host,
+    which is what the generic deployment's build config describes.
+    """
+
+    def test_build_base_url_is_the_lms_origin(self) -> None:
+        frontend = _paths.repo_root() / "deployments/mit-ol/mfe_slot_config/frontend"
+        configs = sorted(frontend.glob("*/site.config.build.tsx"))
+        assert configs
+        for config in configs:
+            body = config.read_text()
+            matches = {
+                key: re.search(rf'{key}:\s*"([^"]+)"', body)
+                for key in ("baseUrl", "lmsBaseUrl")
+            }
+            missing = [key for key, m in matches.items() if m is None]
+            assert not missing, f"{config} is missing {missing}"
+            urls = {key: m.group(1) for key, m in matches.items() if m}
+            assert urls["baseUrl"] == urls["lmsBaseUrl"], (
+                f"{config}: baseUrl {urls['baseUrl']} is not the LMS origin "
+                f"{urls['lmsBaseUrl']}. Site Projects are served under /apps on "
+                "the LMS host, not on one of their own."
+            )
+
+
 class TestMFEDevHostnamesFailLoudly:
     """A partial map would report success for sites it never looked at."""
 
@@ -810,22 +885,18 @@ class TestMFEDevHostnamesFailLoudly:
         with pytest.raises(SystemExit, match="not a directory"):
             local_dev.mfe_dev_hostnames(tmp_path / "typo")
 
-    def test_a_deployment_with_no_site_projects_is_an_error(self, tmp_path) -> None:
+    def test_a_deployment_with_no_dev_hosts_is_an_error(self, tmp_path) -> None:
         (tmp_path / "mfe_slot_config" / "frontend").mkdir(parents=True)
-        with pytest.raises(SystemExit, match="No site.config.dev.tsx"):
+        with pytest.raises(SystemExit, match="No dev-hosts.json"):
             local_dev.mfe_dev_hostnames(tmp_path)
 
-    def test_a_config_without_a_base_url_is_an_error(self, tmp_path) -> None:
-        site = tmp_path / "mfe_slot_config" / "frontend" / "thing"
-        site.mkdir(parents=True)
-        (site / "site.config.dev.tsx").write_text("const siteConfig = {};\n")
-        with pytest.raises(SystemExit, match="No baseUrl"):
+    def test_dev_hosts_declaring_no_sites_is_an_error(self, tmp_path) -> None:
+        _write_dev_hosts(tmp_path, {"lmsBaseUrl": "http://localhost:8000"})
+        with pytest.raises(SystemExit, match="No sites declared"):
             local_dev.mfe_dev_hostnames(tmp_path)
 
     def test_a_base_url_without_a_host_is_an_error(self, tmp_path) -> None:
-        site = tmp_path / "mfe_slot_config" / "frontend" / "thing"
-        site.mkdir(parents=True)
-        (site / "site.config.dev.tsx").write_text('baseUrl: "/just/a/path",\n')
+        _write_dev_hosts(tmp_path, {"sites": {"thing": "/just/a/path"}})
         with pytest.raises(SystemExit, match="has no host"):
             local_dev.mfe_dev_hostnames(tmp_path)
 

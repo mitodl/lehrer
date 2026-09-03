@@ -32,7 +32,24 @@
 
 load("ext://helm_resource", "helm_resource", "helm_repo")
 
-def _base_url_port(site_dir, site_name):
+def _dev_hosts(frontend_dir):
+    """Return the deployment's local-dev hostname declarations.
+
+    ``shared/src/dev-hosts.json`` is the one place a deployment's local-dev
+    hostnames are set: every ``site.config.dev.tsx`` imports it as
+    ``@shared/dev-hosts.json``, so what the tooling reads here is what the
+    bundle was built with.
+    """
+    hosts_path = frontend_dir + "/shared/src/dev-hosts.json"
+    if not os.path.exists(hosts_path):
+        fail(
+            "--mfe-hot-reload needs " + hosts_path + ", declaring lmsBaseUrl " +
+            "and a baseUrl per Site Project."
+        )
+    return decode_json(str(read_file(hosts_path)))
+
+
+def _base_url_port(dev_hosts, site_name, frontend_dir):
     """Return the port in a Site Project's dev ``baseUrl``, or "" if it has none.
 
     An MFE that owns a host carries its port here; one served as a sub-path of
@@ -40,17 +57,14 @@ def _base_url_port(site_dir, site_name):
     no port of its own. Only the first case is worth cross-checking against the
     declared dev port.
     """
-    config_path = site_dir + "/site.config.dev.tsx"
-    config = str(read_file(config_path))
+    sites = dev_hosts.get("sites", {})
+    if site_name not in sites:
+        fail(
+            "MFE site '" + site_name + "' has no baseUrl in " + frontend_dir +
+            "/shared/src/dev-hosts.json."
+        )
 
-    start = config.find("baseUrl:")
-    if start == -1:
-        fail("MFE site '" + site_name + "': no baseUrl in " + config_path)
-
-    quote = config.find('"', start)
-    url = config[quote + 1:config.find('"', quote + 1)]
-
-    authority = url.split("://")[-1].split("/")[0]
+    authority = sites[site_name].split("://")[-1].split("/")[0]
     parts = authority.split(":")
     if len(parts) == 2 and parts[1].isdigit():
         return parts[1]
@@ -393,11 +407,10 @@ def setup(cfg):
         )
 
     if mfe_hot_reload:
-        # Each dev server binds its own host port, taken from the port in that
-        # site's own site.config.dev.tsx baseUrl. Reading it from the config
-        # rather than assigning one here keeps the two from disagreeing: the
-        # MFE builds its asset and route URLs from baseUrl, so a server that
-        # listens anywhere else serves a site that points at nothing.
+        # Each dev server binds the host port declared for its site in
+        # dev-ports.yaml, cross-checked against the baseUrl the bundle is built
+        # with (shared/src/dev-hosts.json): a server listening anywhere other
+        # than where the app points serves a site that points at nothing.
         #
         # The port must also stay clear of the ones k3d's loadbalancer binds
         # (see k3d-config.yaml). It holds those for as long as the cluster is
@@ -408,6 +421,7 @@ def setup(cfg):
 
         ports_path = frontend_dir + "/dev-ports.yaml"
         dev_ports = _dev_server_ports(frontend_dir, site_projects)
+        dev_hosts = _dev_hosts(frontend_dir)
 
         claimed = {}
         for site_name in site_projects:
@@ -430,13 +444,14 @@ def setup(cfg):
 
             # Only meaningful when the site owns a host. A sub-path baseUrl
             # carries the LMS origin, so there is nothing to reconcile.
-            base_port = _base_url_port(site_dir, site_name)
+            base_port = _base_url_port(dev_hosts, site_name, frontend_dir)
             if base_port and base_port != port:
                 fail(
                     "MFE site '" + site_name + "' serves on port " + port +
-                    " per " + ports_path + ", but its site.config.dev.tsx " +
-                    "baseUrl points at port " + base_port + ". The app would " +
-                    "load from an address nothing is listening on."
+                    " per " + ports_path + ", but its baseUrl in " +
+                    "shared/src/dev-hosts.json points at port " + base_port +
+                    ". The app would load from an address nothing is " +
+                    "listening on."
                 )
 
             # A baseUrl host that does not resolve is checked by

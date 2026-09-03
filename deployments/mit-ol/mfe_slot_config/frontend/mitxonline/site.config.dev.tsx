@@ -6,6 +6,7 @@ import {
 	type SiteConfig,
 } from "@openedx/frontend-base";
 
+import devHosts from "@shared/dev-hosts.json";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxOnlineHeaderApp } from "@shared/header";
 
@@ -18,10 +19,10 @@ const siteConfig: SiteConfig = {
 	siteId: "mitol",
 	siteName: "MIT Learn (dev)",
 	basename: "/",
-	baseUrl: "http://apps.local.openedx.io:8102",
-	lmsBaseUrl: "http://local.openedx.io:8000",
-	loginUrl: "http://local.openedx.io:8000/login",
-	logoutUrl: "http://local.openedx.io:8000/logout",
+	baseUrl: devHosts.sites.mitxonline,
+	lmsBaseUrl: devHosts.lmsBaseUrl,
+	loginUrl: `${devHosts.lmsBaseUrl}/login`,
+	logoutUrl: `${devHosts.lmsBaseUrl}/logout`,
 	environment: EnvironmentTypes.DEVELOPMENT,
 	// commonAppConfig (mitolHeader / mitolFooter) is loaded at runtime from the LMS
 	// frontend_site_config API rather than hardcoded here. The dev server proxies

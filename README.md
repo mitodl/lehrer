@@ -77,22 +77,42 @@ The port is declared rather than read out of `baseUrl` because the two answer
 different questions: the port is where webpack-dev-server listens on your
 machine, while `baseUrl` is where the browser reaches the app. They coincide
 only when a site gets a host to itself. An MFE served as a **sub-path of the
-LMS** — the topology ol-infrastructure deploys — has a `baseUrl` carrying the
-LMS origin and no port of its own. When `baseUrl` *does* name a port, the
-Tiltfile checks it matches, since a dev server listening anywhere else just
-serves a broken site.
+LMS** (the topology ol-infrastructure deploys) has a `baseUrl` carrying the LMS
+origin and no port of its own. When `baseUrl` *does* name a port, the Tiltfile
+checks it matches, since a dev server listening anywhere else just serves a
+broken site.
 
-Hostnames are per-deployment settings, not fixed requirements. The defaults
-above need no setup because upstream Open edX publishes `*.local.openedx.io` as
-a public A record pointing at `127.0.0.1` — but that makes hot reload depend on
-public DNS, so it breaks offline or behind a resolver that filters the name. To
-check before starting:
+Hostnames are a per-deployment setting, declared in
+`mfe_slot_config/frontend/shared/src/dev-hosts.json`:
+
+```json
+{
+  "lmsBaseUrl": "http://local.openedx.io:8000",
+  "sites": {
+    "mitx": "http://apps.local.openedx.io:8101",
+    "mitxonline": "http://apps.local.openedx.io:8102",
+    "xpro": "http://apps.local.openedx.io:8103"
+  }
+}
+```
+
+Every `site.config.dev.tsx` imports that file as `@shared/dev-hosts.json`, and
+both `lehrer dev check` and the Tiltfile read the same file, so changing a
+deployment's local-dev domain is one edit and the tooling cannot end up
+checking something the bundle was not built with.
+
+The defaults need no setup because upstream Open edX publishes
+`*.local.openedx.io` as a public A record pointing at `127.0.0.1`. That does
+make hot reload depend on public DNS, so it breaks offline or behind a resolver
+that filters the name. To check before starting:
 
 ```bash
 lehrer dev check --deployment-config ./deployments/mit-ol
 ```
 
-If a name does not resolve, map it to `127.0.0.1` in `/etc/hosts`.
+If a name does not resolve, either map it to `127.0.0.1` in `/etc/hosts` or
+point `dev-hosts.json` at a name that does. A deployment whose production LMS is
+`learn.mit.edu` may prefer a subdomain of it so local dev mirrors production.
 
 Secret values are read from the environment (`MYSQL_ROOT_PASSWORD`,
 `DJANGO_SECRET_KEY`, `MONGO_PASSWORD`, `PROVISION_SUPERUSER_PASSWORD`, ...) and

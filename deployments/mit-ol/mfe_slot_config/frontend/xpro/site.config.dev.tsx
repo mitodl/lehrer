@@ -6,6 +6,7 @@ import {
 	type SiteConfig,
 } from "@openedx/frontend-base";
 
+import devHosts from "@shared/dev-hosts.json";
 import { instructorDashboardApp } from "@openedx/frontend-app-instructor-dashboard";
 import { createMITOLFooterApp } from "@shared/footer";
 import { createXProHeaderApp } from "@shared/header";
@@ -18,10 +19,10 @@ const siteConfig: SiteConfig = {
 	siteId: "xpro",
 	siteName: "MIT xPRO (dev)",
 	basename: "/",
-	baseUrl: "http://apps.local.openedx.io:8103",
-	lmsBaseUrl: "http://local.openedx.io:8000",
-	loginUrl: "http://local.openedx.io:8000/login",
-	logoutUrl: "http://local.openedx.io:8000/logout",
+	baseUrl: devHosts.sites.xpro,
+	lmsBaseUrl: devHosts.lmsBaseUrl,
+	loginUrl: `${devHosts.lmsBaseUrl}/login`,
+	logoutUrl: `${devHosts.lmsBaseUrl}/logout`,
 	environment: EnvironmentTypes.DEVELOPMENT,
 	runtimeConfigJsonUrl: "/api/frontend_site_config/v1/",
 	apps: [

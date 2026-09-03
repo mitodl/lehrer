@@ -15,13 +15,21 @@ import "@openedx/frontend-base/shell/style";
 import "@shared/styles/mitx.scss";
 
 // xPRO nav model differs from mitxonline: the marketing site (xpro.mit.edu) is separate from
-// the LMS (courses.xpro.mit.edu). Production defaults — all fields are overridden at runtime
+// the LMS (courses.xpro.mit.edu). Production defaults; most fields are overridden at runtime
 // by /api/frontend_site_config/v1/, which reads from FRONTEND_SITE_CONFIG in the LMS configmap.
 const siteConfig: SiteConfig = {
 	siteId: "xpro",
 	siteName: "MIT xPRO",
 	basename: "/",
-	baseUrl: "https://apps.xpro.mit.edu",
+	// The origin this Site Project is served from, which is the LMS host: Fastly
+	// serves it under /apps there ('Handle Site Project routing' in
+	// ol-infrastructure applications/edxapp/__main__.py) rather than giving it a
+	// host of its own, and wrapWithAppsPath nests the routes to match, which is why
+	// basename stays "/". A default like the origins below it, replaced per
+	// environment by FRONTEND_SITE_CONFIG. It previously named apps.*.mit.edu, a
+	// placeholder from the original OEP-65 scaffold (5d68e40) that has never
+	// resolved.
+	baseUrl: "https://courses.xpro.mit.edu",
 	lmsBaseUrl: "https://courses.xpro.mit.edu",
 	loginUrl: "https://courses.xpro.mit.edu/login",
 	logoutUrl: "https://courses.xpro.mit.edu/logout",

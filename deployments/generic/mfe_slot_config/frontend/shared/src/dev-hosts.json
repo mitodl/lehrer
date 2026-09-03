@@ -1,0 +1,21 @@
+{
+  "//": [
+    "Local-dev hostnames for this deployment's Site Projects. The one place",
+    "to change them. Imported by every site.config.dev.tsx as",
+    "'@shared/dev-hosts.json', and read by lehrer-core.star and `lehrer dev",
+    "check` so the tooling and the bundle cannot disagree.",
+    "",
+    "The generic deployment stays on localhost so it depends on no name",
+    "resolution at all. An operator forking this deployment points these at",
+    "whatever names their developers use.",
+    "",
+    "The port in each site's baseUrl is where the browser reaches the app; the",
+    "port webpack-dev-server binds is declared separately in ../../dev-ports.yaml",
+    "for the reasons given there. lehrer-core.star fails the load when the two",
+    "disagree."
+  ],
+  "lmsBaseUrl": "http://localhost:8000",
+  "sites": {
+    "default": "http://localhost:8100"
+  }
+}

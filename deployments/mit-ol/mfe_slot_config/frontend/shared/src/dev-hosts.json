@@ -1,0 +1,27 @@
+{
+  "//": [
+    "Local-dev hostnames for this deployment's Site Projects. The one place",
+    "to change them. Imported by every site.config.dev.tsx as",
+    "'@shared/dev-hosts.json', and read by lehrer-core.star and `lehrer dev",
+    "check` so the tooling and the bundle cannot disagree.",
+    "",
+    "*.local.openedx.io needs no /etc/hosts entry: upstream Open edX publishes",
+    "it as a public wildcard A record pointing at 127.0.0.1. That makes hot",
+    "reload depend on public DNS, so it breaks offline or behind a resolver",
+    "that filters the name. `lehrer dev check --deployment-config` reports",
+    "that before you start. Point these at any name that resolves to 127.0.0.1",
+    "if you would rather not depend on it; a deployment whose production LMS is",
+    "learn.mit.edu may prefer a subdomain of it so local dev mirrors prod.",
+    "",
+    "The port in each site's baseUrl is where the browser reaches the app; the",
+    "port webpack-dev-server binds is declared separately in ../../dev-ports.yaml",
+    "for the reasons given there. lehrer-core.star fails the load when the two",
+    "disagree."
+  ],
+  "lmsBaseUrl": "http://local.openedx.io:8000",
+  "sites": {
+    "mitx": "http://apps.local.openedx.io:8101",
+    "mitxonline": "http://apps.local.openedx.io:8102",
+    "xpro": "http://apps.local.openedx.io:8103"
+  }
+}

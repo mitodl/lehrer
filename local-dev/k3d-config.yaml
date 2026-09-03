@@ -25,8 +25,11 @@ ports:
   nodeFilters: ["loadbalancer"]
 # MFE ingress for the *compiled* MFEs. 8090 rather than the conventional 8080
 # to avoid clashing with other local dev servers that commonly squat on 8080.
-# `lehrer dev setup` preflights this port; the baseUrl in each frontend
-# site.config.build.tsx must match it.
+# `lehrer dev setup` preflights this port. lehrer-core.star routes each compiled
+# site here by host, as <site>.localhost, so a build config that gives its MFE a
+# host of its own must name that address to be reachable in local dev. A
+# deployment that serves MFEs as a sub-path of the LMS instead (mit-ol) carries
+# the LMS origin and is reached through the LMS ingress, not this one.
 #
 # site.config.dev.tsx is a separate matter: under `--mfe-hot-reload` the
 # compiled MFEs are not deployed at all, and each site's dev server binds its

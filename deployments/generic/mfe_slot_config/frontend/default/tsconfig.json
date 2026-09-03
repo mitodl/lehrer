@@ -3,11 +3,13 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@shared/*": ["./shared/src/*"]
     }
   },
   "include": [
     "src/**/*",
+    "./shared/src/**/*",
     "site.config.build.tsx",
     "site.config.dev.tsx"
   ]
