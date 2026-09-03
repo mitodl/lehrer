@@ -5,10 +5,12 @@ import ast
 import pytest
 
 from lehrer.core.platform import (
+    _deployment_overrides_reapply,
+    _edx_base_deps_script,
+    _edx_platform_editable_install,
+    _edx_testing_deps_script,
     _FAILURE_OUTPUT_CHARS,
     _derive_test_settings,
-    _edx_base_deps_script,
-    _edx_testing_deps_script,
     _test_paths,
     _TestRunFailed,
 )
@@ -132,3 +134,37 @@ def test_edx_testing_deps_script() -> None:
     assert "--group testing" in script
     # legacy branch: same testing.txt the pre-migration path installed.
     assert "uv pip install -r requirements/edx/testing.txt" in script
+
+
+def test_edx_platform_editable_install_is_no_deps() -> None:
+    # Load-bearing, and the reason this command is centralized rather than
+    # repeated at its three call sites. Without --no-deps the editable install
+    # re-resolves edx-platform's own declared dependencies from the index and
+    # silently discards the deployment overrides applied beforehand: master's
+    # pyproject.toml declares openedx-forum, so a git+ override of it was
+    # replaced by the indexed pin and the built image carried none of the
+    # branch's code, while release/verawood (whose pyproject declares only
+    # setuptools) kept it.
+    cmd = _edx_platform_editable_install()
+    assert "--no-deps" in cmd
+    assert cmd[-2:] == ["-e", "."]
+
+
+def test_edx_platform_editable_install_returns_a_fresh_list() -> None:
+    # Callers hand this straight to with_exec; a shared mutable default would
+    # let one call site's mutation leak into the others.
+    first = _edx_platform_editable_install()
+    first.append("--mutated")
+    assert "--mutated" not in _edx_platform_editable_install()
+
+
+def test_deployment_overrides_reapply_targets_the_cell_file() -> None:
+    cmd = _deployment_overrides_reapply("master", "mitxonline")
+    assert cmd[:3] == ["uv", "pip", "install"]
+    assert "-r" in cmd
+    assert cmd[-1] == "/root/pip_package_overrides/master/mitxonline.txt"
+    # Only the -r file: the source-built lxml/xmlsec from the initial overrides
+    # install already satisfy the versions pinned there, so uv leaves them
+    # alone instead of replacing them with wheels.
+    assert "--no-binary" not in cmd
+    assert "lxml" not in cmd
