@@ -894,6 +894,25 @@ class OpenedxPlatform:
             .with_mounted_directory(
                 "/root/pip_package_overrides", pip_package_overrides
             )
+            # `uv run` resyncs the active venv against pyproject.toml/uv.lock
+            # before running anything, unless told not to -- and it is not
+            # only this module's own `with_exec`s that can invoke it. On
+            # master, edx-platform's own package.json runs `compile-sass` as
+            # `uv run --active python scripts/compile_sass.py`, entirely
+            # outside this pipeline's control, and that resync silently
+            # reverts a deployment override of any package master's
+            # pyproject.toml declares -- discovered when it took a git-based
+            # override of a package master's pyproject.toml declares back to
+            # its uv.lock-pinned version partway through build_static_assets(),
+            # after both the overrides step and the --no-deps editable install
+            # had already run and left the right version in place.
+            # release/verawood's compile-sass script is a plain
+            # `scripts/compile_sass.py`, no `uv run`, which is why that release
+            # line never showed this. Set once, here, so it protects every
+            # `uv run` for the rest of this container's life, not only the one
+            # call site found so far -- it has no effect on the explicit
+            # `uv sync` below, whose own flags govern that invocation.
+            .with_env_variable("UV_NO_SYNC", "1")
             # Install base + assets (+ dev) deps from edx-platform (uv sync
             # against uv.lock, or the legacy pip-compile .txt, whichever the
             # checkout has), then layer the deployment's own pinned package
@@ -2007,6 +2026,13 @@ class OpenedxPlatform:
                 "PATH",
                 "/openedx/venv/bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin",
             )
+            # Re-carry UV_NO_SYNC too: only directories, not env vars, cross
+            # from `deps` to this fresh apt_base(). Without it,
+            # build_static_assets()'s `npm run compile-sass` runs master
+            # edx-platform's own `uv run --active python scripts/compile_sass.py`
+            # unprotected, and that resyncs the venv against uv.lock -- see
+            # install_deps() for what that silently undoes.
+            .with_env_variable("UV_NO_SYNC", "1")
         )
 
         # Locales run on the clean base (not the deps chain)
