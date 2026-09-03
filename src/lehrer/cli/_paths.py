@@ -72,3 +72,13 @@ def k3d_config() -> Path:
 def namespace_manifest() -> Path:
     """Return the path to the openedx namespace manifest."""
     return local_dev_dir() / "manifests" / "namespace.yaml"
+
+
+def secret_defaults() -> Path:
+    """Return the path to the shared openedx-secrets defaults.
+
+    Shared with ``lehrer-core.star``'s ``manage_secrets``, so a Tilt caller
+    composing this stack into its own cluster creates the same Secret this
+    CLI does.
+    """
+    return local_dev_dir() / "secret-defaults.yaml"

@@ -28,6 +28,14 @@
 #     "helm_override_dir": "",   # path to dir with override Helm values, or ""
 #     "local_dev_dir":   "/abs/path/to/lehrer/local-dev",
 #     "apply_platform_configmaps": True,  # False when caller applies its own
+#     # Paths to any ConfigMaps the caller layers over lms-config/cms-config
+#     # (the *-config-overrides read last in envFrom). Folded into the pod
+#     # fingerprint so editing one rolls the platform pods; [] when none.
+#     "config_override_paths": [],
+#     # Create the openedx-secrets Secret from local-dev/secret-defaults.yaml.
+#     # True for a caller whose cluster does not already have it (anyone not
+#     # running `lehrer dev setup`, which creates it from the same file).
+#     "manage_secrets":  False,
 #   })
 
 load("ext://helm_resource", "helm_resource", "helm_repo")
@@ -96,6 +104,37 @@ def _dev_server_ports(frontend_dir, site_projects):
         ports[site_name] = str(declared[site_name])
     return ports
 
+def secret_manifest(local_dev, namespace):
+    """Build the openedx-secrets Secret from the shared secret-defaults.yaml.
+
+    The same file `lehrer dev setup` reads, so a caller composing this stack
+    into a cluster it already owns gets a Secret identical to the one lehrer's
+    own cluster gets, instead of hand-maintaining a second copy that drifts.
+
+    Values come from the environment when set, falling back to the committed
+    local-dev default. stringData keeps them literal — no base64 in Starlark.
+    """
+    path = local_dev + "/secret-defaults.yaml"
+    parsed = decode_yaml(read_file(path))
+
+    data = {}
+    for entry in parsed["secrets"]:
+        key = entry["key"]
+        data[key] = str(os.environ.get(key, entry["default"]))
+    # A mirrored key copies the resolved source value, so an override reaches
+    # both it and its source.
+    for entry in parsed.get("mirrors") or []:
+        data[entry["key"]] = data[entry["from"]]
+
+    return encode_yaml({
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": "openedx-secrets", "namespace": namespace},
+        "type": "Opaque",
+        "stringData": data,
+    })
+
+
 def setup(cfg):
     """Deploy the full Open edX local dev stack from the given configuration."""
 
@@ -120,6 +159,8 @@ def setup(cfg):
     helm_override_dir = cfg["helm_override_dir"]
     local_dev = cfg["local_dev_dir"]
     apply_configmaps = cfg["apply_platform_configmaps"]
+    manage_secrets = cfg["manage_secrets"]
+    config_override_paths = cfg["config_override_paths"]
 
     # Lehrer core source — injected directly into the container by inject_aqueduct_settings
     # (dag.current_module().source().file("src/lehrer/settings/base.py")).
@@ -171,6 +212,19 @@ def setup(cfg):
         labels=["infra"],
     )
 
+    # The MariaDB CR reads MYSQL_ROOT_PASSWORD from this Secret and the MongoDB
+    # CR reads MONGO_PASSWORD, so it has to land before either operator CR is
+    # applied — hence its own resource, named in their resource_deps below.
+    secret_deps = []
+    if manage_secrets:
+        k8s_yaml(secret_manifest(local_dev, namespace))
+        k8s_resource(
+            new_name="openedx-secrets",
+            objects=["openedx-secrets:Secret:" + namespace],
+            labels=["infra"],
+        )
+        secret_deps = ["openedx-secrets"]
+
     if manage_infra or mysql_managed:
         # Install the MariaDB operator in its own namespace, then apply the
         # MariaDB CR (+ Database/Grant CRs) in the application namespace.
@@ -196,7 +250,7 @@ def setup(cfg):
                 "edxapp-grant-notes:Grant:openedx",
                 "edxapp-grant-csmh:Grant:openedx",
             ],
-            resource_deps=["mariadb-operator"],
+            resource_deps=["mariadb-operator"] + secret_deps,
             labels=["infra"],
         )
 
@@ -219,7 +273,7 @@ def setup(cfg):
             objects=[
                 "mongodb:MongoDBCommunity:openedx",
             ],
-            resource_deps=["mongodb-operator"],
+            resource_deps=["mongodb-operator"] + secret_deps,
             labels=["infra"],
         )
 
@@ -501,10 +555,42 @@ def setup(cfg):
     )).replace("__RELEASE_NAME__", release_name)))
     k8s_yaml(local_dev + "/manifests/platform/service-lms.yaml")
     k8s_yaml(local_dev + "/manifests/platform/service-cms.yaml")
-    k8s_yaml(local_dev + "/manifests/platform/deployment-lms.yaml")
-    k8s_yaml(local_dev + "/manifests/platform/deployment-cms.yaml")
-    k8s_yaml(local_dev + "/manifests/platform/deployment-worker.yaml")
-    k8s_yaml(local_dev + "/manifests/platform/deployment-cms-worker.yaml")
+
+    # Stamp a config hash into every platform pod template, same reason as the
+    # notes deployment above: envFrom does not trigger a rollout, so without
+    # this a config edit updates the ConfigMap and leaves every running pod on
+    # the old values — silently, since nothing reports it.
+    #
+    # Covers the caller's override ConfigMaps as well as ours. A composing
+    # caller applies those itself, so hashing only our files would miss exactly
+    # the edits that caller makes most often.
+    platform_config_files = []
+    if apply_configmaps:
+        platform_config_files.append(
+            local_dev + "/manifests/platform/configmap-lms.yaml")
+        platform_config_files.append(
+            local_dev + "/manifests/platform/configmap-cms.yaml")
+    platform_config_files.extend(config_override_paths)
+
+    if platform_config_files:
+        # read_file registers a Tilt watch on each path, so an edit re-runs the
+        # Tiltfile and recomputes this; `cat` alone would hash the file without
+        # ever being told it changed.
+        platform_config_checksum = str(hash("\n".join(
+            [str(read_file(path)) for path in platform_config_files]
+        )))
+    else:
+        platform_config_checksum = "none"
+
+    for name in [
+        "deployment-lms.yaml",
+        "deployment-cms.yaml",
+        "deployment-worker.yaml",
+        "deployment-cms-worker.yaml",
+    ]:
+        k8s_yaml(blob(str(read_file(
+            local_dev + "/manifests/platform/" + name
+        )).replace("__PLATFORM_CONFIG_CHECKSUM__", platform_config_checksum)))
 
     # Run DB migrations once the database is up, before the services start.
     k8s_resource(

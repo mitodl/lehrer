@@ -11,6 +11,11 @@ spec:
       app: lms-worker
   template:
     metadata:
+      annotations:
+        # Replaced by lehrer-core.star with a hash of the platform
+        # ConfigMaps (ours plus any caller overrides). Changing it is
+        # what rolls the pod, since envFrom alone never does.
+        lehrer.mit.edu/config-checksum: "__PLATFORM_CONFIG_CHECKSUM__"
       labels:
         app: lms-worker
     spec:
@@ -35,6 +40,13 @@ spec:
             name: lms-config
         - secretRef:
             name: openedx-secrets
+        # Last wins: a caller composing this stack into its own cluster
+        # supplies only the keys it needs to change (shared Valkey/
+        # OpenSearch hosts, public URLs) instead of copying the whole
+        # ConfigMap above and drifting from it.
+        - configMapRef:
+            name: lms-config-overrides
+            optional: true
         livenessProbe:
           exec:
             command:

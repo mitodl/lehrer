@@ -23,6 +23,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 import cyclopts
+import yaml
 
 from lehrer.cli import _paths
 from lehrer.cli._proc import capture, capture_result, have, pipe, run
@@ -54,18 +55,22 @@ _HELM_REPOS: tuple[tuple[str, str], ...] = (
     ("valkey", "https://valkey.io/valkey-helm/"),
 )
 
-# Safe local-dev secret defaults; override via the matching environment vars.
-_SECRET_DEFAULTS: tuple[tuple[str, str], ...] = (
-    ("MYSQL_ROOT_PASSWORD", "openedx-dev"),
-    ("MYSQL_PASSWORD", "openedx-dev"),
-    ("DJANGO_SECRET_KEY", "insecure-local-dev-key-change-for-staging"),
-    ("MONGO_PASSWORD", "openedx-dev"),
-    ("NOTES_OAUTH_CLIENT_ID", "notes"),
-    ("NOTES_OAUTH_CLIENT_SECRET", "notes-dev-secret"),
-    # Consumed by the edxapp-provision Job; the username and email it pairs
-    # with live in job-provision.yaml, since neither is secret.
-    ("PROVISION_SUPERUSER_PASSWORD", "edx"),
-)
+
+def _load_secret_defaults() -> tuple[
+    tuple[tuple[str, str], ...], tuple[tuple[str, str], ...]
+]:
+    """Return ``(defaults, mirrors)`` from local-dev/secret-defaults.yaml.
+
+    Read at call time rather than import time so a test (or a caller pointing
+    LEHRER_REPO_ROOT elsewhere) sees the file it actually has on disk.
+    """
+    parsed = yaml.safe_load(_paths.secret_defaults().read_text())
+    defaults = tuple((entry["key"], entry["default"]) for entry in parsed["secrets"])
+    mirrors = tuple(
+        (entry["key"], entry["from"]) for entry in parsed.get("mirrors") or ()
+    )
+    return defaults, mirrors
+
 
 # Matches PROVISION_SUPERUSER_USERNAME in
 # local-dev/manifests/platform/job-provision.yaml.
@@ -608,14 +613,14 @@ def setup() -> None:
     previous_root_password = _stored_secret_value("MYSQL_ROOT_PASSWORD")
 
     print("==> Creating openedx-secrets Secret...")
-    secret_args = [
-        f"--from-literal={key}={os.environ.get(key, default)}"
-        for key, default in _SECRET_DEFAULTS
-    ]
-    # DB_PASSWORD mirrors MYSQL_PASSWORD (kept in sync with the old setup.sh).
-    secret_args.append(
-        f"--from-literal=DB_PASSWORD={os.environ.get('MYSQL_PASSWORD', 'openedx-dev')}"
-    )
+    defaults, mirrors = _load_secret_defaults()
+    resolved = {key: os.environ.get(key, default) for key, default in defaults}
+    # A mirrored key copies the *resolved* source value, so an override or a
+    # changed default reaches both. Reading the environment for the mirror's
+    # own name again here is what let DB_PASSWORD drift from MYSQL_PASSWORD.
+    for key, source in mirrors:
+        resolved[key] = resolved[source]
+    secret_args = [f"--from-literal={key}={value}" for key, value in resolved.items()]
     pipe(
         [
             "kubectl",
@@ -635,9 +640,13 @@ def setup() -> None:
 
     _warn_on_stale_mariadb_secret_ref()
     _warn_on_uncollated_edxapp_database()
+    # The value actually written above, not a second reading of the
+    # environment: re-deriving it here with its own fallback is what would let
+    # a changed default silently skip the warning (previous == current) on the
+    # very run that changes it.
     _warn_on_init_only_root_password(
         previous_root_password,
-        os.environ.get("MYSQL_ROOT_PASSWORD", "openedx-dev"),
+        resolved["MYSQL_ROOT_PASSWORD"],
     )
     _warn_on_schema_collation_drift()
 

@@ -136,7 +136,7 @@ class TestProvisioningManifests:
         assert env["PROVISION_SUPERUSER_USERNAME"] == local_dev._SUPERUSER_USERNAME
 
     def test_secret_supplies_every_env_var_the_job_requires(self) -> None:
-        provisioned = {key for key, _ in local_dev._SECRET_DEFAULTS}
+        provisioned = {key for key, _ in local_dev._load_secret_defaults()[0]}
         # provision.py indexes these directly rather than defaulting them.
         assert {
             "PROVISION_SUPERUSER_PASSWORD",
@@ -160,7 +160,7 @@ class TestOperatorSecretRefs:
     """The infra operators must read their passwords from openedx-secrets.
 
     A CR carrying its own hardcoded password silently ignores the matching
-    environment override in ``_SECRET_DEFAULTS``, leaving the operator's
+    environment override in ``secret-defaults.yaml``, leaving the operator's
     account disagreeing with the value every other component is handed.
     """
 
@@ -173,7 +173,7 @@ class TestOperatorSecretRefs:
         mariadb = next(d for d in self._docs("mariadb.yaml") if d["kind"] == "MariaDB")
         ref = mariadb["spec"]["rootPasswordSecretKeyRef"]
         assert ref["name"] == "openedx-secrets"
-        assert ref["key"] in {key for key, _ in local_dev._SECRET_DEFAULTS}
+        assert ref["key"] in {key for key, _ in local_dev._load_secret_defaults()[0]}
 
     def test_mongodb_user_password_comes_from_openedx_secrets(self) -> None:
         mongodb = next(
@@ -181,7 +181,7 @@ class TestOperatorSecretRefs:
         )
         ref = mongodb["spec"]["users"][0]["passwordSecretRef"]
         assert ref["name"] == "openedx-secrets"
-        assert ref["key"] in {key for key, _ in local_dev._SECRET_DEFAULTS}
+        assert ref["key"] in {key for key, _ in local_dev._load_secret_defaults()[0]}
 
     def test_no_infra_manifest_ships_its_own_password_secret(self) -> None:
         for name in ("mariadb.yaml", "mongodb.yaml"):
@@ -915,3 +915,189 @@ class TestMFEDevHostnames:
             _paths.repo_root() / "deployments/generic"
         )
         assert set(hostnames.values()) == {"localhost"}
+
+
+class TestSharedSecretDefaults:
+    """secret-defaults.yaml is the one definition both consumers read.
+
+    The CLI loads it here; ``setup()``'s ``manage_secrets`` in
+    lehrer-core.star reads the same file so a Tilt caller composing this
+    stack into its own cluster creates an identical Secret. These tests pin
+    the contract between the two, since only one of them is exercised by the
+    Python suite.
+    """
+
+    def test_star_and_cli_read_the_same_file(self) -> None:
+        star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
+        assert '"/secret-defaults.yaml"' in star
+        assert _paths.secret_defaults().exists()
+
+    def test_mirrors_resolve_to_their_source_value(self) -> None:
+        defaults, mirrors = local_dev._load_secret_defaults()
+        keys = {key for key, _ in defaults}
+        for key, source in mirrors:
+            # A mirror naming a missing source would silently KeyError at
+            # cluster-creation time, long after the edit that caused it.
+            assert source in keys, f"{key} mirrors unknown key {source}"
+            assert key not in keys, f"{key} is both a default and a mirror"
+
+    def test_db_password_mirrors_mysql_password(self) -> None:
+        # Kept from the setup.sh this CLI replaced; edxapp reads DB_PASSWORD
+        # while the MariaDB Grant reads MYSQL_PASSWORD, and they must agree.
+        _, mirrors = local_dev._load_secret_defaults()
+        assert ("DB_PASSWORD", "MYSQL_PASSWORD") in mirrors
+
+
+class TestConfigOverrideLayer:
+    """Each platform manifest offers an optional <variant>-config-overrides.
+
+    A caller composing this stack into a cluster it already runs supplies only
+    the keys it needs to change; without this layer it would have to copy the
+    whole ConfigMap and then track every key added here.
+    """
+
+    @staticmethod
+    def _env_from_blocks(name: str) -> list[list[dict[str, Any]]]:
+        path = _paths.local_dev_dir() / "manifests" / "platform" / name
+        docs = [d for d in yaml.safe_load_all(path.read_text()) if d]
+        blocks = []
+        for doc in docs:
+            spec = doc["spec"]["template"]["spec"]
+            for container in spec["containers"] + spec.get("initContainers", []):
+                if container.get("envFrom"):
+                    blocks.append(container["envFrom"])
+        return blocks
+
+    @pytest.mark.parametrize(
+        ("manifest", "variant"),
+        [
+            ("deployment-lms.yaml", "lms"),
+            ("deployment-cms.yaml", "cms"),
+            ("deployment-worker.yaml", "lms"),
+            ("deployment-cms-worker.yaml", "cms"),
+            ("job-migrate.yaml", "lms"),
+            ("job-provision.yaml", "lms"),
+            # Reads cms-config, so its override must be the cms one — naming it
+            # from the filename gets this wrong.
+            ("job-demo-course.yaml", "cms"),
+        ],
+    )
+    def test_override_matches_the_base_configmap(
+        self, manifest: str, variant: str
+    ) -> None:
+        for block in self._env_from_blocks(manifest):
+            names = [
+                ref["configMapRef"]["name"] for ref in block if "configMapRef" in ref
+            ]
+            if f"{variant}-config" not in names:
+                continue
+            assert f"{variant}-config-overrides" in names, (
+                f"{manifest} reads {variant}-config but offers no matching override"
+            )
+
+    @pytest.mark.parametrize(
+        "manifest",
+        [
+            "deployment-lms.yaml",
+            "deployment-cms.yaml",
+            "deployment-worker.yaml",
+            "deployment-cms-worker.yaml",
+            "job-migrate.yaml",
+            "job-provision.yaml",
+            "job-demo-course.yaml",
+        ],
+    )
+    def test_override_is_last_and_optional(self, manifest: str) -> None:
+        for block in self._env_from_blocks(manifest):
+            overrides = [
+                i
+                for i, ref in enumerate(block)
+                if ref.get("configMapRef", {}).get("name", "").endswith("-overrides")
+            ]
+            if not overrides:
+                continue
+            # envFrom resolves in order, so an override that is not last loses
+            # to the very ConfigMap it exists to override.
+            assert overrides[-1] == len(block) - 1, f"{manifest}: override not last"
+            # Without optional, every consumer of this stack would be forced to
+            # create the ConfigMap even when overriding nothing.
+            assert block[overrides[-1]]["configMapRef"]["optional"] is True
+
+
+class TestRootPasswordWarningUsesTheWrittenValue:
+    """The warning must compare against the value actually put in the Secret.
+
+    Re-deriving MYSQL_ROOT_PASSWORD from the environment at the call site gives
+    it a second source of truth. Both agree only while the environment is unset
+    *and* the YAML default is unchanged; change the default and the run that
+    changes it compares old-default against old-default, concludes nothing
+    moved, and skips the warning — on exactly the run that needed it.
+    """
+
+    @staticmethod
+    def _warn_call() -> ast.Call:
+        source = Path(local_dev.__file__).read_text()
+        for node in ast.walk(ast.parse(source)):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "_warn_on_init_only_root_password"
+            ):
+                return node
+        pytest.fail("no call to _warn_on_init_only_root_password found")
+
+    def test_current_value_comes_from_the_resolved_mapping(self) -> None:
+        current = self._warn_call().args[1]
+        assert isinstance(current, ast.Subscript), ast.dump(current)
+        assert isinstance(current.value, ast.Name)
+        assert current.value.id == "resolved"
+        assert isinstance(current.slice, ast.Constant)
+        assert current.slice.value == "MYSQL_ROOT_PASSWORD"
+
+    def test_no_hardcoded_password_default_survives_in_the_module(self) -> None:
+        # secret-defaults.yaml is the only place a default belongs now.
+        source = Path(local_dev.__file__).read_text()
+        assert "openedx-dev" not in source
+
+
+class TestPlatformConfigChecksum:
+    """Platform pods must roll when their config changes.
+
+    envFrom never triggers a rollout, so without a changing pod-template
+    annotation an edit to lms-config/cms-config — or to a caller's
+    *-config-overrides — updates the ConfigMap and leaves every running pod on
+    the old values, with nothing reporting it.
+    """
+
+    PLACEHOLDER = "__PLATFORM_CONFIG_CHECKSUM__"
+    DEPLOYMENTS = (
+        "deployment-lms.yaml",
+        "deployment-cms.yaml",
+        "deployment-worker.yaml",
+        "deployment-cms-worker.yaml",
+    )
+
+    @pytest.mark.parametrize("manifest", DEPLOYMENTS)
+    def test_annotation_is_on_the_pod_template(self, manifest: str) -> None:
+        path = _paths.local_dev_dir() / "manifests" / "platform" / manifest
+        doc = next(d for d in yaml.safe_load_all(path.read_text()) if d)
+        # On the pod template, not the Deployment's own metadata — annotating
+        # the latter changes nothing about the pods.
+        annotations = doc["spec"]["template"]["metadata"]["annotations"]
+        assert annotations["lehrer.mit.edu/config-checksum"] == self.PLACEHOLDER
+
+    @pytest.mark.parametrize("manifest", DEPLOYMENTS)
+    def test_the_star_substitutes_this_manifest(self, manifest: str) -> None:
+        # A manifest carrying the placeholder that lehrer-core.star does not
+        # substitute would ship the literal string to the cluster, pinning the
+        # annotation to a constant and silently never rolling.
+        star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
+        assert self.PLACEHOLDER in star
+        assert manifest in star
+
+    def test_overrides_are_folded_into_the_checksum(self) -> None:
+        # Hashing only lehrer's own ConfigMaps would miss exactly the edits a
+        # composing caller makes most often — its override files.
+        star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
+        assert "config_override_paths" in star
+        assert "platform_config_files.extend(config_override_paths)" in star
