@@ -553,6 +553,16 @@ def _edx_testing_deps_script() -> str:
     Runs after ``install_deps`` has already layered the deployment's own
     packages into the environment, so ``python_deps_install_script``'s
     ``--inexact`` sync is what keeps those from being pruned back out.
+
+    ``--inexact`` does NOT, however, preserve a deployment override of a
+    package the checkout itself pins -- it only stops extraneous packages
+    being pruned. Both arms reconcile such a package back to the checkout's
+    own version: the sync arm to ``uv.lock`` (master locks
+    ``openedx-forum==0.4.3``) and the legacy arm to the requirements file
+    (release/verawood's ``requirements/edx/testing.txt`` pins
+    ``openedx-forum==0.4.2``). Callers must therefore re-apply the
+    deployment overrides after this script -- see
+    :func:`_deployment_overrides_reapply`.
     """
     return python_deps_install_script(
         workdir="/openedx/edx-platform",
@@ -560,6 +570,56 @@ def _edx_testing_deps_script() -> str:
         sync_groups=["testing"],
         legacy_installer=["uv", "pip", "install"],
     )
+
+
+def _edx_platform_editable_install() -> list[str]:
+    """Command installing edx-platform editable, without touching its deps.
+
+    edx-platform has to be installed as a *distribution*, not merely be
+    importable: its dist-info carries 133 entry points across 14 groups,
+    including every core XBlock (``xblock.v1``: problem, video, sequential,
+    vertical, ...) plus ``lms.djangoapp``/``cms.djangoapp`` and the console
+    scripts. Those are discovered by scanning installed distributions, so
+    without the install no course content renders.
+
+    Editable, because the build keeps writing into the tree afterwards --
+    :meth:`OpenedxPlatform.collected` injects the Django settings modules
+    under ``lms/envs/<namespace>/`` and ``cms/envs/<namespace>/`` after this
+    runs, and :meth:`OpenedxPlatform.inject_aqueduct_settings` adds more. A
+    non-editable install would snapshot site-packages first and none of that
+    would ever be importable.
+
+    ``--no-deps`` is load-bearing. Without it this re-resolves edx-platform's
+    own declared dependencies from the index and silently discards the
+    deployment overrides applied beforehand. master's ``pyproject.toml``
+    declares ``openedx-forum``, so a ``git+...#egg=openedx-forum`` override
+    was replaced by the indexed pin and the built image carried none of the
+    branch's code -- while release/verawood, whose ``pyproject.toml``
+    declares only ``dependencies = ["setuptools"]``, kept it. Dependencies
+    are already installed by :func:`_edx_base_deps_script` and then the
+    overrides step, so there is nothing here to resolve; this install only
+    has to register the distribution.
+    """
+    return ["uv", "pip", "install", "--no-deps", "-e", "."]
+
+
+def _deployment_overrides_reapply(release_name: str, deployment_name: str) -> list[str]:
+    """Command re-applying a cell's overrides as the final dependency layer.
+
+    For use after any step that can reconcile packages back to the
+    checkout's own pins -- currently :func:`_edx_testing_deps_script`. Only
+    the ``-r`` file is passed, deliberately: the source-built lxml/xmlsec
+    from the initial overrides install already satisfy the versions pinned
+    there, so uv leaves them alone rather than replacing them with wheels.
+    """
+    return [
+        "uv",
+        "pip",
+        "install",
+        "--no-cache-dir",
+        "-r",
+        f"/root/pip_package_overrides/{release_name}/{deployment_name}.txt",
+    ]
 
 
 @object_type
@@ -1084,10 +1144,12 @@ class OpenedxPlatform:
             "/openedx/venv/bin:/openedx/bin:/openedx/edx-platform/node_modules/.bin:/openedx/nodeenv/bin:/usr/local/bin:/usr/bin:/bin",
         )
 
-        # Install edx-platform in editable mode using uv
+        # Install edx-platform in editable mode using uv. The settings modules
+        # written into the tree below are exactly why this must be editable --
+        # see _edx_platform_editable_install() for that and for why --no-deps.
         container = (
             container.with_workdir("/openedx/edx-platform")
-            .with_exec(["uv", "pip", "install", "-e", "."])
+            .with_exec(_edx_platform_editable_install())
             .with_exec(
                 [
                     "mkdir",
@@ -1727,8 +1789,11 @@ class OpenedxPlatform:
             ]
         )
 
+        # --no-deps so this editable install cannot re-resolve, and thereby
+        # undo, the overrides applied immediately above -- see
+        # _edx_platform_editable_install() for the failure it prevents.
         return container.with_workdir("/openedx/edx-platform").with_exec(
-            ["uv", "pip", "install", "-e", "."]
+            _edx_platform_editable_install()
         )
 
     @function
@@ -2554,10 +2619,24 @@ class OpenedxPlatform:
         # Editable install (so lms/cms and their console entry points resolve)
         # plus edx-platform's own test requirements (pytest, pytest-django,
         # factory_boy, ...).
+        #
+        # --no-deps for the same reason as the build path: install_deps above
+        # has already installed the dependency set and applied the deployment
+        # overrides, and re-resolving here would quietly revert them -- leaving
+        # the suite testing packages the shipped image does not contain.
+        #
+        # The testing deps step reverts them too, which --no-deps alone does
+        # not prevent: both of its arms reconcile a package the checkout pins
+        # back to the checkout's own version (uv.lock on master,
+        # requirements/edx/testing.txt on the legacy releases), and --inexact
+        # only stops extraneous packages being pruned. So re-apply the
+        # deployment overrides afterwards, keeping them the final dependency
+        # layer and the test environment faithful to the shipped image.
         container = (
             container.with_workdir("/openedx/edx-platform")
-            .with_exec(["uv", "pip", "install", "-e", "."])
+            .with_exec(_edx_platform_editable_install())
             .with_exec(["sh", "-c", _edx_testing_deps_script()])
+            .with_exec(_deployment_overrides_reapply(release_name, deployment_name))
         )
 
         # When folding the plugins' own suites into this run, derive the plugin
