@@ -1,0 +1,45 @@
+---
+# Upstream frontend-base landing watch list for MIT Open Learning.
+#
+# Read by `lehrer upstream frontend-base-status`.  Each entry names an upstream
+# MFE repository and the OL deployments whose *legacy* MFE build tracks that
+# repository's default branch — the builds a frontend-base landing breaks,
+# because after the merge the default branch is an npm module library and no
+# longer produces a servable webpack bundle.
+#
+# ol-infrastructure `src/bridge/settings/openedx/version_matrix.py` is the
+# source of truth for what each deployment builds.  This file only records the
+# exposure, so keep `exposed_deployments` in step with the `release=` and
+# `branch_override=` values there.  A deployment pinned to a release branch
+# (`release="verawood"` -> `release/verawood`) is insulated and is deliberately
+# not listed.
+#
+# Verified against version_matrix.py @ 92ad0bdbd on 2026-09-01.
+repos:
+- repo: openedx/frontend-app-admin-console
+  exposed_deployments: [mitxonline]
+- repo: openedx/frontend-app-authoring
+  exposed_deployments: [mitxonline]
+- repo: openedx/frontend-app-communications
+  exposed_deployments: [mitxonline]
+- repo: openedx/frontend-app-discussions
+  exposed_deployments: [mitxonline]
+- repo: openedx/frontend-app-gradebook
+  exposed_deployments: [mitxonline]
+- repo: openedx/frontend-app-learning
+  exposed_deployments: [mitxonline]
+- repo: openedx/frontend-app-ora-grading
+  exposed_deployments: [mitxonline]
+
+# version_matrix.py declares this one with branch_override="main", which is the
+# repository's default branch, so these deployments are exposed exactly as if
+# they tracked master.  It has already landed; see the `instructor` rows in
+# version_matrix.py.
+- repo: openedx/frontend-app-instructor-dashboard
+  exposed_deployments: [mitxonline, mitx, mitx-staging]
+
+# Built only at release="verawood" today, so no deployment is exposed, but the
+# Site Projects will consume the module library and mitx/xpro move to Willow
+# eventually.  Watched, not urgent.
+- repo: openedx/frontend-app-learner-dashboard
+  exposed_deployments: []
