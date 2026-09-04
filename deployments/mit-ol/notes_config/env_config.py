@@ -25,8 +25,30 @@ REQUIRED_ENV_VARS = [
     "DJANGO_SECRET_KEY",
     "OAUTH_CLIENT_ID",
     "OAUTH_CLIENT_SECRET",
-    "ELASTICSEARCH_DSL_HOST",
 ]
+
+# Search backend selection. notesapi/v1/views/__init__.py resolves the search
+# view from these two flags: Elasticsearch when ES_DISABLED is false,
+# Meilisearch when it is true and MEILISEARCH_ENABLED is true, otherwise a
+# LIKE query over the Note model in the application database.
+ES_DISABLED = os.environ.get("ELASTICSEARCH_DSL_DISABLED", "false").lower() == "true"
+MEILISEARCH_ENABLED = os.environ.get("MEILISEARCH_ENABLED", "false").lower() == "true"
+
+if MEILISEARCH_ENABLED and not ES_DISABLED:
+    # views/__init__.py only consults MEILISEARCH_ENABLED inside its
+    # ES_DISABLED branch, so this combination silently keeps serving
+    # Elasticsearch. Refuse it rather than let the deployment believe it
+    # switched.
+    msg = (
+        "MEILISEARCH_ENABLED requires ELASTICSEARCH_DSL_DISABLED=true; "
+        "Meilisearch is only consulted when Elasticsearch is disabled."
+    )
+    raise ImproperlyConfigured(msg)
+
+if not ES_DISABLED:
+    REQUIRED_ENV_VARS.append("ELASTICSEARCH_DSL_HOST")
+if MEILISEARCH_ENABLED:
+    REQUIRED_ENV_VARS.append("MEILISEARCH_API_KEY")
 
 # Validate required environment variables
 missing_vars = [var for var in REQUIRED_ENV_VARS if not os.environ.get(var)]
@@ -73,8 +95,6 @@ for override, value in DB_OVERRIDES.items():
     DATABASES["default"][override] = value
 
 # Elasticsearch Configuration
-ES_DISABLED = os.environ.get("ELASTICSEARCH_DSL_DISABLED", "false").lower() == "true"
-
 if not ES_DISABLED:
     ELASTICSEARCH_DSL = {
         "default": {
@@ -90,6 +110,21 @@ if not ES_DISABLED:
     }
 else:
     ELASTICSEARCH_DSL = {}
+    # notesserver.settings.common sets its own ES_DISABLED = False at import
+    # time, so the star-import above has already put ES_APPS into
+    # INSTALLED_APPS regardless of what this module decides. Left there,
+    # django_elasticsearch_dsl's AppConfig.ready() installs RealTimeSignalProcessor
+    # on Note save/delete. That is inert today only because NoteDocument is
+    # reachable solely through views/elasticsearch.py, which is not imported
+    # when ES is off -- an accident of import order, not a guarantee. Drop the
+    # apps so no signal handler is registered in the first place.
+    INSTALLED_APPS = [app for app in INSTALLED_APPS if app not in ES_APPS]  # noqa: F405
+
+# Meilisearch Configuration
+if MEILISEARCH_ENABLED:
+    MEILISEARCH_URL = os.environ.get("MEILISEARCH_URL", "http://meilisearch:7700")
+    MEILISEARCH_API_KEY = os.environ["MEILISEARCH_API_KEY"]
+    MEILISEARCH_INDEX = os.environ.get("MEILISEARCH_INDEX", "student_notes")
 
 # Storage Configuration
 STORAGES = {
