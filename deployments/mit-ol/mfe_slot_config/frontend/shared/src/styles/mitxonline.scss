@@ -32,13 +32,9 @@
     display: none !important;
   }
 
-  // The learning header's logo box. These declarations come from
-  // frontend-app-learning's own src/index.scss (`header .logo`) rather than the
-  // shared header component or the slot config, so a Site Project that is not
-  // the learning MFE has to restate them or the logo sits 1px high with no gap
-  // after it. A 1.75rem content-box holding the 24px image, nudged down 0.1em;
-  // the 1rem right margin plus the lockup's 10px left margin is the 26px
-  // logo-to-title gap the learning header has.
+  // The learning header's logo box, which lives in frontend-app-learning's own
+  // src/index.scss and so is missing from any other Site Project. Its 1rem
+  // margin plus the lockup's 10px is the 26px logo-to-title gap.
   .logo {
     display: block !important;
     box-sizing: content-box !important;
@@ -69,10 +65,8 @@
     margin-left: 10px !important;
     min-width: 0;
 
-    // frontend-component-header applies these under `.learning-header`, a class
-    // the frontend-base shell's header does not carry. Without them a long
-    // course title runs on instead of truncating, and the two lines sit 1.6px
-    // tighter than in the learning header.
+    // From frontend-component-header's `.learning-header` block, which the
+    // shell's header does not match: truncation, plus 1.6px of line spacing.
     span {
       white-space: nowrap;
       overflow: hidden;

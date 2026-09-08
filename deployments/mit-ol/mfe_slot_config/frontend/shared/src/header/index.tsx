@@ -55,12 +55,9 @@ const WIDGET = {
 // ---------------------------------------------------------------------------
 
 /**
- * The course info lockup (org + number over the course title) that
- * @openedx/frontend-app-instructor-dashboard appends to the header's
- * primaryLinks slot. `slotShowcase.headerLink` is the id the package actually
- * registers — an upstream copy-paste artifact from frontend-base's slot
- * showcase, not a name we chose — and it is the only handle we have on that
- * widget. Keep it in step with `slots.ts` in that package when bumping it.
+ * Course info lockup @openedx/frontend-app-instructor-dashboard appends to
+ * primaryLinks. The showcase-looking id is the one it really registers — check
+ * its `slots.ts` on a version bump.
  */
 const INSTRUCTOR_DASHBOARD_COURSE_INFO_WIDGET =
 	"org.openedx.frontend.widget.slotShowcase.headerLink";
@@ -85,12 +82,8 @@ function useMITOLHeaderConfig(): MITOLHeaderConfig {
 }
 
 // ---------------------------------------------------------------------------
-// Narrow-viewport detection
-//
-// 991px is the width at which the mitxonline SCSS hides the standalone
-// Dashboard button (`@media (max-width: 991px)`), so anything keyed off this
-// hook flips over exactly when that button disappears. It is the same
-// breakpoint the legacy header's isMobile() used (MOBILE_BREAKPOINT = 991).
+// Narrow-viewport detection. 991px is where mitxonline.scss hides the
+// standalone Dashboard button, and the breakpoint legacy's isMobile() used.
 // ---------------------------------------------------------------------------
 
 const MOBILE_MEDIA_QUERY = "(max-width: 991px)";
@@ -104,8 +97,7 @@ function useIsNarrowViewport(): boolean {
 	useEffect(() => {
 		if (typeof window === "undefined") return undefined;
 		const mediaQueryList = window.matchMedia(MOBILE_MEDIA_QUERY);
-		// Re-sync on mount: the initial state was computed before this effect ran,
-		// and the width can change between the two (hydration, orientation change).
+		// The width can change between the initial state and this effect running.
 		setIsNarrow(mediaQueryList.matches);
 		const handleChange = (event: MediaQueryListEvent) =>
 			setIsNarrow(event.matches);
@@ -219,12 +211,9 @@ interface InstructorDashboardCourseInfo {
 }
 
 /**
- * Course org / number / title for the header, from the LMS instructor API.
- *
- * The instructor dashboard's own `useCourseInfo` is internal to the package
- * (only `.` is exported), so this re-declares the query — but under the same
- * cache key that hook uses, so the two share one cache entry and the header
- * does not issue a second request alongside the Course Info page.
+ * Course org / number / title from the LMS instructor API. The instructor
+ * dashboard's own `useCourseInfo` is not exported, so this repeats the query
+ * under the same cache key — one cache entry, one request.
  */
 function useInstructorDashboardCourseInfo(courseId: string) {
 	return useQuery<InstructorDashboardCourseInfo>({
@@ -247,24 +236,11 @@ function useInstructorDashboardCourseInfo(courseId: string) {
 // ---------------------------------------------------------------------------
 
 /**
- * Course info lockup for the instructor dashboard header, replacing the one
- * @openedx/frontend-app-instructor-dashboard registers.
- *
- * UAI / MIT Learn courses show the course title on its own; every other course
- * keeps the two-line org + number over title lockup. This mirrors the learning
- * header (addLearningCourseInfoSlotOverride in
- * legacy/mitxonline/common-mfe-config.env.jsx), which hides the default widget
- * and inserts a title-only one for those courses.
- *
- * Why they hide it is not recorded: that override and the slot table in
- * legacy/Readme.md both state the behaviour and not the reason, and it arrived
- * in a bulk slot-config import (7eb5519). Note it is not missing data -- the
- * values exist (course-v1:UAI_SOURCE+UAI111+UAI_11 reports org UAI_SOURCE,
- * number UAI111) -- so treat it as a product decision and check with the team
- * before extending the rule to other courses.
- *
- * Everything except the org/number line matches the upstream widget, so the
- * non-UAI header is unchanged.
+ * Course info lockup, replacing the one
+ * @openedx/frontend-app-instructor-dashboard registers: we hide the course
+ * number on UAI courses and show the title alone, as the learning header does
+ * (addLearningCourseInfoSlotOverride in legacy/mitxonline/common-mfe-config.env.jsx).
+ * Everything else is the upstream widget, so other courses are unchanged.
  */
 const MITxOnlineCourseInfo: FC = () => {
 	const { courseId = "" } = useParams();
@@ -273,48 +249,27 @@ const MITxOnlineCourseInfo: FC = () => {
 	const { org = "", courseNumber = "", displayName = "" } = data;
 	const showCourseNumber = isMITxOnlineCourse();
 	return (
-		// Same element as legacy's LearningHeaderCourseInfo: a plain `min-width: 0`
-		// div. The lockup wrapper around it (margin, font-size, line-height) is
-		// MITxOnlinePrimaryLinks, mirroring how LearningHeader wraps the slot.
-		//
-		// The 7px top padding in the title-only case is legacy's too: its UAI
-		// override adds it so the single line lands where the two-line lockup's
-		// title does, rather than centred in the row. Without it the UAI title
-		// sits 3px above the learning header's.
+		// Legacy's markup, including the 7px nudge that lands the single line
+		// where the two-line title sits rather than centred in the row.
 		<div style={{ minWidth: 0, paddingTop: showCourseNumber ? undefined : "7px" }}>
 			{showCourseNumber && (
 				<span className="d-block small m-0">
 					{org} {courseNumber}
 				</span>
 			)}
-			{/* No `font-weight-bold`, unlike the upstream widget and legacy's markup.
-			    Legacy carries the class but renders at 400 anyway: mitxonline-styles
-			    neutralises it with `.learning-header .font-weight-bold { font-weight:
-			    400 !important }`, which outranks Bootstrap's utility on specificity.
-			    frontend-base puts Paragon in a cascade layer, so that override no
-			    longer wins and the title came out bold — 700 against the learning
-			    header's 400. Omitting the class reaches the same computed weight
-			    without depending on a cascade fight we cannot win. */}
+			{/* No `font-weight-bold`: legacy neutralises it in SCSS, but Paragon sits
+			    in a cascade layer here, so that override loses and the title came
+			    out bold. */}
 			<span className="d-block m-0 course-title">{displayName}</span>
 		</div>
 	);
 };
 
 /**
- * Course-info lockup wrapper, replacing frontend-base's PrimaryNavLinks.
- *
- * PrimaryNavLinks wraps the primaryLinks slot in `<Nav className="... ml-3">`,
- * putting a 16px gap between the logo and the course title. The learning header
- * wraps the same content in `<div class="flex-grow-1 course-title-lockup d-flex"
- * style="line-height: 1">` and mitxonline-styles gives that a 10px margin and a
- * 14px font size, so the two headers sat 6px apart. Rendering the legacy element
- * here picks up those existing rules instead of trying to cancel `ml-3` from the
- * site stylesheet — `ml-3` is an `!important` utility that a layered site rule
- * cannot outrank.
- *
- * Dropping the `Nav` wrapper also matches legacy, whose learning header has no
- * nav element around the course info. A future primaryLinks widget that needs
- * `Nav`/`Nav.Link` styling would have to bring its own wrapper.
+ * Legacy's lockup element in place of frontend-base's `Nav.ml-3` wrapper, so the
+ * `.course-title-lockup` rules apply and the logo-to-title gap matches the
+ * learning header. Cancelling `ml-3` in SCSS is not an option — it is an
+ * `!important` utility a layered site rule cannot outrank.
  */
 const MITxOnlinePrimaryLinks: FC = () => (
 	<div
@@ -383,14 +338,9 @@ const MITxOnlineAccountMenuItem: FC = () => {
 };
 
 /**
- * Dashboard menu item with context-aware URL.
- *
- * Narrow viewports only. Above 991px the standalone Dashboard button in the
- * secondary links slot is what the user clicks, and duplicating it inside the
- * user menu is what this fixes; at or below 991px the SCSS hides that button
- * (`.dashboard-btn { display: none }`), so the menu becomes the only route to
- * the dashboard. Same rule as the legacy learning MFE, which passed
- * `includeDashboard: isMobile()` when building the user menu.
+ * Dashboard menu item, narrow viewports only: above 991px the standalone
+ * Dashboard button covers it, below that the SCSS hides the button. Same rule as
+ * legacy's `includeDashboard: isMobile()`.
  */
 const MITxOnlineDashboardMenuItem: FC = () => {
 	const { lmsBaseUrl } = useSiteConfig();
@@ -510,11 +460,8 @@ export function createMITxOnlineHeaderApp(): App {
 			op: WidgetOperationTypes.APPEND,
 			component: MITxOnlineLogoutMenuItem,
 		},
-		// Drop the org + course number from the course info lockup on UAI / MIT
-		// Learn courses, matching the learning header. The widget being replaced
-		// belongs to @openedx/frontend-app-instructor-dashboard, which appends it
-		// to the header's primaryLinks slot; REPLACE is a no-op on sites/pages
-		// where that widget is absent.
+		// Hide the course number on UAI courses. REPLACE is a no-op wherever the
+		// instructor dashboard's widget is absent.
 		{
 			slotId: SLOT.primaryLinks,
 			id: "mitol.header.mitxonline.courseInfo",
@@ -522,9 +469,7 @@ export function createMITxOnlineHeaderApp(): App {
 			op: WidgetOperationTypes.REPLACE,
 			component: MITxOnlineCourseInfo,
 		},
-		// Wrap the primaryLinks slot in the legacy learning-header lockup element
-		// instead of frontend-base's `Nav.ml-3`, so the logo-to-title gap and the
-		// lockup font size match the learning MFE.
+		// Legacy lockup element instead of frontend-base's `Nav.ml-3`.
 		{
 			slotId: SLOT.desktopLeft,
 			id: "mitol.header.mitxonline.primaryLinks",
