@@ -72,10 +72,8 @@ Currently contains:
   Project build.
 - `footer/index.tsx` — `createMITOLFooterApp()`: runtime-config-driven footer links
 - `header/index.tsx` — `createMITxOnlineHeaderApp()`, `createMITxHeaderApp()`, `createXProHeaderApp()`.
-  The mitxonline app also replaces the instructor dashboard's course info lockup so UAI /
-  MIT Learn courses show the course title alone (they have no public org + number), and
-  keeps the Dashboard user-menu item to viewports at or below 991px, where the standalone
-  Dashboard button is hidden — both matching the legacy learning header.
+  The mitxonline app also hides the course number on UAI courses and keeps the Dashboard
+  user-menu item to viewports at or below 991px, both matching the legacy learning header.
 - `styles/mitxonline.scss` — mitxonline theme overrides (imported directly in each `site.config.*.tsx`)
 - `styles/mitx.scss` — mitx theme overrides (scaffold)
 - `utils/courseContext.ts` — URL/course-context detection helpers
