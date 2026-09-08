@@ -149,8 +149,10 @@ New deployments must include the equivalent block there.
 
 The exact keys consumed by the MFE are in `shared/src/footer/index.tsx`
 (`MITOLFooterConfig`) and `shared/src/header/index.tsx` (`MITOLHeaderConfig`).
-All of them are set in ol-infrastructure; the two below were added late, so an
-environment that has not been applied since will still fall back:
+The two below are **not in ol-infrastructure yet** — they are added by
+[ol-infrastructure#4893], which is still open — so every environment falls back
+today, and will keep falling back until that merges *and* the edxapp stack is
+applied there:
 
 - `commonAppConfig.mitolHeader.mitLearnBaseUrl` / `marketingSiteBaseUrl` →
   fall back to `https://learn.mit.edu` / `lmsBaseUrl`, which sends the Dashboard
@@ -166,6 +168,7 @@ local LMS without the configmap), the header/footer render with empty links and
 the default logo.
 
 [ol-infrastructure]: https://github.com/mitodl/ol-infrastructure
+[ol-infrastructure#4893]: https://github.com/mitodl/ol-infrastructure/pull/4893
 
 ## Relationship to legacy JSX files
 
