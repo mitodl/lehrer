@@ -160,6 +160,28 @@ if (process.env.DEPLOYMENT_NAME?.includes("mitxonline")) {
           },
         ],
       },
+      // MITx Online issues its own certificates, so edX must not show any certificate
+      // messaging on the progress page. The card is rendered by one of two slots
+      // depending on viewport width (Paragon `large`, 992px), so both are hidden.
+      // See mitxonline-issues#1474.
+      'org.openedx.frontend.learning.progress_tab_certificate_status_main_body.v1': {
+        keepDefault: false,
+        plugins: [
+          {
+            op: PLUGIN_OPERATIONS.Hide,
+            widgetId: 'default_contents',
+          },
+        ]
+      },
+      'org.openedx.frontend.learning.progress_tab_certificate_status_side_panel.v1': {
+        keepDefault: false,
+        plugins: [
+          {
+            op: PLUGIN_OPERATIONS.Hide,
+            widgetId: 'default_contents',
+          },
+        ]
+      },
       // Slot-based AskTIM chatbot + per-block feedback drawer share this slot.
       // The coordinator owns the column (AskTIM plus the inline feedback drawer);
       // the LMS-side feedback_enabled waffle flag is the per-course gate.
