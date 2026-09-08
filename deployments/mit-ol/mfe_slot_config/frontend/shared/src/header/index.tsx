@@ -250,12 +250,18 @@ function useInstructorDashboardCourseInfo(courseId: string) {
  * Course info lockup for the instructor dashboard header, replacing the one
  * @openedx/frontend-app-instructor-dashboard registers.
  *
- * UAI / MIT Learn courses are published without a public org + course number
- * (their keys are internal, e.g. `course-v1:UAI_SOURCE+UAI.AST.1+1T2026`), so
- * the learning header shows the course title on its own for them and keeps the
- * two-line lockup everywhere else. This mirrors the legacy learning MFE
- * (addLearningCourseInfoSlotOverride in legacy/mitxonline/common-mfe-config.env.jsx),
- * which hid the default widget and inserted a title-only one for those courses.
+ * UAI / MIT Learn courses show the course title on its own; every other course
+ * keeps the two-line org + number over title lockup. This mirrors the learning
+ * header (addLearningCourseInfoSlotOverride in
+ * legacy/mitxonline/common-mfe-config.env.jsx), which hides the default widget
+ * and inserts a title-only one for those courses.
+ *
+ * Why they hide it is not recorded: that override and the slot table in
+ * legacy/Readme.md both state the behaviour and not the reason, and it arrived
+ * in a bulk slot-config import (7eb5519). Note it is not missing data -- the
+ * values exist (course-v1:UAI_SOURCE+UAI111+UAI_11 reports org UAI_SOURCE,
+ * number UAI111) -- so treat it as a product decision and check with the team
+ * before extending the rule to other courses.
  *
  * Everything except the org/number line matches the upstream widget, so the
  * non-UAI header is unchanged.
