@@ -1,5 +1,8 @@
-import type { FC } from "react";
+import { useEffect, useState, type FC } from "react";
 import {
+	camelCaseObject,
+	getAuthenticatedHttpClient,
+	getSiteConfig,
 	useSiteConfig,
 	useAuthenticatedUser,
 	WidgetOperationTypes,
@@ -7,6 +10,8 @@ import {
 } from "@openedx/frontend-base";
 import type { App, SlotOperation } from "@openedx/frontend-base";
 import { Dropdown, Hyperlink, Image } from "@openedx/paragon";
+import { useQuery } from "@tanstack/react-query";
+import { useParams } from "react-router-dom";
 import { isLearnCourse, isMITxOnlineCourse } from "../utils/courseContext";
 
 // ---------------------------------------------------------------------------
@@ -20,6 +25,7 @@ const SLOT = {
 	desktopRight: "org.openedx.frontend.slot.header.desktopRight.v1",
 	mobileCenter: "org.openedx.frontend.slot.header.mobileCenter.v1",
 	mobileRight: "org.openedx.frontend.slot.header.mobileRight.v1",
+	primaryLinks: "org.openedx.frontend.slot.header.primaryLinks.v1",
 	secondaryLinks: "org.openedx.frontend.slot.header.secondaryLinks.v1",
 	authenticatedMenu: "org.openedx.frontend.slot.header.authenticatedMenu.v1",
 } as const;
@@ -45,6 +51,22 @@ const WIDGET = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Widget IDs owned by module libraries (not frontend-base) that we override.
+// ---------------------------------------------------------------------------
+
+/**
+ * Course info lockup @openedx/frontend-app-instructor-dashboard appends to
+ * primaryLinks. The showcase-looking id is the one it really registers — check
+ * its `slots.ts` on a version bump.
+ */
+const INSTRUCTOR_DASHBOARD_COURSE_INFO_WIDGET =
+	"org.openedx.frontend.widget.slotShowcase.headerLink";
+
+/** App ID the instructor dashboard registers, used for its react-query cache keys. */
+const INSTRUCTOR_DASHBOARD_APP_ID =
+	"org.openedx.frontend.app.instructorDashboard";
+
+// ---------------------------------------------------------------------------
 // Shared config interface (populated via FRONTEND_SITE_CONFIG commonAppConfig)
 // ---------------------------------------------------------------------------
 
@@ -57,6 +79,32 @@ function useMITOLHeaderConfig(): MITOLHeaderConfig {
 	const { commonAppConfig } = useSiteConfig();
 	return ((commonAppConfig as Record<string, unknown>)?.mitolHeader ??
 		{}) as MITOLHeaderConfig;
+}
+
+// ---------------------------------------------------------------------------
+// Narrow-viewport detection. 991px is where mitxonline.scss hides the
+// standalone Dashboard button, and the breakpoint legacy's isMobile() used.
+// ---------------------------------------------------------------------------
+
+const MOBILE_MEDIA_QUERY = "(max-width: 991px)";
+
+function useIsNarrowViewport(): boolean {
+	const [isNarrow, setIsNarrow] = useState(
+		() =>
+			typeof window !== "undefined" &&
+			window.matchMedia(MOBILE_MEDIA_QUERY).matches,
+	);
+	useEffect(() => {
+		if (typeof window === "undefined") return undefined;
+		const mediaQueryList = window.matchMedia(MOBILE_MEDIA_QUERY);
+		// The width can change between the initial state and this effect running.
+		setIsNarrow(mediaQueryList.matches);
+		const handleChange = (event: MediaQueryListEvent) =>
+			setIsNarrow(event.matches);
+		mediaQueryList.addEventListener("change", handleChange);
+		return () => mediaQueryList.removeEventListener("change", handleChange);
+	}, []);
+	return isNarrow;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,8 +201,84 @@ const AlwaysDesktopLayout: FC = () => (
 const NoMobileLayout: FC = () => null;
 
 // ---------------------------------------------------------------------------
+// Instructor dashboard course info
+// ---------------------------------------------------------------------------
+
+interface InstructorDashboardCourseInfo {
+	org?: string;
+	courseNumber?: string;
+	displayName?: string;
+}
+
+/**
+ * Course org / number / title from the LMS instructor API. The instructor
+ * dashboard's own `useCourseInfo` is not exported, so this repeats the query
+ * under the same cache key — one cache entry, one request.
+ */
+function useInstructorDashboardCourseInfo(courseId: string) {
+	return useQuery<InstructorDashboardCourseInfo>({
+		queryKey: [INSTRUCTOR_DASHBOARD_APP_ID, "courseInfo", courseId],
+		queryFn: async () => {
+			const { data } = await getAuthenticatedHttpClient().get(
+				`${getSiteConfig().lmsBaseUrl}/api/instructor/v2/courses/${courseId}`,
+			);
+			return camelCaseObject(data) as InstructorDashboardCourseInfo;
+		},
+		enabled: !!courseId,
+		refetchOnWindowFocus: false,
+		refetchOnMount: false,
+		retry: false,
+	});
+}
+
+// ---------------------------------------------------------------------------
 // MITx Online header — full UAI/Learn course detection, custom logo, user menu
 // ---------------------------------------------------------------------------
+
+/**
+ * Course info lockup, replacing the one
+ * @openedx/frontend-app-instructor-dashboard registers: we hide the course
+ * number on UAI courses and show the title alone, as the learning header does
+ * (addLearningCourseInfoSlotOverride in legacy/mitxonline/common-mfe-config.env.jsx).
+ * Everything else is the upstream widget, so other courses are unchanged.
+ */
+const MITxOnlineCourseInfo: FC = () => {
+	const { courseId = "" } = useParams();
+	const { data } = useInstructorDashboardCourseInfo(courseId);
+	if (!data) return null;
+	const { org = "", courseNumber = "", displayName = "" } = data;
+	const showCourseNumber = isMITxOnlineCourse();
+	return (
+		// Legacy's markup, including the 7px nudge that lands the single line
+		// where the two-line title sits rather than centred in the row.
+		<div style={{ minWidth: 0, paddingTop: showCourseNumber ? undefined : "7px" }}>
+			{showCourseNumber && (
+				<span className="d-block small m-0">
+					{org} {courseNumber}
+				</span>
+			)}
+			{/* No `font-weight-bold`: legacy neutralises it in SCSS, but Paragon sits
+			    in a cascade layer here, so that override loses and the title came
+			    out bold. */}
+			<span className="d-block m-0 course-title">{displayName}</span>
+		</div>
+	);
+};
+
+/**
+ * Legacy's lockup element in place of frontend-base's `Nav.ml-3` wrapper, so the
+ * `.course-title-lockup` rules apply and the logo-to-title gap matches the
+ * learning header. Cancelling `ml-3` in SCSS is not an option — it is an
+ * `!important` utility a layered site rule cannot outrank.
+ */
+const MITxOnlinePrimaryLinks: FC = () => (
+	<div
+		className="flex-grow-1 course-title-lockup d-flex"
+		style={{ lineHeight: 1 }}
+	>
+		<Slot id={SLOT.primaryLinks} />
+	</div>
+);
 
 /** Logo that links to the dashboard appropriate for the current course context. */
 const MITxOnlineLogo: FC = () => {
@@ -213,13 +337,19 @@ const MITxOnlineAccountMenuItem: FC = () => {
 	);
 };
 
-/** Dashboard menu item with context-aware URL (mobile-only; secondary links covers desktop). */
+/**
+ * Dashboard menu item, narrow viewports only: above 991px the standalone
+ * Dashboard button covers it, below that the SCSS hides the button. Same rule as
+ * legacy's `includeDashboard: isMobile()`.
+ */
 const MITxOnlineDashboardMenuItem: FC = () => {
 	const { lmsBaseUrl } = useSiteConfig();
 	const { mitLearnBaseUrl, marketingSiteBaseUrl } = useMITOLHeaderConfig();
+	const isNarrowViewport = useIsNarrowViewport();
 	const url = isLearnCourse()
 		? `${mitLearnBaseUrl ?? "https://learn.mit.edu"}/dashboard`
 		: `${marketingSiteBaseUrl ?? lmsBaseUrl}/dashboard/`;
+	if (!isNarrowViewport) return null;
 	return <Dropdown.Item href={url}>Dashboard</Dropdown.Item>;
 };
 
@@ -330,14 +460,26 @@ export function createMITxOnlineHeaderApp(): App {
 			op: WidgetOperationTypes.APPEND,
 			component: MITxOnlineLogoutMenuItem,
 		},
+		// Hide the course number on UAI courses. REPLACE is a no-op wherever the
+		// instructor dashboard's widget is absent.
+		{
+			slotId: SLOT.primaryLinks,
+			id: "mitol.header.mitxonline.courseInfo",
+			relatedId: INSTRUCTOR_DASHBOARD_COURSE_INFO_WIDGET,
+			op: WidgetOperationTypes.REPLACE,
+			component: MITxOnlineCourseInfo,
+		},
+		// Legacy lockup element instead of frontend-base's `Nav.ml-3`.
+		{
+			slotId: SLOT.desktopLeft,
+			id: "mitol.header.mitxonline.primaryLinks",
+			relatedId: WIDGET.desktopPrimaryLinks,
+			op: WidgetOperationTypes.REPLACE,
+			component: MITxOnlinePrimaryLinks,
+		},
 		// TODO: Hide primary nav links on dashboard apps (gradebook, learner-dashboard).
 		// This requires knowing which route roles those apps register. Add a condition with
 		// condition: { active: ['<gradebook-role>'] } once frontend-app-gradebook is a module.
-		//
-		// TODO: Per-app header_learning_course_info override (UAI course title-only display).
-		// In frontend-base the course info is inside CourseTabsNavigation; override it via
-		// org.openedx.frontend.slot.header.courseNavigationBar.extraContent.v1 once the
-		// course bar slot API is confirmed.
 	];
 
 	return { appId: "mitol.header.mitxonline", slots };
