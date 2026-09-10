@@ -31,6 +31,37 @@ def _safe_mfe_path(path: str, *, field: str) -> str:
     return normalized
 
 
+# Emitted by frontend-build's prod config, which templates public/index.html
+# through HtmlWebpackPlugin (config/webpack.prod.config.js). Every legacy MFE
+# has one; a frontend-base App Repository does not, because its `make build` is
+# `tsc` plus an SCSS copy and never touches public/.
+_SERVABLE_BUNDLE_MARKER = "index.html"
+
+
+def _assert_servable_bundle(dist_path: str) -> list[str]:
+    """Return an argv asserting ``dist_path`` holds a servable MFE bundle.
+
+    Without this the failure is silent rather than loud. When an upstream repo
+    lands its frontend-base conversion its default branch becomes an npm module
+    library, and `npm run build` there writes dist/index.js and no index.html.
+    `dist/` still exists and is non-empty, so exporting it succeeds, the
+    pipeline goes green, and the deployment ships a directory no browser can
+    load. The build has to refuse the artifact itself, because nothing
+    downstream looks at its shape.
+    """
+    marker = f"{dist_path}/{_SERVABLE_BUNDLE_MARKER}"
+    return [
+        "sh",
+        "-c",
+        f'test -f "{marker}" || {{ '
+        f'echo "no {_SERVABLE_BUNDLE_MARKER} in {dist_path}: this built an npm '
+        "module library, not a servable MFE bundle. The upstream default "
+        "branch has most likely landed its frontend-base conversion. Run "
+        "'lehrer upstream frontend-base-status', then repoint this build at "
+        'the legacy-mfe branch or retire it." >&2; exit 1; }',
+    ]
+
+
 @object_type
 class OpenedxMfe:
     """Build Open edX Micro Frontends (MFEs).
@@ -255,6 +286,9 @@ class OpenedxMfe:
         container = container.with_env_variable("NODE_ENV", "production").with_exec(
             ["npm", "run", "build"]
         )
+
+        # Refuse a build that produced a module library rather than a bundle.
+        container = container.with_exec(_assert_servable_bundle("/app/mfe/dist"))
 
         # Return the dist directory
         return container.directory("/app/mfe/dist")
