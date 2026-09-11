@@ -77,7 +77,7 @@ Currently contains:
 - `utils/courseContext.ts` — URL/course-context detection helpers
 - `ai-drawer/AIDrawerManagerSidebar.tsx` — fully typed AI drawer sidebar wrapper
 - `ai-drawer/SidebarAIDrawerCoordinator.tsx` — stub, blocked on `frontend-app-learning` migration
-- `course-tabs/ResponsiveCourseTabs.tsx` — stub, blocked on `frontend-app-learning` migration
+- `course-tabs/ResponsiveCourseTabs.tsx` — `MITOLCourseNavigationBar()`: replaces frontend-base's `courseNavigationBar` widget with the legacy underline-tab markup and a "More..." overflow
 
 ## Module libraries wired in
 

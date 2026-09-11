@@ -65,6 +65,7 @@ frontend/
 | `../legacy/mitx-staging/common-mfe-config.env.jsx` | separate Site Project or runtime config | Complete — maps to mitx Site Project config |
 | `../legacy/AIDrawerManagerSidebar.jsx` | `src/AIDrawerManagerSidebar.tsx` | Complete — `shared/src/ai-drawer/AIDrawerManagerSidebar.tsx` fully typed and migrated |
 | `../legacy/SidebarAIDrawerCoordinator.jsx` | `src/SidebarAIDrawerCoordinator.tsx` | Documented typescript stub created in shared (blocked on frontend-app-learning) |
+| `../legacy/ResponsiveCourseTabs.jsx` | `shared/src/course-tabs/ResponsiveCourseTabs.tsx` | Complete — `MITOLCourseNavigationBar` REPLACEs `org.openedx.frontend.widget.header.courseNavigationBar.v1`. Not blocked on frontend-app-learning after all: the tabs come from the react-query key frontend-base's own course bar fills, so no access to the learning app's model store is needed. |
 | `../legacy/mitxonline-styles.scss` | CSS override via frontend-base theme API (verify) | Complete — loaded dynamically using `createStyleOverrideApp` from `shared/src/styles/` |
 | `../legacy/mitx-styles.scss` | CSS override via frontend-base theme API (verify) | Complete — loaded dynamically using `createStyleOverrideApp` from `shared/src/styles/` |
 
