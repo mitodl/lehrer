@@ -19,13 +19,17 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import type { FC } from "react";
-import { matchPath, useLocation, useParams } from "react-router-dom";
+import { Link, matchPath, useLocation, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Dropdown } from "@openedx/paragon";
 import {
 	camelCaseObject,
 	getAuthenticatedHttpClient,
+	getProvidesAsStrings,
 	getSiteConfig,
+	getUrlByRouteRole,
+	providesCourseBarRolesId,
+	Slot,
 	useIntl,
 } from "@openedx/frontend-base";
 
@@ -91,6 +95,24 @@ function findActiveTabId(tabs: CourseTab[], pathname: string): string | null {
 	return bestId;
 }
 
+/**
+ * Upstream's course-bar `isClientRoute`, replicated because the package does not export
+ * it. Tabs whose pathname belongs to an app that opted into the course bar are in-app
+ * routes and must stay inside the SPA; everything else is a cross-app URL. The
+ * instructor dashboard declares `providesCourseBarRolesId`, so its own tab is a client
+ * route whenever the LMS emits the MFE URL for it.
+ */
+function isClientRoute(pathname: string): boolean {
+	return getProvidesAsStrings(providesCourseBarRolesId).some((role) => {
+		const routePath = getUrlByRouteRole(role);
+		return (
+			routePath !== null &&
+			routePath.startsWith("/") &&
+			matchPath({ path: routePath, end: false }, pathname) !== null
+		);
+	});
+}
+
 /** Tab links plus a "More..." dropdown holding whatever did not fit. */
 function ResponsiveCourseTabs({
 	tabs,
@@ -149,15 +171,19 @@ function ResponsiveCourseTabs({
 	// stylesheet's `.nav > .nav-item` rules match.
 	return (
 		<>
-			{visibleTabs.map(({ url, title, tabId }) => (
-				<a
-					key={tabId}
-					href={url}
-					className={`nav-item flex-shrink-0 nav-link${tabId === activeTabId ? " active" : ""}`}
-				>
-					{title}
-				</a>
-			))}
+			{visibleTabs.map(({ url, title, tabId }) => {
+				const className = `nav-item flex-shrink-0 nav-link${tabId === activeTabId ? " active" : ""}`;
+				const { pathname } = new URL(url);
+				return isClientRoute(pathname) ? (
+					<Link key={tabId} to={pathname} className={className}>
+						{title}
+					</Link>
+				) : (
+					<a key={tabId} href={url} className={className}>
+						{title}
+					</a>
+				);
+			})}
 
 			{overflowTabs.length > 0 && (
 				<div className="pgn__tab_more nav-item flex-shrink-0 nav-link responsive-tabs-overflow">
@@ -170,15 +196,21 @@ function ResponsiveCourseTabs({
 							{moreLabel}
 						</Dropdown.Toggle>
 						<Dropdown.Menu className="responsive-tabs-dropdown-menu">
-							{overflowTabs.map(({ url, title, tabId }) => (
-								<Dropdown.Item
-									key={tabId}
-									href={url}
-									className={tabId === activeTabId ? "active" : ""}
-								>
-									{title}
-								</Dropdown.Item>
-							))}
+							{overflowTabs.map(({ url, title, tabId }) => {
+								const { pathname } = new URL(url);
+								const routing = isClientRoute(pathname)
+									? { as: Link, to: pathname }
+									: { href: url };
+								return (
+									<Dropdown.Item
+										key={tabId}
+										{...routing}
+										className={tabId === activeTabId ? "active" : ""}
+									>
+										{title}
+									</Dropdown.Item>
+								);
+							})}
 						</Dropdown.Menu>
 					</Dropdown>
 				</div>
@@ -210,9 +242,14 @@ function ResponsiveCourseTabs({
 						{title}
 					</span>
 				))}
+				{/* Mirrors the real Dropdown.Toggle, not a plain tab: it carries btn /
+				    dropdown-toggle padding a `.nav-link` alone does not, and the stylesheet
+				    zeroes the wrapper's own padding, so the toggle is the whole width. Using
+				    the plain tab class here undercounts it and lets one tab too many into
+				    the row; wrapping it in `.nav-link` too double-counts the padding. */}
 				<span
 					data-measure
-					className="nav-item flex-shrink-0 nav-link"
+					className="nav-link h-100 dropdown-toggle btn btn-link"
 					style={{ whiteSpace: "nowrap" }}
 				>
 					{moreLabel}
@@ -258,6 +295,9 @@ export const MITOLCourseNavigationBar: FC = () => {
 							className="nav flex-nowrap nav-underline-tabs"
 						>
 							<ResponsiveCourseTabs tabs={tabs} activeTabId={activeTabId} />
+							{/* Rendered inside frontend-base's CourseTabsNavigation; kept so
+							    widgets registered there do not vanish on these routes. */}
+							<Slot id="org.openedx.frontend.slot.header.courseNavigationBar.extraContent.v1" />
 						</nav>
 					</div>
 				</div>

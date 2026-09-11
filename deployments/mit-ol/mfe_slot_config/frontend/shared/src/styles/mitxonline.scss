@@ -488,7 +488,16 @@ nav.navbar-expand-md > .navbar-nav.nav-tabs {
       font-weight: var(--pgn-typography-font-weight-normal) !important;
       color: var(--pgn-color-primary-500) !important;
       border-bottom-color: var(--pgn-color-primary-500) !important;
-      background-color: transparent !important;
+    }
+
+    // Match the course tab bar on hover: light-400 background, and non-active links
+    // do not gain the underline (only the active tab keeps it).
+    &:hover {
+      background-color: var(--pgn-color-light-400) !important;
+    }
+
+    &:not(.active):hover {
+      border-bottom-color: transparent !important;
     }
   }
 }
