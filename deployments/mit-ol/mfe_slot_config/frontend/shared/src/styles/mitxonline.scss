@@ -266,10 +266,10 @@
   .nav-menu {
     min-width: 0 !important;
     overflow: visible !important;
-  }
-
-  .nav-underline-tabs {
-    align-items: stretch !important;
+    // `flex: 1` is load-bearing, not cosmetic: ResponsiveCourseTabs measures the
+    // parent <nav>'s width to decide how many tabs fit, so without it the nav is
+    // narrower than the legacy one and the "More..." split happens too early.
+    flex: 1;
   }
 
   .nav {
@@ -378,7 +378,162 @@
       }
     }
   }
+
+  // From frontend-app-learning/src/course-tabs/course-tabs-navigation.scss and
+  // src/index.scss (`.nav-underline-tabs`) — the third and fourth stylesheets
+  // contributing to this row in the legacy MFE, neither of which ships in the Site
+  // Project. `border-bottom` is !important because frontend-base's own
+  // course-tabs-navigation.scss (still bundled: it is imported by the module we
+  // replace, not the component we render) sets a 2px border where legacy uses 1px.
+  border-bottom: solid 1px #eaeaea !important;
+
+  .nav a,
+  .nav button {
+    &:hover {
+      background-color: var(--pgn-color-light-400);
+    }
+  }
+
+  // Non-active links drop the underline on hover; the background above already
+  // applies to both states.
+  .nav a:not(.active):hover {
+    border-bottom: none;
+  }
+
+  .nav-bar {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .nav-underline-tabs {
+    align-items: stretch !important;
+    margin: 0 0 -1px;
+
+    .nav-link {
+      border-bottom: 4px solid transparent;
+      border-top: 4px solid transparent;
+      color: var(--pgn-color-gray-700);
+
+      // Upstream comment: temporary until we can remove .btn class from dropdowns.
+      border-left: 0;
+      border-right: 0;
+      border-radius: 0;
+
+      &:hover,
+      &:focus,
+      &.active {
+        font-weight: var(--pgn-typography-font-weight-normal);
+        color: var(--pgn-color-primary-500);
+        border-bottom-color: var(--pgn-color-primary-500);
+      }
+    }
+  }
 }
+// ---------------------------------------------------------------------------
+// Instructor dashboard tab row (InstructorNav in
+// @openedx/frontend-app-instructor-dashboard).
+//
+// Unlike the course tab bar above, this component is NOT exposed as a replaceable
+// widget — its slot (`org.openedx.frontend.slot.instructorDashboard.tabs.v1`) only
+// *adds* tabs, which is how the Canvas and Rapid Responses tabs arrive — and it is
+// rendered internally by the package's PageWrapper. So its Bootstrap navbar has to
+// be restyled in place, keyed on the selectors below.
+//
+// Two stock behaviours to undo: `.navbar-light .navbar-nav .nav-link` gives the
+// rgba(0, 0, 0, .5) link colour, and `navbar-expand-md` collapses the row into a
+// hamburger below 768px, which the learning MFE never does at any width.
+//
+// `aria-controls` / the collapse `id` are the only stable hooks here — the <nav>
+// carries nothing but generic Bootstrap classes — and they avoid needing `:has()`.
+// ---------------------------------------------------------------------------
+
+// Both the collapse and its `.navbar-nav` wrapper sit at the flexbox default
+// `min-width: auto`, so force-expanding the row makes them size to the full tab
+// strip (~1335px for ten tabs) and stretch the document instead of scrolling. A
+// flex item needs an explicit `min-width: 0` before `overflow-x` does anything,
+// and the wrapper needs it too or the overflow just moves up one level.
+nav.navbar-expand-md > .navbar-nav.nav-tabs {
+  min-width: 0;
+}
+
+#instructor-nav {
+  display: flex !important;
+  min-width: 0;
+  overflow-x: auto;
+
+  .nav-item {
+    flex-shrink: 0;
+  }
+
+  // Same underline treatment as the course tab bar, so the two rows read as one
+  // system. `!important` overrides `.navbar-light .navbar-nav .nav-link` and
+  // `.nav-tabs .nav-link`; see the cascade-layer note at the top of this file.
+  .nav-link {
+    border-bottom: 4px solid transparent !important;
+    border-top: 4px solid transparent !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-radius: 0 !important;
+    color: var(--pgn-color-gray-700) !important;
+    white-space: nowrap;
+    // `.navbar-nav .nav-link` trims horizontal padding for a stacked mobile
+    // navbar, leaving 8px against the course tab bar's 8px 16px.
+    padding: 8px 16px !important;
+
+    &:hover,
+    &:focus,
+    &.active {
+      font-weight: var(--pgn-typography-font-weight-normal) !important;
+      color: var(--pgn-color-primary-500) !important;
+      border-bottom-color: var(--pgn-color-primary-500) !important;
+      background-color: transparent !important;
+    }
+  }
+}
+
+.navbar-toggler[aria-controls="instructor-nav"] {
+  display: none !important;
+}
+
+// ---------------------------------------------------------------------------
+// Separable from the tab work above, and pre-existing rather than caused by it: the
+// dashboard's own page content is not responsive below ~480px. Paragon's `pgn__hstack`
+// (the Course Info enrollment stat row) and the `d-flex justify-content-between` page
+// headers both default to `flex-wrap: nowrap`, so their children either overflow the
+// viewport or squeeze the heading to a fraction of its text width. Neither is
+// slot-replaceable; letting them wrap at phone width is the least invasive fix, and it
+// applies only below the breakpoint so desktop layout is untouched. A fix in
+// @openedx/frontend-app-instructor-dashboard would still be preferable.
+// ---------------------------------------------------------------------------
+@media (max-width: 575.98px) {
+  .container-mw-xl .pgn__hstack {
+    flex-wrap: wrap;
+    row-gap: 1rem;
+  }
+
+  // The dashboard's page headers are `d-flex justify-content-between` rows holding
+  // a heading and an action group, with the default `flex-wrap: nowrap`. They do
+  // not collide — the two children sit flush, with no text overflow — but at phone
+  // width `space-between` hands the heading only what the buttons leave over (136px
+  // for "Course Team Management", wrapping it onto three lines beside a 216px button
+  // stack). Wrapping gives the heading the full row and drops the actions beneath it.
+  //
+  // Narrow breakpoint only: above it these rows lay out correctly on one line and
+  // keep their space-between behaviour. The selector is generic Bootstrap utilities
+  // because this markup is upstream page content with no hook of its own and no
+  // replaceable slot; it matches four rows across the app (Enrollment Management,
+  // Course Team Management, Grading Tools, and grading's learner/problem picker),
+  // all of which want to wrap at this width. A fix in
+  // @openedx/frontend-app-instructor-dashboard would still be preferable.
+  .container-mw-xl .d-flex.justify-content-between {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+}
+
+
 
 /**
  * AI Drawer Manager Sidebar Styles

@@ -8,6 +8,7 @@ import {
 import type { App, SlotOperation } from "@openedx/frontend-base";
 import { Dropdown, Hyperlink, Image } from "@openedx/paragon";
 import { isLearnCourse, isMITxOnlineCourse } from "../utils/courseContext";
+import { MITOLCourseNavigationBar } from "../course-tabs/ResponsiveCourseTabs";
 
 // ---------------------------------------------------------------------------
 // Shared slot IDs and widget IDs (from @openedx/frontend-base headerApp)
@@ -22,6 +23,7 @@ const SLOT = {
 	mobileRight: "org.openedx.frontend.slot.header.mobileRight.v1",
 	secondaryLinks: "org.openedx.frontend.slot.header.secondaryLinks.v1",
 	authenticatedMenu: "org.openedx.frontend.slot.header.authenticatedMenu.v1",
+	courseNavigationBar: "org.openedx.frontend.slot.header.courseNavigationBar.v1",
 } as const;
 
 const WIDGET = {
@@ -42,6 +44,8 @@ const WIDGET = {
 		"org.openedx.frontend.widget.header.desktopAuthenticatedMenuAccount.v1",
 	menuLogout:
 		"org.openedx.frontend.widget.header.desktopAuthenticatedMenuLogout.v1",
+	courseNavigationBar:
+		"org.openedx.frontend.widget.header.courseNavigationBar.v1",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -334,10 +338,21 @@ export function createMITxOnlineHeaderApp(): App {
 		// This requires knowing which route roles those apps register. Add a condition with
 		// condition: { active: ['<gradebook-role>'] } once frontend-app-gradebook is a module.
 		//
+		// Replace frontend-base's Bootstrap-navbar course tab bar with the legacy
+		// learning MFE's underline-tabs markup, so the ported `#courseTabsNavigation`
+		// rules in styles/mitxonline.scss apply and the row overflows into a "More..."
+		// dropdown instead of collapsing to a hamburger below 576px.
+		{
+			slotId: SLOT.courseNavigationBar,
+			id: "mitol.header.mitxonline.courseNavigationBar",
+			relatedId: WIDGET.courseNavigationBar,
+			op: WidgetOperationTypes.REPLACE,
+			component: MITOLCourseNavigationBar,
+		},
 		// TODO: Per-app header_learning_course_info override (UAI course title-only display).
-		// In frontend-base the course info is inside CourseTabsNavigation; override it via
-		// org.openedx.frontend.slot.header.courseNavigationBar.extraContent.v1 once the
-		// course bar slot API is confirmed.
+		// The course info lockup lives inside frontend-base's CourseTabsNavigation, which
+		// the operation above now replaces — so this can move into
+		// MITOLCourseNavigationBar rather than needing a slot of its own.
 	];
 
 	return { appId: "mitol.header.mitxonline", slots };
