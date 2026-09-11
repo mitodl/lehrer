@@ -83,9 +83,12 @@ Currently contains:
 
 | Deployment | Module library | npm version |
 |---|---|---|
-| mitxonline | `@openedx/frontend-app-instructor-dashboard` | `^1.1.0-alpha` |
+| mitxonline | `@openedx/frontend-app-instructor-dashboard` | `^2.0.0-alpha` |
 | mitx | `@openedx/frontend-app-instructor-dashboard` | `^1.1.0-alpha` |
 | xpro | `@openedx/frontend-app-instructor-dashboard` | `mitodl/…#verawood` (see below) |
+
+Instructor-dashboard `2.0.0-alpha` peer-requires `@openedx/frontend-base` `^2.0.0-alpha.5`,
+so mitxonline is on frontend-base 2.0 alphas while mitx and xpro stay on `^1.0.0-alpha.49`.
 
 ### Temporary pin: xpro instructor-dashboard
 
