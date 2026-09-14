@@ -83,17 +83,27 @@ function findActiveTabId(tabs: CourseTab[], pathname: string): string | null {
 	let bestId: string | null = null;
 	let bestLen = -1;
 	for (const tab of tabs) {
-		const tabPathname = new URL(tab.url).pathname;
+		const path = tabPathname(tab.url);
 		if (
-			tabPathname.length > bestLen &&
-			matchPath({ path: `${tabPathname}/*`, end: false }, pathname)
+			path.length > bestLen &&
+			matchPath({ path: `${path}/*`, end: false }, pathname)
 		) {
 			bestId = tab.tabId;
-			bestLen = tabPathname.length;
+			bestLen = path.length;
 		}
 	}
 	return bestId;
 }
+
+/**
+ * Tab URLs from the course_home API are absolute in practice, and upstream assumes so.
+ * But `INSTRUCTOR_MICROFRONTEND_URL` defaults to a relative `/instructor` in
+ * ol-infrastructure's base config and is only replaced with an absolute URL for
+ * deployments listing instructor-dashboard in `site_project_mfe_apps` — otherwise the
+ * LMS emits `/instructor/<key>` or, when unset, `None/<key>`. A bare `new URL()` throws
+ * on both and takes the whole nav down, so resolve against the current origin.
+ */
+const tabPathname = (url: string) => new URL(url, window.location.origin).pathname;
 
 /**
  * Upstream's course-bar `isClientRoute`, replicated because the package does not export
@@ -162,7 +172,8 @@ function ResponsiveCourseTabs({
 		const observer = new ResizeObserver(() => window.requestAnimationFrame(split));
 		observer.observe(nav);
 		return () => observer.disconnect();
-	}, [tabs]);
+		// moreLabel: its width is part of the split, so a locale change must remeasure.
+	}, [tabs, moreLabel]);
 
 	const visibleTabs = tabs.slice(0, splitIndex);
 	const overflowTabs = tabs.slice(splitIndex);
@@ -173,7 +184,7 @@ function ResponsiveCourseTabs({
 		<>
 			{visibleTabs.map(({ url, title, tabId }) => {
 				const className = `nav-item flex-shrink-0 nav-link${tabId === activeTabId ? " active" : ""}`;
-				const { pathname } = new URL(url);
+				const pathname = tabPathname(url);
 				return isClientRoute(pathname) ? (
 					<Link key={tabId} to={pathname} className={className}>
 						{title}
@@ -197,7 +208,7 @@ function ResponsiveCourseTabs({
 						</Dropdown.Toggle>
 						<Dropdown.Menu className="responsive-tabs-dropdown-menu">
 							{overflowTabs.map(({ url, title, tabId }) => {
-								const { pathname } = new URL(url);
+								const pathname = tabPathname(url);
 								const routing = isClientRoute(pathname)
 									? { as: Link, to: pathname }
 									: { href: url };

@@ -350,9 +350,10 @@ export function createMITxOnlineHeaderApp(): App {
 			component: MITOLCourseNavigationBar,
 		},
 		// TODO: Per-app header_learning_course_info override (UAI course title-only display).
-		// The course info lockup lives inside frontend-base's CourseTabsNavigation, which
-		// the operation above now replaces — so this can move into
-		// MITOLCourseNavigationBar rather than needing a slot of its own.
+		// The lockup is NOT part of the widget replaced above — the instructor dashboard
+		// registers it into org.openedx.frontend.slot.header.primaryLinks.v1 (see that
+		// package's slots.js), so it is unaffected by this operation and still needs its
+		// own override.
 	];
 
 	return { appId: "mitol.header.mitxonline", slots };
