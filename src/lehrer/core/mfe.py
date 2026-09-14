@@ -248,8 +248,11 @@ class OpenedxMfe:
         if pre_build_commands:
             container = container.with_exec(["sh", "-c", "\n".join(pre_build_commands)])
 
-        # Install webpack
-        container = container.with_exec(["npm", "install", "webpack"])
+        # Pin webpack: 5.111.0 rewrote HTML embedded-source minification so a
+        # failed inline minify (the minimizer plugin's Terser rejecting the `as`
+        # option webpack now forwards) is a hard error instead of a warning,
+        # breaking index.html. 5.110.3 is the last version that built cleanly.
+        container = container.with_exec(["npm", "install", "webpack@5.110.3"])
 
         # Build the MFE
         container = container.with_env_variable("NODE_ENV", "production").with_exec(
