@@ -8,7 +8,10 @@ import {
 import type { App, SlotOperation } from "@openedx/frontend-base";
 import { Dropdown, Hyperlink, Image } from "@openedx/paragon";
 import { isLearnCourse, isMITxOnlineCourse } from "../utils/courseContext";
-import { MITOLCourseNavigationBar } from "../course-tabs/ResponsiveCourseTabs";
+import {
+	isCourseBarRoute,
+	MITOLCourseNavigationBar,
+} from "../course-tabs/ResponsiveCourseTabs";
 
 // ---------------------------------------------------------------------------
 // Shared slot IDs and widget IDs (from @openedx/frontend-base headerApp)
@@ -348,6 +351,10 @@ export function createMITxOnlineHeaderApp(): App {
 			relatedId: WIDGET.courseNavigationBar,
 			op: WidgetOperationTypes.REPLACE,
 			component: MITOLCourseNavigationBar,
+			// REPLACE keeps only this operation's properties, so upstream's
+			// `isCourseBarRoute()` gate has to be restated or the bar would render on
+			// every route the slot appears in.
+			condition: { callback: () => isCourseBarRoute() },
 		},
 		// TODO: Per-app header_learning_course_info override (UAI course title-only display).
 		// The lockup is NOT part of the widget replaced above — the instructor dashboard

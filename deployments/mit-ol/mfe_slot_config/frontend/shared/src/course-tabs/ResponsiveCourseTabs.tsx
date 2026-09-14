@@ -24,6 +24,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Dropdown } from "@openedx/paragon";
 import {
 	camelCaseObject,
+	getActiveRoles,
 	getAuthenticatedHttpClient,
 	getProvidesAsStrings,
 	getSiteConfig,
@@ -124,6 +125,21 @@ function findActiveTabId(tabs: CourseTab[], pathname: string): string | null {
 		}
 	}
 	return bestId;
+}
+
+/**
+ * Upstream's course-bar `isCourseBarRoute`, replicated for the same reason as
+ * `isClientRoute` below. frontend-base registers its course bar with
+ * `condition: () => isCourseBarRoute()`, but a REPLACE operation swaps in only the new
+ * operation's properties (`replaceWidget` splices the widget built from it), so the
+ * original condition is dropped. Re-declaring it here keeps the bar gated to course-bar
+ * routes exactly as upstream gates it.
+ */
+export function isCourseBarRoute(): boolean {
+	const activeRoles = getActiveRoles();
+	return getProvidesAsStrings(providesCourseBarRolesId).some((role) =>
+		activeRoles.includes(role),
+	);
 }
 
 /**
