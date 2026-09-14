@@ -1101,7 +1101,6 @@ class AqueductSettings(BaseSettings):
             "crum.CurrentRequestUserMiddleware",
             "edx_django_utils.cache.middleware.RequestCacheMiddleware",
             "edx_django_utils.monitoring.CachedCustomMonitoringMiddleware",
-            "edx_django_utils.monitoring.CodeOwnerMonitoringMiddleware",
             "edx_django_utils.monitoring.CookieMonitoringMiddleware",
             "edx_django_utils.monitoring.DeploymentMonitoringMiddleware",
             "edx_django_utils.monitoring.FrontendMonitoringMiddleware",
