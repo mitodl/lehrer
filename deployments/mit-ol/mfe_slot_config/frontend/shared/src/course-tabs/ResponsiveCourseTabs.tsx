@@ -51,8 +51,19 @@ const navLabelMessage = {
 	defaultMessage: "Course Material",
 };
 
-// Must stay identical to frontend-base's
-// shell/header/course-bar/data/service.ts so the two share a cache entry.
+// Deliberately duplicated from frontend-base's
+// shell/header/course-bar/data/service.ts. It cannot be imported: the symbols are not
+// re-exported from the package root, and its `exports` map seals deep paths (only ".",
+// "./tools", "./shell/style", "./shell/site" and the layer-order stylesheet resolve), so
+// a deep import fails with ERR_PACKAGE_PATH_NOT_EXPORTED.
+//
+// Keeping the key identical means this component and frontend-base's masquerade handler
+// share one react-query entry: switching "View this course as" invalidates the cache and
+// refetches under this key, and these tabs update from it for free. If upstream changes
+// the key we simply stop sharing -- an extra request, nothing breaks. If upstream changes
+// the SHAPE `getCourseHomeCourseMetadata` returns, the two disagree about what lives in
+// that entry, so keep the normalisation below in step with theirs. frontend-base is
+// alpha; re-check both on every bump.
 const courseHomeCourseMetadataQueryKey = (courseId: string) => [
 	"org.openedx.frontend.app.header.courseMeta",
 	courseId,
@@ -76,6 +87,18 @@ async function getCourseHomeCourseMetadata(
 }
 
 /**
+ * Tab URLs from the course_home API are absolute in practice, and upstream assumes so.
+ * But `INSTRUCTOR_MICROFRONTEND_URL` defaults to a relative `/instructor` in
+ * ol-infrastructure's base config and is only replaced with an absolute URL for
+ * deployments listing instructor-dashboard in `site_project_mfe_apps` — otherwise the
+ * LMS emits `/instructor/<key>` or, when unset, `None/<key>`. A bare `new URL()` throws
+ * on both and takes the whole nav down, so resolve against the current origin. The
+ * resolved URL is used for `href` too: left raw, a value with no leading slash would
+ * resolve against the current dashboard path instead of the origin.
+ */
+const resolveTabUrl = (url: string) => new URL(url, window.location.origin);
+
+/**
  * The tab whose URL pathname is the longest prefix of `pathname`, or null.
  * Ported from frontend-base's `findActiveTab` so the highlight matches upstream.
  */
@@ -83,7 +106,7 @@ function findActiveTabId(tabs: CourseTab[], pathname: string): string | null {
 	let bestId: string | null = null;
 	let bestLen = -1;
 	for (const tab of tabs) {
-		const path = tabPathname(tab.url);
+		const path = resolveTabUrl(tab.url).pathname;
 		if (
 			path.length > bestLen &&
 			matchPath({ path: `${path}/*`, end: false }, pathname)
@@ -94,16 +117,6 @@ function findActiveTabId(tabs: CourseTab[], pathname: string): string | null {
 	}
 	return bestId;
 }
-
-/**
- * Tab URLs from the course_home API are absolute in practice, and upstream assumes so.
- * But `INSTRUCTOR_MICROFRONTEND_URL` defaults to a relative `/instructor` in
- * ol-infrastructure's base config and is only replaced with an absolute URL for
- * deployments listing instructor-dashboard in `site_project_mfe_apps` — otherwise the
- * LMS emits `/instructor/<key>` or, when unset, `None/<key>`. A bare `new URL()` throws
- * on both and takes the whole nav down, so resolve against the current origin.
- */
-const tabPathname = (url: string) => new URL(url, window.location.origin).pathname;
 
 /**
  * Upstream's course-bar `isClientRoute`, replicated because the package does not export
@@ -184,13 +197,14 @@ function ResponsiveCourseTabs({
 		<>
 			{visibleTabs.map(({ url, title, tabId }) => {
 				const className = `nav-item flex-shrink-0 nav-link${tabId === activeTabId ? " active" : ""}`;
-				const pathname = tabPathname(url);
+				const resolved = resolveTabUrl(url);
+				const pathname = resolved.pathname;
 				return isClientRoute(pathname) ? (
 					<Link key={tabId} to={pathname} className={className}>
 						{title}
 					</Link>
 				) : (
-					<a key={tabId} href={url} className={className}>
+					<a key={tabId} href={resolved.href} className={className}>
 						{title}
 					</a>
 				);
@@ -208,10 +222,10 @@ function ResponsiveCourseTabs({
 						</Dropdown.Toggle>
 						<Dropdown.Menu className="responsive-tabs-dropdown-menu">
 							{overflowTabs.map(({ url, title, tabId }) => {
-								const pathname = tabPathname(url);
-								const routing = isClientRoute(pathname)
-									? { as: Link, to: pathname }
-									: { href: url };
+								const resolved = resolveTabUrl(url);
+								const routing = isClientRoute(resolved.pathname)
+									? { as: Link, to: resolved.pathname }
+									: { href: resolved.href };
 								return (
 									<Dropdown.Item
 										key={tabId}
@@ -279,7 +293,7 @@ export const MITOLCourseNavigationBar: FC = () => {
 	const location = useLocation();
 	const intl = useIntl();
 
-	const { data } = useQuery({
+	const { data, isPending } = useQuery({
 		queryKey: courseHomeCourseMetadataQueryKey(courseId),
 		queryFn: () => getCourseHomeCourseMetadata(courseId),
 		retry: 2,
@@ -287,14 +301,16 @@ export const MITOLCourseNavigationBar: FC = () => {
 	});
 
 	const tabs = data?.tabs ?? [];
-	// Also covers loading and a missing courseId (which disables the query). Upstream
-	// renders a <Skeleton> here; this bar is a thin strip, and a placeholder that then
-	// changes height shifts the page under the user.
-	if (!tabs.length) {
+	// While the query is in flight, reserve the row rather than collapsing to nothing:
+	// rendering null and then inserting the bar is what pushes the page down. The
+	// placeholder is a real tab with hidden text, so it reserves exactly a tab's height
+	// without hard-coding one. Once we know the answer, no tabs means no bar.
+	const loading = isPending && !!courseId;
+	if (!loading && !tabs.length) {
 		return null;
 	}
 
-	const activeTabId = findActiveTabId(tabs, location.pathname);
+	const activeTabId = loading ? null : findActiveTabId(tabs, location.pathname);
 
 	return (
 		<div id="courseTabsNavigation" className="course-tabs-navigation mb-3">
@@ -305,7 +321,17 @@ export const MITOLCourseNavigationBar: FC = () => {
 							aria-label={intl.formatMessage(navLabelMessage)}
 							className="nav flex-nowrap nav-underline-tabs"
 						>
-							<ResponsiveCourseTabs tabs={tabs} activeTabId={activeTabId} />
+							{loading ? (
+								<span
+									className="nav-item flex-shrink-0 nav-link"
+									aria-hidden="true"
+									style={{ visibility: "hidden" }}
+								>
+									&nbsp;
+								</span>
+							) : (
+								<ResponsiveCourseTabs tabs={tabs} activeTabId={activeTabId} />
+							)}
 							{/* Rendered inside frontend-base's CourseTabsNavigation; kept so
 							    widgets registered there do not vanish on these routes. */}
 							<Slot id="org.openedx.frontend.slot.header.courseNavigationBar.extraContent.v1" />
