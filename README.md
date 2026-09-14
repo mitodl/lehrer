@@ -151,15 +151,21 @@ usable stack:
 
 | Job | Trigger | What it does |
 |---|---|---|
-| `edxapp-provision`  | automatic | Superuser, notes OAuth client, waffle flags |
+| `edxapp-provision`  | on `tilt up`, then manual | Superuser, notes OAuth client, waffle flags |
 | `notes-migrate`     | automatic | edx-notes-api schema and search index |
 | `edxapp-demo-course`| manual    | Imports the Open edX demo course |
+
+`edxapp-migrate` and `edxapp-provision` run by themselves when `tilt up`
+starts; after that they wait for a trigger (see
+[Iterating on platform settings](#iterating-on-platform-settings) for why).
+Trigger `edxapp-migrate` after a change that brings new migrations, such as a
+`build_manifest.yaml` bump.
 
 `edxapp-provision` creates the `edx` / `edx` superuser (override the password
 with `PROVISION_SUPERUSER_PASSWORD` before `lehrer dev setup`), the DOT OAuth
 Application that LMS↔notes SSO signs its tokens with, and the waffle flags in
-`local-dev/provision/waffle-flags.yaml`. It is idempotent, so Tilt re-runs it
-whenever the platform image changes. Add OAuth clients in
+`local-dev/provision/waffle-flags.yaml`. It is idempotent, so trigger it again
+whenever you edit either file. Add OAuth clients in
 `local-dev/provision/provision.py`; both files are mounted into the Job as a
 ConfigMap.
 
@@ -184,6 +190,51 @@ Neither migrate Job retries. MariaDB DDL is not transactional, so a migration
 that dies partway leaves the tables and columns it already created behind, and a
 second attempt fails on "table already exists" — burying whatever the first, real
 error was. `backoffLimit: 0` keeps the original failure on screen.
+
+#### Iterating on platform settings
+
+Edits to these files are live-updated into the running platform pods instead of
+rebuilding the image:
+
+- `settings/{lms,cms}/aqueduct.py` and `settings/{lms,cms}/models/aqueduct.py`
+- `src/lehrer/settings/base.py`
+- `settings/set_waffle_flags.py`, `settings/process_scheduled_emails.py`, `settings/saml_pull.py`
+
+Tilt copies the changed file into every running LMS, CMS and worker container
+and sends PID 1 a `HUP`. gunicorn answers by starting new workers, which import
+the settings again; celery re-execs itself in place. The container is not
+restarted, so the synced files stay.
+
+Everything else the platform build reads (`assets.py`, `i18n.py`, the
+`*.env.yml` files, `build_manifest.yaml`) still runs the full Dagger build.
+Those feed collectstatic, compilemessages or dependency resolution, which a
+file copy cannot redo.
+
+| Edit | Full rebuild (before) | Live update (after) |
+|---|---|---|
+| `settings/lms/aqueduct.py` | 31m 26s | 8s |
+
+Measured 2026-09-14 on an i7-13800H / 49 GB WSL2 host with Tilt v0.37.7 and
+Dagger v0.21.9, the second build of the same inputs on that Dagger engine.
+"Full rebuild" runs from `tilt up` until the LMS answers `/heartbeat` on the new
+image, with the codejail, notes and MFE images building alongside it. 1641s of it
+was the platform image step: Dagger evaluating and exporting the image, then
+`docker load` and a push that re-uploaded 63 of the image's 71 layers. The rest was the migrate
+and provision Jobs and the pod rollout. "Live update" runs from saving the file
+until the same pod answers `/heartbeat` after gunicorn has booted new workers.
+
+The full rebuild exports the platform image, about 6 GB, as a tarball under
+`$TMPDIR` (default `/tmp`). Where `/tmp` is tmpfs (systemd's `tmp.mount`
+makes it one), that tarball sits in RAM; point it at disk instead:
+
+```bash
+TMPDIR=/var/tmp lehrer dev start
+```
+
+`edxapp-migrate` and `edxapp-provision` wait for a trigger once `tilt up` has
+started them. A finished Job's pod cannot be live-updated, and Tilt answers that
+by rebuilding the image for that resource, which would turn every settings edit
+back into a full build.
 
 #### Database collation
 

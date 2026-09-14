@@ -162,10 +162,12 @@ def setup(cfg):
     manage_secrets = cfg["manage_secrets"]
     config_override_paths = cfg["config_override_paths"]
 
-    # Lehrer core source — injected directly into the container by inject_aqueduct_settings
+    # Lehrer core settings — injected directly into the container by inject_aqueduct_settings
     # (dag.current_module().source().file("src/lehrer/settings/base.py")).
-    # Must be in deps so Tilt triggers a rebuild when base.py changes.
-    lehrer_core_src = local_dev + "/../src/lehrer/settings"
+    # Must be in deps so Tilt notices when base.py changes. Only that file: the
+    # build reads nothing else from the package, so anything wider is a change
+    # no sync matches, which costs a full rebuild for nothing.
+    lehrer_base = local_dev + "/../src/lehrer/settings/base.py"
 
     # Absolute path to the deployment config directory.
     # Relative paths are treated as relative to local_dev (where tilt up is run from).
@@ -325,12 +327,62 @@ def setup(cfg):
 
     platform_image = img("openedx-platform")
 
+    # Runtime settings edits are synced into the running pods instead of
+    # rebuilt. A rebuild re-runs dagger, exports the whole image to a tarball,
+    # loads and pushes it, and rolls every platform pod; a sync copies the
+    # changed file and signals the servers.
+    #
+    # The destinations mirror inject_aqueduct_settings() in
+    # src/lehrer/core/platform.py, and tests/cli/test_local_dev.py pins the
+    # two together. Every other file under deps (assets.py, i18n.py, the
+    # *.env.yml files, build_manifest.yaml) feeds collectstatic or dependency
+    # resolution, so it deliberately matches no sync: Tilt stops a live update
+    # on a file no sync covers and does the full build, which is what those
+    # edits need.
+    # (path under the deployment's settings/, path in the container)
+    platform_settings_syncs = [
+        ("lms/aqueduct.py", "/openedx/edx-platform/lms/envs/aqueduct.py"),
+        ("lms/models/aqueduct.py", "/openedx/edx-platform/lms/envs/models/aqueduct.py"),
+        ("cms/aqueduct.py", "/openedx/edx-platform/cms/envs/aqueduct.py"),
+        ("cms/models/aqueduct.py", "/openedx/edx-platform/cms/envs/models/aqueduct.py"),
+        ("set_waffle_flags.py", "/openedx/edx-platform/set_waffle_flags.py"),
+        ("process_scheduled_emails.py", "/openedx/edx-platform/process_scheduled_emails.py"),
+        ("saml_pull.py", "/openedx/edx-platform/saml_pull.py"),
+    ]
+    platform_live_update = [
+        sync(dep_cfg + "/settings/" + local_path, container_path)
+        for local_path, container_path in platform_settings_syncs
+    ]
+    # Tilt maps a changed file to the first sync that matches it, so one local
+    # file cannot land in two places; the CMS copy of base.py is made in-pod.
+    platform_live_update += [
+        sync(lehrer_base, "/openedx/edx-platform/lms/envs/models/base.py"),
+        # --remove-destination because the image's copy is root-owned and the
+        # pod runs as app, which may replace the file (app owns the directory)
+        # but not write into it. The sync above gets away with it only because
+        # tar unlinks before extracting.
+        run(
+            "cp --remove-destination /openedx/edx-platform/lms/envs/models/base.py" +
+            " /openedx/edx-platform/cms/envs/models/base.py",
+            trigger=[lehrer_base],
+        ),
+        # PID 1 is the server itself, since opentelemetry-instrument execs it.
+        # gunicorn answers HUP by starting new workers, which import the
+        # settings afresh; celery answers it by re-exec'ing itself in place.
+        # Neither restarts the container, which would throw the synced files
+        # away.
+        run("kill -HUP 1"),
+    ]
+
     custom_build(
         ref=platform_image,
         command=(
             "set -e && " +
             push_rewrite +
-            "tmp=$(mktemp /tmp/lehrer-platform-XXXXXX.tar) && " +
+            # The platform image is several GB, and /tmp is RAM-backed tmpfs
+            # wherever systemd's tmp.mount is active; $TMPDIR lets a
+            # developer put the tarball on disk instead.
+            "tmp=$(mktemp \"${TMPDIR:-/tmp}/lehrer-platform-XXXXXX.tar\") && " +
             "dagger --progress=plain call platform build-platform" +
             " --deployment-name " + deploy_name +
             " --release-name " + release_name +
@@ -346,9 +398,10 @@ def setup(cfg):
         deps=[
             dep_cfg + "/build_manifest.yaml",
             dep_cfg + "/settings",
-            lehrer_core_src,
+            lehrer_base,
         ],
         skips_local_docker=True,
+        live_update=platform_live_update,
     )
 
     # ------------------------------------------------------------------ #
@@ -362,7 +415,7 @@ def setup(cfg):
         command=(
             "set -e && " +
             push_rewrite +
-            "tmp=$(mktemp /tmp/lehrer-codejail-XXXXXX.tar) && " +
+            "tmp=$(mktemp \"${TMPDIR:-/tmp}/lehrer-codejail-XXXXXX.tar\") && " +
             "dagger --progress=plain call codejail build" +
             " --release-name " + release_name +
             " --codejail-config " + dep_cfg + "/codejail_config" +
@@ -387,7 +440,7 @@ def setup(cfg):
         command=(
             "set -e && " +
             push_rewrite +
-            "tmp=$(mktemp /tmp/lehrer-notes-XXXXXX.tar) && " +
+            "tmp=$(mktemp \"${TMPDIR:-/tmp}/lehrer-notes-XXXXXX.tar\") && " +
             "dagger --progress=plain call notes build" +
             " --release-name " + release_name +
             " --notes-repo " + notes_repo +
@@ -593,9 +646,18 @@ def setup(cfg):
         )).replace("__PLATFORM_CONFIG_CHECKSUM__", platform_config_checksum)))
 
     # Run DB migrations once the database is up, before the services start.
+    #
+    # Both Jobs below run on the platform image. They run when `tilt up` starts;
+    # after that they wait for a trigger. A finished Job's pod cannot be
+    # live-updated, and Tilt answers that by rebuilding the whole image for the
+    # resource, so leaving them automatic would turn every settings edit back
+    # into the full rebuild the live_update above exists to avoid. Trigger
+    # edxapp-migrate yourself after a change that brings new migrations (a
+    # build_manifest.yaml bump), and edxapp-provision after editing provision/.
     k8s_resource(
         "edxapp-migrate",
         resource_deps=infra_deps,
+        trigger_mode=TRIGGER_MODE_MANUAL,
         labels=["platform"],
     )
 
@@ -606,6 +668,7 @@ def setup(cfg):
         "edxapp-provision",
         objects=["edxapp-provision:ConfigMap:openedx"],
         resource_deps=["edxapp-migrate"],
+        trigger_mode=TRIGGER_MODE_MANUAL,
         labels=["platform"],
     )
 

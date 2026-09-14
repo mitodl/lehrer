@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import socket
+import tempfile
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -37,15 +38,35 @@ CLUSTER = "lehrer-dev"
 CONTEXT = "k3d-lehrer-dev"
 NAMESPACE = "openedx"
 
-# Required tooling: (command, recommended minimum version, version flag).
-_DEPENDENCIES: tuple[tuple[str, str, str], ...] = (
-    ("k3d", "5.0", "version"),
-    ("kubectl", "1.26", "version"),
-    ("tilt", "0.33", "version"),
-    ("helm", "3.12", "version"),
-    ("dagger", "0.9", "version"),
-    ("docker", "24.0", "--version"),
+# Required tooling: (command, minimum version, argv that prints the version).
+# k3d 5.5 is the first release that reads k3d-config.yaml's k3d.io/v1alpha5.
+# dagger is not listed: its floor is the module's engineVersion, which
+# _dependencies() reads from dagger.json so the two cannot drift.
+_DEPENDENCIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("k3d", "5.5", ("version",)),
+    ("kubectl", "1.26", ("version", "--client")),
+    ("tilt", "0.33", ("version",)),
+    ("helm", "3.12", ("version", "--short")),
+    ("docker", "24.0", ("--version",)),
 )
+
+_VERSION = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
+
+
+def _dependencies() -> tuple[tuple[str, str, tuple[str, ...]], ...]:
+    engine = json.loads((_paths.repo_root() / "dagger.json").read_text())
+    dagger_floor = engine["engineVersion"].removeprefix("v")
+    return (*_DEPENDENCIES, ("dagger", dagger_floor, ("version",)))
+
+
+def _parse_version(output: str) -> tuple[int, int, int] | None:
+    """Return the first ``X.Y[.Z]`` in a tool's version output."""
+    match = _VERSION.search(output)
+    if match is None:
+        return None
+    major, minor, patch = match.groups(default="0")
+    return int(major), int(minor), int(patch)
+
 
 # Helm repositories needed to install the in-cluster infra operators.
 _HELM_REPOS: tuple[tuple[str, str], ...] = (
@@ -525,7 +546,7 @@ def _check_mfe_hostnames(deployment_config: Path) -> int:
 
 @app.command(name="check")
 def check_deps(*, deployment_config: str | None = None) -> None:
-    """Verify that all required CLI tools are installed.
+    """Verify that all required CLI tools are installed and new enough.
 
     Parameters
     ----------
@@ -534,24 +555,33 @@ def check_deps(*, deployment_config: str | None = None) -> None:
         resolve. Skipped when omitted, since the hostnames are deployment
         specific and the generic config only uses localhost.
     """
-    missing = 0
-    for cmd, minimum, flag in _DEPENDENCIES:
+    problems = 0
+    for cmd, minimum, argv in _dependencies():
         if not have(cmd):
-            print(f"MISSING: {cmd} (recommended >= {minimum})")
-            missing += 1
+            print(f"MISSING: {cmd} (need >= {minimum})")
+            problems += 1
             continue
-        version = capture(cmd, flag, check=False).splitlines()
-        first = version[0] if version else "installed"
-        print(f"OK:      {cmd} — {first}")
+        found = _parse_version(capture(cmd, *argv, check=False))
+        if found is None:
+            # Reported but not fatal: a dev build printing something odd is
+            # not evidence the tool is too old.
+            print(f"UNKNOWN: {cmd} — no version in `{cmd} {' '.join(argv)}`")
+            continue
+        shown = ".".join(map(str, found))
+        if found < tuple(int(part) for part in minimum.split(".")):
+            print(f"TOO OLD: {cmd} {shown} (need >= {minimum})")
+            problems += 1
+        else:
+            print(f"OK:      {cmd} {shown}")
 
     unresolved = 0
     if deployment_config is not None:
         unresolved = _check_mfe_hostnames(Path(deployment_config).resolve())
 
-    if missing:
+    if problems:
         raise SystemExit(
-            f"\n{missing} missing dependency/ies. Install them before "
-            "`lehrer dev setup`."
+            f"\n{problems} tool(s) missing or older than lehrer needs. Install "
+            "or upgrade them before `lehrer dev setup`."
         )
     if unresolved:
         raise SystemExit(
@@ -772,10 +802,13 @@ def teardown() -> None:
 
 def _clean_temp_artifacts() -> None:
     shutil.rmtree("/tmp/lehrer-mfe-dist", ignore_errors=True)  # noqa: S108
+    # lehrer-core.star writes the image tarballs under ${TMPDIR:-/tmp};
+    # gettempdir() checks $TMPDIR first.
+    tmpdir = tempfile.gettempdir()
     for pattern in (
-        "/tmp/lehrer-platform-*.tar",  # noqa: S108
-        "/tmp/lehrer-codejail-*.tar",  # noqa: S108
-        "/tmp/lehrer-notes-*.tar",  # noqa: S108
+        f"{tmpdir}/lehrer-platform-*.tar",
+        f"{tmpdir}/lehrer-codejail-*.tar",
+        f"{tmpdir}/lehrer-notes-*.tar",
     ):
         for path in glob.glob(pattern):
             Path(path).unlink(missing_ok=True)

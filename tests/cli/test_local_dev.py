@@ -1101,3 +1101,170 @@ class TestPlatformConfigChecksum:
         star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
         assert "config_override_paths" in star
         assert "platform_config_files.extend(config_override_paths)" in star
+
+
+def _inject_aqueduct_settings_body() -> str:
+    source = (
+        _paths.repo_root() / "src" / "lehrer" / "core" / "platform.py"
+    ).read_text()
+    return source.split("def inject_aqueduct_settings(", 1)[1].split(
+        "\n    @function", 1
+    )[0]
+
+
+class TestPlatformLiveUpdate:
+    """Settings edits must reach running pods without a full image rebuild.
+
+    The sync table restates inject_aqueduct_settings()'s file placement in
+    Starlark. A sync pointed at a path the build does not use leaves the pod
+    running the old file with nothing reporting it; a file the build injects
+    that no sync covers costs a full rebuild. Pin the two together.
+
+    Equality also keeps build-time files (assets.py, i18n.py, the env.yml
+    files) out of the table: syncing one would skip the collectstatic run it
+    feeds and serve stale static files.
+    """
+
+    STAR = _paths.local_dev_dir() / "lehrer-core.star"
+
+    def test_sync_table_matches_what_the_build_injects(self) -> None:
+        injected = {
+            (settings_path, container_path)
+            for container_path, settings_path in re.findall(
+                r'\.with_file\(\s*"(/openedx/[^"]+)",\s*custom_settings\.file\("([^"]+)"\)',
+                _inject_aqueduct_settings_body(),
+            )
+        }
+        star = self.STAR.read_text()
+        table = star.split("platform_settings_syncs = [", 1)[1].split("\n    ]", 1)[0]
+        synced = set(re.findall(r'\("([^"]+)", "(/openedx/[^"]+)"\)', table))
+        assert injected, "no custom_settings files parsed out of platform.py"
+        assert synced == injected
+
+    def test_lehrer_base_reaches_both_services(self) -> None:
+        # The build injects lehrer's base.py into lms and cms; the star syncs
+        # it to one and copies it to the other in-pod.
+        injected = set(
+            re.findall(
+                r'\.with_file\(\s*"(/openedx/[^"]+)",\s*lehrer_base,',
+                _inject_aqueduct_settings_body(),
+            )
+        )
+        lms, cms = (
+            "/openedx/edx-platform/lms/envs/models/base.py",
+            "/openedx/edx-platform/cms/envs/models/base.py",
+        )
+        assert injected == {lms, cms}
+        star = self.STAR.read_text()
+        assert f'sync(lehrer_base, "{lms}")' in star
+        # A plain cp fails in the pod: the image's file is root-owned and the
+        # pod runs as app, which can only replace it, not write into it.
+        assert f'"cp --remove-destination {lms}" +\n            " {cms}"' in star
+
+    @pytest.mark.parametrize("job", ["edxapp-migrate", "edxapp-provision"])
+    def test_platform_image_jobs_wait_for_a_trigger(self, job: str) -> None:
+        # A finished Job's pod cannot be live-updated, and Tilt rebuilds the
+        # image for that resource instead, undoing the live update.
+        star = self.STAR.read_text()
+        block = star.split(f'k8s_resource(\n        "{job}",', 1)[1].split(
+            "\n    )", 1
+        )[0]
+        assert "trigger_mode=TRIGGER_MODE_MANUAL" in block
+
+    def test_every_platform_image_job_is_covered(self) -> None:
+        platform = _paths.local_dev_dir() / "manifests" / "platform"
+        jobs = {
+            doc["metadata"]["name"]
+            for path in platform.glob("job-*.yaml")
+            for doc in yaml.safe_load_all(path.read_text())
+            if doc and "openedx-platform" in json.dumps(doc)
+        }
+        # edxapp-demo-course is manual already (it clones over the network).
+        assert jobs == {"edxapp-migrate", "edxapp-provision", "edxapp-demo-course"}
+
+
+# Real first lines from each tool, so a format change shows up as a parse
+# failure here rather than as a silently skipped check.
+_CURRENT_TOOL_OUTPUT = {
+    "k3d": "k3d version v5.8.3\nk3s version v1.31.5-k3s1 (default)",
+    "kubectl": "Client Version: v1.36.4\nKustomize Version: v5.8.1",
+    "tilt": "v0.37.7, built 2026-08-15",
+    "helm": "v4.2.2+gb05881c",
+    "dagger": "dagger v0.21.9 (image://registry.dagger.io/engine:v0.21.9) linux/amd64",
+    "docker": "Docker version 29.7.2, build a7dcaa6fdb",
+}
+
+
+class TestToolVersions:
+    """`lehrer dev check` must reject a tool that is present but too old.
+
+    Checking presence alone let an old k3d/tilt/dagger through, which then
+    failed inside `setup` or Tilt with an error that never names the version.
+    """
+
+    @pytest.mark.parametrize(
+        ("cmd", "expected"),
+        [
+            ("k3d", (5, 8, 3)),
+            ("kubectl", (1, 36, 4)),
+            ("tilt", (0, 37, 7)),
+            ("helm", (4, 2, 2)),
+            ("dagger", (0, 21, 9)),
+            ("docker", (29, 7, 2)),
+        ],
+    )
+    def test_parses_real_version_output(
+        self, cmd: str, expected: tuple[int, int, int]
+    ) -> None:
+        assert local_dev._parse_version(_CURRENT_TOOL_OUTPUT[cmd]) == expected
+
+    def test_every_tool_has_sample_output(self) -> None:
+        checked = {cmd for cmd, _, _ in local_dev._dependencies()}
+        assert checked == set(_CURRENT_TOOL_OUTPUT)
+
+    def test_dagger_floor_is_the_module_engine_version(self) -> None:
+        engine = json.loads((_paths.repo_root() / "dagger.json").read_text())
+        floors = {cmd: floor for cmd, floor, _ in local_dev._dependencies()}
+        assert floors["dagger"] == engine["engineVersion"].removeprefix("v")
+
+    def test_k3d_floor_matches_the_cluster_config_schema(self) -> None:
+        # k3d.io/v1alpha5 first shipped in k3d 5.5.0. Moving the config to a
+        # newer schema means raising the floor with it.
+        api_version = yaml.safe_load(_paths.k3d_config().read_text())["apiVersion"]
+        floors = {cmd: floor for cmd, floor, _ in local_dev._dependencies()}
+        assert (api_version, floors["k3d"]) == ("k3d.io/v1alpha5", "5.5")
+
+    def _check(self, monkeypatch: pytest.MonkeyPatch, outputs: dict[str, str]) -> None:
+        monkeypatch.setattr(local_dev, "have", lambda cmd: cmd in outputs)
+        monkeypatch.setattr(
+            local_dev, "capture", lambda cmd, *args, **kwargs: outputs[cmd]
+        )
+        local_dev.check_deps()
+
+    def test_current_tools_pass(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._check(monkeypatch, _CURRENT_TOOL_OUTPUT)
+        assert "OK:      k3d 5.8.3" in capsys.readouterr().out
+
+    def test_too_old_tool_fails(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        outputs = {**_CURRENT_TOOL_OUTPUT, "k3d": "k3d version v5.4.9"}
+        with pytest.raises(SystemExit):
+            self._check(monkeypatch, outputs)
+        assert "TOO OLD: k3d 5.4.9 (need >= 5.5)" in capsys.readouterr().out
+
+    def test_missing_tool_fails(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        outputs = {k: v for k, v in _CURRENT_TOOL_OUTPUT.items() if k != "tilt"}
+        with pytest.raises(SystemExit):
+            self._check(monkeypatch, outputs)
+        assert "MISSING: tilt" in capsys.readouterr().out
+
+    def test_unreadable_version_is_reported_not_fatal(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._check(monkeypatch, {**_CURRENT_TOOL_OUTPUT, "tilt": "dev build"})
+        assert "UNKNOWN: tilt" in capsys.readouterr().out
