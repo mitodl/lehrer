@@ -332,22 +332,23 @@ def setup(cfg):
     # loads and pushes it, and rolls every platform pod; a sync copies the
     # changed file and signals the servers.
     #
-    # The destinations mirror inject_aqueduct_settings() in
-    # src/lehrer/core/platform.py, and tests/cli/test_local_dev.py pins the
-    # two together. Every other file under deps (assets.py, i18n.py, the
-    # *.env.yml files, build_manifest.yaml) feeds collectstatic or dependency
-    # resolution, so it deliberately matches no sync: Tilt stops a live update
-    # on a file no sync covers and does the full build, which is what those
-    # edits need.
+    # The table covers the settings modules inject_aqueduct_settings() in
+    # src/lehrer/core/platform.py places under */envs/, which the servers
+    # import; tests/cli/test_local_dev.py pins the two together. Every other
+    # file under deps matches no sync on purpose, and Tilt stops a live update
+    # on a file no sync covers and does the full build:
+    # - assets.py, i18n.py, the *.env.yml files and build_manifest.yaml feed
+    #   collectstatic or dependency resolution.
+    # - set_waffle_flags.py is run by the edxapp-provision Job, whose pod
+    #   starts from the image, so an edit has to reach the image. Nothing
+    #   long-running imports it, process_scheduled_emails.py or saml_pull.py,
+    #   so syncing them would only update copies nothing executes.
     # (path under the deployment's settings/, path in the container)
     platform_settings_syncs = [
         ("lms/aqueduct.py", "/openedx/edx-platform/lms/envs/aqueduct.py"),
         ("lms/models/aqueduct.py", "/openedx/edx-platform/lms/envs/models/aqueduct.py"),
         ("cms/aqueduct.py", "/openedx/edx-platform/cms/envs/aqueduct.py"),
         ("cms/models/aqueduct.py", "/openedx/edx-platform/cms/envs/models/aqueduct.py"),
-        ("set_waffle_flags.py", "/openedx/edx-platform/set_waffle_flags.py"),
-        ("process_scheduled_emails.py", "/openedx/edx-platform/process_scheduled_emails.py"),
-        ("saml_pull.py", "/openedx/edx-platform/saml_pull.py"),
     ]
     platform_live_update = [
         sync(dep_cfg + "/settings/" + local_path, container_path)
@@ -383,6 +384,8 @@ def setup(cfg):
             # wherever systemd's tmp.mount is active; $TMPDIR lets a
             # developer put the tarball on disk instead.
             "tmp=$(mktemp \"${TMPDIR:-/tmp}/lehrer-platform-XXXXXX.tar\") && " +
+            # Removes the tarball on a failed step too, not just after the push.
+            "trap 'rm -f \"$tmp\"' EXIT && " +
             "dagger --progress=plain call platform build-platform" +
             " --deployment-name " + deploy_name +
             " --release-name " + release_name +
@@ -392,8 +395,7 @@ def setup(cfg):
             " export --path $tmp && " +
             "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
             "docker tag $loaded $PUSH_REF && " +
-            "docker push $PUSH_REF && " +
-            "rm -f $tmp"
+            "docker push $PUSH_REF"
         ),
         deps=[
             dep_cfg + "/build_manifest.yaml",
@@ -416,14 +418,14 @@ def setup(cfg):
             "set -e && " +
             push_rewrite +
             "tmp=$(mktemp \"${TMPDIR:-/tmp}/lehrer-codejail-XXXXXX.tar\") && " +
+            "trap 'rm -f \"$tmp\"' EXIT && " +
             "dagger --progress=plain call codejail build" +
             " --release-name " + release_name +
             " --codejail-config " + dep_cfg + "/codejail_config" +
             " export --path $tmp && " +
             "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
             "docker tag $loaded $PUSH_REF && " +
-            "docker push $PUSH_REF && " +
-            "rm -f $tmp"
+            "docker push $PUSH_REF"
         ),
         deps=[dep_cfg + "/codejail_config"],
         skips_local_docker=True,
@@ -441,6 +443,7 @@ def setup(cfg):
             "set -e && " +
             push_rewrite +
             "tmp=$(mktemp \"${TMPDIR:-/tmp}/lehrer-notes-XXXXXX.tar\") && " +
+            "trap 'rm -f \"$tmp\"' EXIT && " +
             "dagger --progress=plain call notes build" +
             " --release-name " + release_name +
             " --notes-repo " + notes_repo +
@@ -448,8 +451,7 @@ def setup(cfg):
             " export --path $tmp && " +
             "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
             "docker tag $loaded $PUSH_REF && " +
-            "docker push $PUSH_REF && " +
-            "rm -f $tmp"
+            "docker push $PUSH_REF"
         ),
         deps=[dep_cfg + "/notes_config"],
         skips_local_docker=True,

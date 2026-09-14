@@ -18,7 +18,6 @@ import os
 import re
 import shutil
 import socket
-import tempfile
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -802,9 +801,11 @@ def teardown() -> None:
 
 def _clean_temp_artifacts() -> None:
     shutil.rmtree("/tmp/lehrer-mfe-dist", ignore_errors=True)  # noqa: S108
-    # lehrer-core.star writes the image tarballs under ${TMPDIR:-/tmp};
-    # gettempdir() checks $TMPDIR first.
-    tmpdir = tempfile.gettempdir()
+    # The same ${TMPDIR:-/tmp} the build commands expand; gettempdir() would
+    # also honour $TEMP/$TMP, which they do not. Each command's EXIT trap
+    # removes its own tarball, so this only finds one from a killed build, and
+    # only when $TMPDIR matches what `lehrer dev start` ran with.
+    tmpdir = os.environ.get("TMPDIR") or "/tmp"  # noqa: S108
     for pattern in (
         f"{tmpdir}/lehrer-platform-*.tar",
         f"{tmpdir}/lehrer-codejail-*.tar",

@@ -198,17 +198,18 @@ rebuilding the image:
 
 - `settings/{lms,cms}/aqueduct.py` and `settings/{lms,cms}/models/aqueduct.py`
 - `src/lehrer/settings/base.py`
-- `settings/set_waffle_flags.py`, `settings/process_scheduled_emails.py`, `settings/saml_pull.py`
 
 Tilt copies the changed file into every running LMS, CMS and worker container
 and sends PID 1 a `HUP`. gunicorn answers by starting new workers, which import
 the settings again; celery re-execs itself in place. The container is not
 restarted, so the synced files stay.
 
-Everything else the platform build reads (`assets.py`, `i18n.py`, the
-`*.env.yml` files, `build_manifest.yaml`) still runs the full Dagger build.
-Those feed collectstatic, compilemessages or dependency resolution, which a
-file copy cannot redo.
+Everything else the platform build reads still runs the full Dagger build.
+`assets.py`, `i18n.py`, the `*.env.yml` files and `build_manifest.yaml` feed
+collectstatic, compilemessages or dependency resolution, which a file copy
+cannot redo. `set_waffle_flags.py` is run by the `edxapp-provision` Job from
+the image, so an edit to it has to reach the image before you re-trigger the
+Job.
 
 | Edit | Full rebuild (before) | Live update (after) |
 |---|---|---|

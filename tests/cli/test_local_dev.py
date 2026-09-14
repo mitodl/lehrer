@@ -1115,31 +1115,80 @@ def _inject_aqueduct_settings_body() -> str:
 class TestPlatformLiveUpdate:
     """Settings edits must reach running pods without a full image rebuild.
 
-    The sync table restates inject_aqueduct_settings()'s file placement in
-    Starlark. A sync pointed at a path the build does not use leaves the pod
-    running the old file with nothing reporting it; a file the build injects
-    that no sync covers costs a full rebuild. Pin the two together.
+    The sync table restates inject_aqueduct_settings()'s placement of the
+    settings modules the servers import (everything under */envs/). A sync
+    pointed at a path the build does not use leaves the pod running the old
+    file with nothing reporting it; a settings module no sync covers costs a
+    full rebuild. Pin the two together.
 
-    Equality also keeps build-time files (assets.py, i18n.py, the env.yml
-    files) out of the table: syncing one would skip the collectstatic run it
-    feeds and serve stale static files.
+    Build-time files (assets.py, i18n.py, the env.yml files) stay out of the
+    table: syncing one would skip the collectstatic run it feeds and serve
+    stale static files.
     """
 
     STAR = _paths.local_dev_dir() / "lehrer-core.star"
 
-    def test_sync_table_matches_what_the_build_injects(self) -> None:
+    def _synced(self) -> set[tuple[str, str]]:
+        star = self.STAR.read_text()
+        table = star.split("platform_settings_syncs = [", 1)[1].split("\n    ]", 1)[0]
+        return set(re.findall(r'\("([^"]+)", "(/openedx/[^"]+)"\)', table))
+
+    def test_sync_table_matches_the_settings_modules_the_build_injects(
+        self,
+    ) -> None:
         injected = {
             (settings_path, container_path)
             for container_path, settings_path in re.findall(
                 r'\.with_file\(\s*"(/openedx/[^"]+)",\s*custom_settings\.file\("([^"]+)"\)',
                 _inject_aqueduct_settings_body(),
             )
+            if "/envs/" in container_path
         }
+        assert injected, "no custom_settings settings modules parsed out of platform.py"
+        assert self._synced() == injected
+
+    def test_job_consumed_scripts_are_not_synced(self) -> None:
+        # edxapp-provision runs set_waffle_flags.py from the image. Synced, an
+        # edit would update copies in the long-running pods and skip the
+        # rebuild the Job needs to see it.
+        job = (
+            _paths.local_dev_dir() / "manifests" / "platform" / "job-provision.yaml"
+        ).read_text()
+        assert "python set_waffle_flags.py" in job
+        synced_names = {Path(settings_path).name for settings_path, _ in self._synced()}
+        assert "set_waffle_flags.py" not in synced_names
+
+    def test_every_image_tarball_is_removed_on_exit(self) -> None:
+        # Without the trap a build that fails after the export leaves a
+        # multi-GB tarball behind in $TMPDIR.
         star = self.STAR.read_text()
-        table = star.split("platform_settings_syncs = [", 1)[1].split("\n    ]", 1)[0]
-        synced = set(re.findall(r'\("([^"]+)", "(/openedx/[^"]+)"\)', table))
-        assert injected, "no custom_settings files parsed out of platform.py"
-        assert synced == injected
+        tarballs = re.findall(
+            r'mktemp \\"\$\{TMPDIR:-/tmp\}/(lehrer-[a-z]+)-XXXXXX\.tar', star
+        )
+        assert sorted(tarballs) == [
+            "lehrer-codejail",
+            "lehrer-notes",
+            "lehrer-platform",
+        ]
+        assert star.count('"trap \'rm -f \\"$tmp\\"\' EXIT && "') == len(tarballs)
+
+    def test_teardown_looks_where_the_build_writes(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        # ${TMPDIR:-/tmp}, not gettempdir(): that would also follow $TEMP.
+        build_dir, other_dir = tmp_path / "build", tmp_path / "other"
+        build_dir.mkdir()
+        other_dir.mkdir()
+        leftover = build_dir / "lehrer-platform-abc123.tar"
+        decoy = other_dir / "lehrer-platform-def456.tar"
+        leftover.touch()
+        decoy.touch()
+        monkeypatch.setenv("TMPDIR", str(build_dir))
+        monkeypatch.setenv("TEMP", str(other_dir))
+        monkeypatch.setattr(local_dev.shutil, "rmtree", lambda *a, **k: None)
+        local_dev._clean_temp_artifacts()
+        assert not leftover.exists()
+        assert decoy.exists()
 
     def test_lehrer_base_reaches_both_services(self) -> None:
         # The build injects lehrer's base.py into lms and cms; the star syncs
