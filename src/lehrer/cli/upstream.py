@@ -207,6 +207,7 @@ def frontend_base_status(
     repository's default branch.
     """
     require("gh")
+    require("npm")
 
     if repo:
         entries = [{"repo": name, "exposed_deployments": []} for name in repo]

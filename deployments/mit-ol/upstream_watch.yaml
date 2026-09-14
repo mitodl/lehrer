@@ -17,19 +17,19 @@
 # Verified against version_matrix.py @ 92ad0bdbd on 2026-09-01.
 repos:
 - repo: openedx/frontend-app-admin-console
-  exposed_deployments: [mitxonline]
+  exposed_deployments: [mitxonline, mitx, mitx-staging]
 - repo: openedx/frontend-app-authoring
-  exposed_deployments: [mitxonline]
+  exposed_deployments: [mitxonline, mitx, mitx-staging]
 - repo: openedx/frontend-app-communications
-  exposed_deployments: [mitxonline]
+  exposed_deployments: [mitxonline, mitx, mitx-staging]
 - repo: openedx/frontend-app-discussions
-  exposed_deployments: [mitxonline]
+  exposed_deployments: [mitxonline, mitx, mitx-staging]
 - repo: openedx/frontend-app-gradebook
-  exposed_deployments: [mitxonline]
+  exposed_deployments: [mitxonline, mitx, mitx-staging]
 - repo: openedx/frontend-app-learning
-  exposed_deployments: [mitxonline]
+  exposed_deployments: [mitxonline, mitx, mitx-staging]
 - repo: openedx/frontend-app-ora-grading
-  exposed_deployments: [mitxonline]
+  exposed_deployments: [mitxonline, mitx, mitx-staging]
 
 # version_matrix.py declares this one with branch_override="main", which is the
 # repository's default branch, so these deployments are exposed exactly as if
@@ -38,8 +38,8 @@ repos:
 - repo: openedx/frontend-app-instructor-dashboard
   exposed_deployments: [mitxonline, mitx, mitx-staging]
 
-# Built only at release="verawood" today, so no deployment is exposed, but the
-# Site Projects will consume the module library and mitx/xpro move to Willow
-# eventually.  Watched, not urgent.
+# mitx and mitx-staging already track this from release="master" (their CI
+# environment); mitxonline does not build it at all.  xpro is pinned to
+# release="verawood"/"ulmo" and is insulated.
 - repo: openedx/frontend-app-learner-dashboard
-  exposed_deployments: []
+  exposed_deployments: [mitx, mitx-staging]
