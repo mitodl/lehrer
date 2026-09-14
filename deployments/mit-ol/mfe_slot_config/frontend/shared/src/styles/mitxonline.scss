@@ -32,6 +32,18 @@
     display: none !important;
   }
 
+  // The learning header's logo box, which lives in frontend-app-learning's own
+  // src/index.scss and so is missing from any other Site Project. Its 1rem
+  // margin plus the lockup's 10px is the 26px logo-to-title gap.
+  .logo {
+    display: block !important;
+    box-sizing: content-box !important;
+    position: relative;
+    top: 0.1em;
+    height: 1.75rem !important;
+    margin-right: 1rem !important;
+  }
+
   .logo img{
     height: 24px !important;
   }
@@ -51,6 +63,16 @@
 
   .course-title-lockup {
     margin-left: 10px !important;
+    min-width: 0;
+
+    // From frontend-component-header's `.learning-header` block, which the
+    // shell's header does not match: truncation, plus 1.6px of line spacing.
+    span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-bottom: calc(var(--pgn-spacing-spacer-base, 1rem) * 0.1);
+    }
   }
   .dropdown-toggle, .menu-trigger {
     display: flex !important;

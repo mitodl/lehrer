@@ -60,7 +60,7 @@ frontend/
 |---|---|---|
 | `../legacy/Footer.jsx` | `src/Footer.tsx` | Moved to shared: `shared/src/footer/index.tsx` |
 | `../legacy/learning-mfe-config.env.jsx` | plugin slot entries in `site.config.build.tsx` | HIDE operations completed; custom widgets blocked on frontend-app-learning |
-| `../legacy/mitxonline/common-mfe-config.env.jsx` | environment-specific config in `site.config.build.tsx` | Complete — Header apps, custom user menu overrides, and dashboard routing verified |
+| `../legacy/mitxonline/common-mfe-config.env.jsx` | environment-specific config in `site.config.build.tsx` | Complete — Header apps, custom user menu overrides (Dashboard item narrow-viewport only, as in legacy), UAI title-only course info, and dashboard routing verified |
 | `../legacy/mitx/common-mfe-config.env.jsx` | separate Site Project or runtime config | Complete — custom Header application injected |
 | `../legacy/mitx-staging/common-mfe-config.env.jsx` | separate Site Project or runtime config | Complete — maps to mitx Site Project config |
 | `../legacy/AIDrawerManagerSidebar.jsx` | `src/AIDrawerManagerSidebar.tsx` | Complete — `shared/src/ai-drawer/AIDrawerManagerSidebar.tsx` fully typed and migrated |

@@ -71,7 +71,9 @@ Currently contains:
   `shared/` is the only per-deployment directory Dagger mounts into a Site
   Project build.
 - `footer/index.tsx` — `createMITOLFooterApp()`: runtime-config-driven footer links
-- `header/index.tsx` — `createMITxOnlineHeaderApp()`, `createMITxHeaderApp()`, `createXProHeaderApp()`
+- `header/index.tsx` — `createMITxOnlineHeaderApp()`, `createMITxHeaderApp()`, `createXProHeaderApp()`.
+  The mitxonline app also hides the course number on UAI courses and keeps the Dashboard
+  user-menu item to viewports at or below 991px, both matching the legacy learning header.
 - `styles/mitxonline.scss` — mitxonline theme overrides (imported directly in each `site.config.*.tsx`)
 - `styles/mitx.scss` — mitx theme overrides (scaffold)
 - `utils/courseContext.ts` — URL/course-context detection helpers
@@ -145,13 +147,17 @@ New deployments must include the equivalent block there.
 
 The exact keys consumed by the MFE are in `shared/src/footer/index.tsx`
 (`MITOLFooterConfig`) and `shared/src/header/index.tsx` (`MITOLHeaderConfig`).
-Two of them are **not** set in ol-infrastructure today and rely on the components'
-built-in fallbacks (acceptable, but set them there if you want explicit control):
+Each key has a built-in fallback, so a deployment that omits one still renders —
+just not correctly:
 
 - `commonAppConfig.mitolHeader.mitLearnBaseUrl` / `marketingSiteBaseUrl` →
-  fall back to `https://learn.mit.edu` / `lmsBaseUrl`.
+  fall back to `https://learn.mit.edu` / `lmsBaseUrl`, which sends the Dashboard
+  button to production MIT Learn and Profile / Settings to the LMS instead of the
+  marketing site.
 - `commonAppConfig.mitolFooter.footerLogoUrl` / `footerLogoDestination` →
-  footer logo falls back to `headerLogoImageUrl` and renders without a link.
+  footer logo falls back to `headerLogoImageUrl` and renders without a link. For
+  mitxonline that fallback is drawn `fill="white"` for the dark header, so it is
+  invisible on the light footer and the footer reads as having no logo.
 
 If `ENABLE_MFE_CONFIG_API` is off or `FRONTEND_SITE_CONFIG` is empty (e.g. a fresh
 local LMS without the configmap), the header/footer render with empty links and
