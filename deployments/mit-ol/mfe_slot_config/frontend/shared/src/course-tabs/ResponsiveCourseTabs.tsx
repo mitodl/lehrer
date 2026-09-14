@@ -45,10 +45,16 @@ const moreMessage = {
 	defaultMessage: "More...",
 };
 
+// frontend-base's own descriptor, id and default copied verbatim from
+// shell/header/course-bar/navigation/messages.ts. A bespoke `mitol.*` id could never pick
+// up a translation; this one resolves against frontend-base's catalogue if the site ever
+// loads one (src/i18n/index.ts is empty today, so everything falls back to the default).
+// It also describes the row better than the learning MFE's "Course Material", which
+// undersells a bar holding Progress, Discussion and Instructor.
 const navLabelMessage = {
-	id: "mitol.course.tabs.navigation.label",
-	description: "Accessible label for the course tab navigation bar",
-	defaultMessage: "Course Material",
+	id: "org.openedx.frontend.slot.header.courseNavigationBar.tabs.label",
+	description: "The accessible label for course tabs navigation",
+	defaultMessage: "Course Navigation Bar",
 };
 
 // Deliberately duplicated from frontend-base's
@@ -75,9 +81,11 @@ async function getCourseHomeCourseMetadata(
 	const { data } = await getAuthenticatedHttpClient().get(
 		`${getSiteConfig().lmsBaseUrl}/api/course_home/course_metadata/${courseId}`,
 	);
-	const { tabs = [] } = camelCaseObject(data) as { tabs?: CourseTab[] };
+	// `?? []` not a destructuring default: a default only fires on undefined, and the
+	// API can answer `"tabs": null`, which would reach .map() and take the nav down.
+	const { tabs } = camelCaseObject(data) as { tabs?: CourseTab[] | null };
 	return {
-		tabs: tabs.map((tab) => ({
+		tabs: (tabs ?? []).map((tab) => ({
 			...tab,
 			// Upstream renames this one tab id; keep the mapping so a cache entry
 			// written by either component is interchangeable.
