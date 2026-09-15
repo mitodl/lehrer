@@ -118,12 +118,14 @@ alongside) deploying a build:
 
 ### 1. Backend plugins must provide the MFE filters + APIs
 
-The Canvas and Rapid Responses tabs and their data come entirely from the LMS:
+The Canvas, Rapid Responses and Course Sync tabs and their data come entirely from the LMS:
 
 | Capability | Provided by |
 |---|---|
 | "Canvas" / "Rapid Responses" tabs | `InstructorDashboardTabsRequested` filter steps in `ol_openedx_canvas_integration` / `ol_openedx_rapid_response_reports` |
+| "Course Sync" tab | an `InstructorDashboardTabsRequested` filter step in `ol_openedx_course_sync`, emitted only for platform staff on courses that are an active sync source |
 | Canvas task status (`list_canvas_tasks`), rapid-response runs (`rapid_response_runs`) | endpoints in those same plugins |
+| Course Sync problem actions (`sync_problem_actions`) | endpoint in `ol_openedx_course_sync`, gated on `is_staff` |
 | Tab href routing | the filters emit `/apps/instructor-dashboard/<course>/<tab>` to match the `wrapWithAppsPath` routing |
 
 These live in **mitodl/open-edx-plugins** and are pinned in the `mitx`/`mitx-staging`/
@@ -132,6 +134,11 @@ These live in **mitodl/open-edx-plugins** and are pinned in the `mitx`/`mitx-sta
 are the first releases that carry this work. With older versions the tabs simply do
 not appear and the data endpoints 404. (Canvas/Rapid Responses are installed only
 on `mitx*` and `mitxonline`, not `xpro`.)
+
+Course Sync needs `ol-openedx-course-sync==1.2.0` or later, which is the first
+release carrying its filter step and endpoint; the pin is currently `1.0.1`. It is
+registered only in the `mitxonline` Site Project, since that is the only deployment
+running the plugin.
 
 ### 2. Runtime site config must be enabled and populated
 
