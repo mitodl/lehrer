@@ -24,6 +24,24 @@
       "matchDepNames": ["setuptools", "pip", "wheel"],
       "enabled": false,
       "description": "setuptools is deliberately pinned <82 for pkg_resources; pip/wheel are managed manually. Renovate must not bump these in build_manifest.yaml."
+    },
+    {
+      "matchFileNames": [
+        "deployments/mit-ol/mfe_slot_config/frontend/mitx/**",
+        "deployments/mit-ol/mfe_slot_config/frontend/xpro/**"
+      ],
+      "matchPackageNames": ["@openedx/frontend-app-instructor-dashboard", "@openedx/frontend-base"],
+      "allowedVersions": "<2",
+      "description": "mitx and xpro build from edx-platform release/verawood, so they follow the 1.x line of the instructor dashboard and frontend-base - the major that Verawood ships (openedx/frontend-template-site@release/verawood pins 1.2.x / 1.0.x). Updates within 1.x are welcome; 2.x is not, because it is published from the app's main branch, which takes breaking changes with no DEPR process and is not supported in production, and because frontend-base 2 moves the whole site to react-intl 10. Apps built on frontend-base are never branched or tagged per Open edX release (openedx.org/release: null, OEP-10 ADR 0003), so the major is the only release signal there is. Raise this bound when mitx and xpro adopt a named release built on frontend-base 2. mitxonline is deliberately not matched - it tracks edx-platform master and so follows the 2.x alpha lines."
+    },
+    {
+      "matchFileNames": [
+        "deployments/mit-ol/mfe_slot_config/frontend/mitx/**",
+        "deployments/mit-ol/mfe_slot_config/frontend/xpro/**"
+      ],
+      "matchPackageNames": ["react-intl"],
+      "allowedVersions": "<7",
+      "description": "react-intl must stay on the 6.x line in the two Site Projects that declare it, both of which are on frontend-base 1.x, whose regular dependency is react-intl ^6.6.6. Paragon declares react-intl only as a peer (^5.25.1 || ^6.4.0 || ^10.1.20) and is a root dependency here, so npm resolves that peer to the highest match; bump the hoisted copy past 6.x and frontend-base nests its own 6.x copy, Paragon's useIntl() then reads a different react-intl instance's context, and the dashboard dies with 'Could not find required intl object' (see #222). Same class of failure as the react-router rule above. Drop this rule alongside the react-intl entry in mitx/package.json and xpro/package.json when those sites move to frontend-base 2, which brings react-intl 10 and needs no bound."
     }
   ]
 }
