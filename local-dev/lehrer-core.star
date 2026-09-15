@@ -32,6 +32,12 @@
 #     # (the *-config-overrides read last in envFrom). Folded into the pod
 #     # fingerprint so editing one rolls the platform pods; [] when none.
 #     "config_override_paths": [],
+#     # Extra strings folded into that same fingerprint, for a caller whose
+#     # override ConfigMaps are rendered before being applied (e.g. a
+#     # find-and-replace on a hostname) — hashing config_override_paths alone
+#     # hashes the pre-render file, so a render-only edit would not roll the
+#     # pods. [] when the caller applies its override ConfigMaps unmodified.
+#     "config_override_extra_hash_input": [],
 #     # Create the openedx-secrets Secret from local-dev/secret-defaults.yaml.
 #     # True for a caller whose cluster does not already have it (anyone not
 #     # running `lehrer dev setup`, which creates it from the same file).
@@ -161,6 +167,7 @@ def setup(cfg):
     apply_configmaps = cfg["apply_platform_configmaps"]
     manage_secrets = cfg["manage_secrets"]
     config_override_paths = cfg["config_override_paths"]
+    config_override_extra_hash_input = cfg["config_override_extra_hash_input"]
 
     # Lehrer core settings — injected directly into the container by inject_aqueduct_settings
     # (dag.current_module().source().file("src/lehrer/settings/base.py")).
@@ -627,12 +634,16 @@ def setup(cfg):
             local_dev + "/manifests/platform/configmap-cms.yaml")
     platform_config_files.extend(config_override_paths)
 
-    if platform_config_files:
+    if platform_config_files or config_override_extra_hash_input:
         # read_file registers a Tilt watch on each path, so an edit re-runs the
         # Tiltfile and recomputes this; `cat` alone would hash the file without
-        # ever being told it changed.
+        # ever being told it changed. config_override_extra_hash_input carries
+        # no such watch — it exists for a value a caller already has in hand
+        # (e.g. an env var it substitutes into its override ConfigMaps before
+        # applying them), not a file, so an edit to it is a caller restart.
         platform_config_checksum = str(hash("\n".join(
-            [str(read_file(path)) for path in platform_config_files]
+            [str(read_file(path)) for path in platform_config_files] +
+            list(config_override_extra_hash_input)
         )))
     else:
         platform_config_checksum = "none"
