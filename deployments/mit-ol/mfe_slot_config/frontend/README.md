@@ -35,7 +35,7 @@ Each project directory contains:
 | | mitxonline | mitx | xpro |
 |---|---|---|---|
 | edx-platform branch | master | named release | named release |
-| frontend-base version | latest alpha | pinned to release | pinned to release |
+| frontend-base version | latest alpha | `1.x` (Verawood) | `1.x` (Verawood) |
 | Structural differences | AI drawer, UAI course logic, 57 plugin ops | 26 plugin ops | MARKETING_SITE_BASE_URL nav model |
 | mitx-staging | — | same build, runtime config supplies staging URLs | — |
 
@@ -63,6 +63,19 @@ Components in `shared/src/` are imported by any Site Project via the `@shared/*`
 TypeScript path alias declared in each project's `tsconfig.json`. No npm publishing
 required — Dagger mounts the directory at `/app/site/shared` inside each Site Project.
 
+Only Dagger mounts it, though: `@shared/*` resolves to `./shared/src/*` *inside* the
+Site Project, so `npm run dev` needs a local snapshot of this directory. Create or
+refresh it with:
+
+```bash
+rm -rf ./shared && cp -R ../shared ./shared
+```
+
+Keep the `rm -rf`. A bare `cp -R ../shared ./shared` nests a second copy at
+`./shared/shared/` once the snapshot exists rather than refreshing it, leaving the
+stale sources in place — webpack keeps resolving those, so edits to the canonical
+`frontend/shared/` appear to have no effect.
+
 Currently contains:
 - `dev-hosts.json` — the deployment's local-dev hostnames (`lmsBaseUrl` plus a
   `baseUrl` per site), imported by every `site.config.dev.tsx` and read by
@@ -86,14 +99,64 @@ Currently contains:
 | Deployment | Module library | npm version |
 |---|---|---|
 | mitxonline | `@openedx/frontend-app-instructor-dashboard` | `^2.0.0-alpha` |
-| mitx | `@openedx/frontend-app-instructor-dashboard` | `^1.1.0-alpha` |
+| mitx | `@openedx/frontend-app-instructor-dashboard` | `1.x` |
 | xpro | `@openedx/frontend-app-instructor-dashboard` | `mitodl/…#verawood` (see below) |
 
-### Temporary pin: xpro instructor-dashboard
+### Version lines
 
-xpro builds the instructor dashboard from `mitodl/frontend-app-instructor-dashboard@verawood`
-instead of npm. That branch is `v1.2.0` (what the npm pin resolved to) plus two Course Team
-fixes needed to unblock Verawood CI testing:
+Which version a Site Project may use is decided by the edx-platform branch its
+cells build from, not by what is newest.
+
+Apps built on `frontend-base` are **never branched or tagged for an Open edX
+release** — they declare `openedx.org/release: null` and participate by published
+version only ([OEP-10 ADR 0003][adr3]). Only two branches publish:
+`main` → the `alpha` dist-tag, which takes breaking changes with no DEPR process
+and is explicitly not supported in production, and `stable` → `latest`.
+`openedx/frontend-template-site` is the only frontend repo branched per release,
+and ADR 0003 makes its `release/*` branch the authoritative record of which
+frontend versions that release ships.
+
+| edx-platform | instructor-dashboard | frontend-base | source |
+|---|---|---|---|
+| `master` | `^2.0.0-alpha` | `^2.0.0-alpha` | [`frontend-template-site@main`][ts-main] |
+| `open-release/verawood` | `1.2.x` | `1.0.x` | [`frontend-template-site@release/verawood`][ts-vera] |
+
+**mitx** and **xpro** build from `release/verawood`, so they follow the Verawood
+row. They take the whole **`1.x`** line rather than template-site's exact `1.2.x`
+— the major-line range the upstream README gives as the way for consumers to
+select a maintained line. The major is the meaningful boundary: 2.x is published
+from the app's `main` branch, which takes breaking changes with no DEPR process
+and is not supported in production, and frontend-base 2 moves the whole site to
+react-intl 10. Within 1.x, updates are ordinary reviewable bumps, and
+`renovate.json` bounds them at `<2` for these two directories so crossing the
+major stays a deliberate decision.
+
+The cost of `1.x` over `1.2.x` is that these sites carry features published after
+Verawood's frontend set was fixed. Both lockfiles resolve **1.3.0**, one minor ahead
+of template-site's `1.2.x`, which adds CCX coach pages, the grading policy view and
+Schedule — features that call LMS endpoints `release/verawood` may not serve. Nothing
+in `shared/` or either site's `src/` registers against them, so they surface only as
+upstream tabs that may fail against a Verawood backend. Narrow the range to `1.2.x`
+if that turns out to matter; it resolves to 1.2.0, whose public API is identical.
+
+Write a stable line as an explicit range (`1.x`), never as a caret on a prerelease:
+`^1.1.0-alpha` expands to `>=1.1.0-alpha <2.0.0`, which is how mitx ended up on
+1.3.0 without anyone choosing it (#206). A prerelease line is the exception and has
+to stay a caret — npm excludes prereleases from a range that does not name one, so a
+bare `2.x` matches no published `frontend-base` version at all, while `^2.0.0-alpha`
+admits the alpha line.
+
+[adr3]: https://docs.openedx.org/projects/openedx-proposals/en/latest/processes/oep-0010/decisions/0003-frontend-release-strategy.html
+[ts-main]: https://github.com/openedx/frontend-template-site/blob/main/package.json
+[ts-vera]: https://github.com/openedx/frontend-template-site/blob/release/verawood/package.json
+
+### Fork pin: xpro instructor-dashboard (Verawood line)
+
+xpro builds the instructor dashboard from `mitodl/frontend-app-instructor-dashboard`
+instead of npm, tracking that fork's `verawood` branch (currently at commit `7d6de02`).
+That branch is upstream `v1.2.0` (commit `272b8290`, which is the `gitHead` npm records
+for the published `1.2.0`, so it is the same code the Verawood line ships) plus two
+Course Team fixes needed to unblock Verawood CI testing:
 
 - inactive accounts are reported instead of silently skipped
 - failures with no reason attached raise an alert instead of closing the modal quietly
@@ -105,9 +168,26 @@ The branch also carries a `prepare` script, which the published package does not
 `prepare` rather than `prepack` for a git dependency, and without it the install produces no
 `dist/` and the site build fails on the package's `"."` export.
 
-**Revert once #234 merges and a release containing it is published** — restore the
-`^1.0.0-alpha` range, re-run `npm install` in `xpro/` to regenerate the lock, and delete this
-section.
+The dependency names the branch, not a commit. `package-lock.json` still records the
+commit it resolved, so an install is reproducible and a re-resolution shows as a lockfile
+diff — but Renovate's weekly lock file maintenance deletes the lockfile and re-resolves,
+so a commit pushed to the fork's `verawood` branch is absorbed by that run rather than
+arriving as a deliberate bump. Treat the branch as frozen, or name a commit instead, if
+that matters.
+
+**Merging upstream #234 is not on its own enough to retire this pin.** The fixes have to
+reach npm on a line xpro can install. `stable` is the only 1.x line that publishes — there
+is no `1.2.x` maintenance branch, and `1.2.1` exists solely as a git tag — so they arrive
+either as `1.3.x` (if cherry-picked to `stable`) or only in `2.x`. Because xpro's
+frontend-base range is `1.x`, a `1.3.x` publish **is** in range: at that point replace the
+git pin with `"1.x"`, re-run `npm install` in `xpro/`, and delete this section. If the
+fixes only ever land in `2.x`, the pin stays until xpro adopts a named release built on
+frontend-base 2.
+
+Meanwhile, if #234 merges and xpro needs it on Verawood before any of that, rebase the
+fork branch on the tag the Verawood line is at plus the merged commit and push it to
+`verawood`. `xpro/package.json` needs no edit; re-run `npm install` in `xpro/` so the
+lockfile records the new commit.
 
 ## Deployment prerequisites
 
