@@ -9,7 +9,10 @@ import RapidResponseReportsPage from "./RapidResponseReportsPage";
 
 // Instructor Dashboard routes slot (from @openedx/frontend-app-instructor-dashboard).
 // Only the routes slot is used here — the nav tabs come from the backend filter.
-const ROUTES_SLOT_ID = "org.openedx.frontend.slot.instructorDashboard.routes.v1";
+// Exported for site projects that register their own route widgets (the upstream
+// package defines this id but does not re-export it, and its `exports` map has no
+// subpath, so it cannot be deep-imported).
+export const ROUTES_SLOT_ID = "org.openedx.frontend.slot.instructorDashboard.routes.v1";
 
 // ---------------------------------------------------------------------------
 // PlaceholderSlot
@@ -21,8 +24,10 @@ const ROUTES_SLOT_ID = "org.openedx.frontend.slot.instructorDashboard.routes.v1"
 // Mirrors the PlaceholderSlot shipped in the instructor dashboard MFE.
 // ---------------------------------------------------------------------------
 
+// Exported for site projects that register their own route widgets — see
+// ROUTES_SLOT_ID above for why the upstream copy cannot be imported.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const PlaceholderSlot = (_props: Record<string, unknown>) => null;
+export const PlaceholderSlot = (_props: Record<string, unknown>) => null;
 
 // ---------------------------------------------------------------------------
 // MIT OL instructor dashboard app
