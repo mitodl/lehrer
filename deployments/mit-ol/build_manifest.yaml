@@ -51,7 +51,7 @@ cells:
   - ol-openedx-lti-utilities==0.1.2
   - ol-openedx-events-handler==0.3.0
   - ol-openedx-course-sync==1.0.1
-  - ol-openedx-uai-content-customization==0.3.0
+  - ol-openedx-uai-content-customization==0.5.0
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
   - opentelemetry-instrumentation-django
