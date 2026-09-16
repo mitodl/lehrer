@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { getAuthenticatedHttpClient, getSiteConfig } from '@openedx/frontend-base';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Button, Alert, Spinner, DataTable, Form, ModalDialog, ActionRow,
 } from '@openedx/paragon';
@@ -57,9 +57,23 @@ const CourseSyncPage = () => {
   const [results, setResults] = useState<ActionResult[] | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
 
+  // React Router reuses this component when only :courseId changes (no
+  // remount), so state from the previous course would otherwise carry over
+  // and a stale problem ID could be submitted against the new course.
+  useEffect(() => {
+    setAction(ACTION_RESET_ATTEMPTS);
+    setProblemId('');
+    setOnlyIfHigher(true);
+    setLoading(false);
+    setError(null);
+    setResults(null);
+    setShowConfirm(false);
+  }, [courseId]);
+
   const baseUrl = `${getApiBaseUrl()}/courses/${courseId}/course_sync/api`;
 
   const handleSubmit = async () => {
+    const submittedCourseId = courseId;
     setShowConfirm(false);
     setLoading(true);
     setError(null);
@@ -75,11 +89,15 @@ const CourseSyncPage = () => {
         only_if_higher: String(onlyIfHigher),
       });
       const response = await client.post(`${baseUrl}/sync_problem_actions`, body);
+      // Navigated to a different course while this request was in flight —
+      // don't apply a stale response to the new course's page.
+      if (submittedCourseId !== courseId) return;
       setResults(response.data?.results ?? []);
     } catch (err: any) {
+      if (submittedCourseId !== courseId) return;
       setError(err.response?.data?.error || err.message || 'An error occurred');
     } finally {
-      setLoading(false);
+      if (submittedCourseId === courseId) setLoading(false);
     }
   };
 
