@@ -93,7 +93,7 @@ const CourseSyncPage = () => {
 
   return (
     <div className="course-sync-page p-4">
-      <h3>Course Sync Problem Actions</h3>
+      <h3>Course Sync Actions</h3>
       <p>
         Reset attempts or rescore a problem for all learners in this course
         <strong> and in every course synced from it</strong>. Enter the problem&apos;s
@@ -129,7 +129,7 @@ const CourseSyncPage = () => {
             checked={onlyIfHigher}
             onChange={(e) => setOnlyIfHigher(e.target.checked)}
           >
-            Only update a learner&apos;s score if the new score is higher
+            <strong>Only update a learner&apos;s score if the new score is higher</strong>
           </Form.Checkbox>
         </Form.Group>
       )}
