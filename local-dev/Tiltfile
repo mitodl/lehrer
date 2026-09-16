@@ -60,6 +60,7 @@ setup({
     # Nothing layers over lms-config/cms-config here; the standalone stack is
     # the one this repo's own ConfigMaps were written for.
     "config_override_paths": [],
+    "config_override_extra_hash_input": [],
     "release_name":    cfg.get("release-name") or "master",
     "deploy_name":     cfg.get("deployment-name") or "generic",
     "settings_ns":     cfg.get("settings-namespace") or "generic",
