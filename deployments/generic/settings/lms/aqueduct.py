@@ -38,7 +38,11 @@ from pydantic import model_validator
 from django_aqueduct import configure_django_settings
 
 from .models.aqueduct import AqueductSettings
-from .models.base import ProductionSettingsMixin, resolve_derived_settings
+from .models.base import (
+    ProductionSettingsMixin,
+    merge_jwt_signing_keys,
+    resolve_derived_settings,
+)
 
 
 class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
@@ -71,5 +75,9 @@ class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
 # validator) defers to the real common.py value — including the structural
 # settings openedx augments at runtime via add_plugins (INSTALLED_APPS, …),
 # which the static model carries only as a plugin-incomplete snapshot.
-configure_django_settings(LMSProductionSettings, base="lms.envs.common")
+configure_django_settings(
+    LMSProductionSettings,
+    base="lms.envs.common",
+    post_configure=merge_jwt_signing_keys,
+)
 resolve_derived_settings(__name__)

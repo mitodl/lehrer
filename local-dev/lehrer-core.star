@@ -141,6 +141,35 @@ def secret_manifest(local_dev, namespace):
     })
 
 
+def _entrypoint_ingress(namespace, service, port):
+    """Ingress sending everything on the Traefik entrypoint named after service to it.
+
+    The entrypoints are declared in local-dev/manifests/traefik-config.yaml.
+    """
+    return (
+        "---\n" +
+        "apiVersion: networking.k8s.io/v1\n" +
+        "kind: Ingress\n" +
+        "metadata:\n" +
+        "  name: " + service + "\n" +
+        "  namespace: " + namespace + "\n" +
+        "  annotations:\n" +
+        "    kubernetes.io/ingress.class: traefik\n" +
+        "    traefik.ingress.kubernetes.io/router.entrypoints: " + service + "\n" +
+        "spec:\n" +
+        "  rules:\n" +
+        "  - http:\n" +
+        "      paths:\n" +
+        "      - path: /\n" +
+        "        pathType: Prefix\n" +
+        "        backend:\n" +
+        "          service:\n" +
+        "            name: " + service + "\n" +
+        "            port:\n" +
+        "              number: " + str(port) + "\n"
+    )
+
+
 def setup(cfg):
     """Deploy the full Open edX local dev stack from the given configuration."""
 
@@ -699,9 +728,10 @@ def setup(cfg):
     # The platform services depend on a migrated and provisioned schema, so
     # they wait for both Jobs to complete (in addition to the infra services).
     platform_deps = infra_deps + ["edxapp-migrate", "edxapp-provision"]
-    # LMS and CMS are exposed on host ports 8000/8010 via the k3d load
-    # balancer → Traefik ingress.  Port-forwards are omitted here to avoid
-    # conflicting with that binding ("address already in use").
+    # The k3d loadbalancer holds host ports 8000/8010/8001 and hands each to a
+    # Traefik entrypoint of its own (see the Ingresses below). LMS, CMS and
+    # notes get no port-forwards, since one on those ports fails with
+    # "address already in use".
     k8s_resource(
         "lms",
         resource_deps=platform_deps,
@@ -776,7 +806,6 @@ def setup(cfg):
     k8s_resource(
         "notes",
         resource_deps=infra_deps + ["notes-migrate"],
-        port_forwards=["8001:8000"],
         labels=["notes"],
     )
 
@@ -845,47 +874,30 @@ def setup(cfg):
     # ------------------------------------------------------------------ #
 
     if ingress == "traefik":
+        # LMS, Studio and notes each get the Traefik entrypoint their host port
+        # lands on (local-dev/manifests/traefik-config.yaml) and match no host,
+        # so whatever name a deployment's dev-hosts.json gives the LMS reaches
+        # it. The compiled MFEs share the default `web` entrypoint on 8090 and
+        # are told apart by host.
         ingress_yaml = (
-            "apiVersion: networking.k8s.io/v1\n" +
-            "kind: Ingress\n" +
-            "metadata:\n" +
-            "  name: openedx\n" +
-            "  namespace: " + namespace + "\n" +
-            "  annotations:\n" +
-            "    kubernetes.io/ingress.class: traefik\n" +
-            "spec:\n" +
-            "  rules:\n" +
-            "  - host: lms.localhost\n" +
-            "    http:\n" +
-            "      paths:\n" +
-            "      - path: /\n" +
-            "        pathType: Prefix\n" +
-            "        backend:\n" +
-            "          service:\n" +
-            "            name: lms\n" +
-            "            port:\n" +
-            "              number: 8000\n" +
-            "  - host: studio.localhost\n" +
-            "    http:\n" +
-            "      paths:\n" +
-            "      - path: /\n" +
-            "        pathType: Prefix\n" +
-            "        backend:\n" +
-            "          service:\n" +
-            "            name: cms\n" +
-            "            port:\n" +
-            "              number: 8010\n" +
-            "  - host: notes.localhost\n" +
-            "    http:\n" +
-            "      paths:\n" +
-            "      - path: /\n" +
-            "        pathType: Prefix\n" +
-            "        backend:\n" +
-            "          service:\n" +
-            "            name: notes\n" +
-            "            port:\n" +
-            "              number: 8000\n"
+            _entrypoint_ingress(namespace, "lms", 8000) +
+            _entrypoint_ingress(namespace, "cms", 8010) +
+            _entrypoint_ingress(namespace, "notes", 8000)
         )
+        if compiled_sites:
+            ingress_yaml += (
+                "---\n" +
+                "apiVersion: networking.k8s.io/v1\n" +
+                "kind: Ingress\n" +
+                "metadata:\n" +
+                "  name: mfe\n" +
+                "  namespace: " + namespace + "\n" +
+                "  annotations:\n" +
+                "    kubernetes.io/ingress.class: traefik\n" +
+                "    traefik.ingress.kubernetes.io/router.entrypoints: web\n" +
+                "spec:\n" +
+                "  rules:\n"
+            )
         for site_name in compiled_sites:
             ingress_yaml += (
                 "  - host: " + site_name + ".localhost\n" +

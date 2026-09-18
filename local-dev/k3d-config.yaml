@@ -5,6 +5,12 @@ kind: Simple
 metadata:
   name: lehrer-dev
 
+# Pinned because the bundled Traefik chart comes with the k3s image, and
+# manifests/traefik-config.yaml is written against this one's values schema.
+# Left unpinned, the image (and chart) would follow whatever k3d release the
+# developer has installed.
+image: rancher/k3s:v1.31.5-k3s1
+
 # Local container registry — accessible as k3d-lehrer-registry:5000 from within
 # the cluster (K3d auto-configures the CoreDNS alias), and as localhost:5100 from
 # the host. All custom_build commands push to localhost:5100; all K8s manifests
@@ -15,13 +21,24 @@ registries:
     host: "0.0.0.0"
     hostPort: "5100"
 
-# Bind Traefik ingress ports to localhost for browser access.
-# Tilt also configures kubectl port-forward on specific ports for each service,
-# which is more reliable for local dev than hostname-based Traefik routing.
+# Bind Traefik ingress ports to localhost for browser access. LMS (8000),
+# Studio (8010) and notes (8001) each land on a Traefik entrypoint of their own
+# (manifests/traefik-config.yaml), so the port picks the service and any
+# hostname that resolves to 127.0.0.1 reaches it: a deployment's dev-hosts.json
+# is free to name localhost, local.openedx.io, or something else. Logins still
+# follow the LMS/CMS base URLs in the platform ConfigMaps (localhost).
+#
+# k3d fixes these mappings when it creates the cluster. Changing one means
+# recreating the cluster (`lehrer dev teardown && lehrer dev setup`), and
+# `lehrer dev setup`/`start` warn when an existing cluster no longer matches.
+# Tilt must not port-forward any of these host ports, or the forward fails with
+# "address already in use".
 ports:
-- port: 8000:80
+- port: 8000:8000
   nodeFilters: ["loadbalancer"]
-- port: 8010:80
+- port: 8010:8010
+  nodeFilters: ["loadbalancer"]
+- port: 8001:8001
   nodeFilters: ["loadbalancer"]
 # MFE ingress for the *compiled* MFEs. 8090 rather than the conventional 8080
 # to avoid clashing with other local dev servers that commonly squat on 8080.
@@ -37,8 +54,20 @@ ports:
 # 8090 — the loadbalancer holds it for as long as the cluster is up.
 - port: 8090:80
   nodeFilters: ["loadbalancer"]
-- port: 8001:80
-  nodeFilters: ["loadbalancer"]
 
 servers: 1
 agents: 1
+
+options:
+  k3s:
+    extraArgs:
+    # k3s evicts below 5% free on the node and image filesystems, which here
+    # are the host's own disk, and then holds the disk-pressure taint until
+    # a further 10% is free (15% in all). Each platform rebuild leaves a ~6GB
+    # image behind, so a busy laptop disk crosses 5% during a session and the
+    # taint then outlives the cleanup that brought it back above 5%: nothing
+    # schedules until 15% is free. Keep the 5% floor but let the taint clear
+    # just above it. Like the port mappings, this only takes effect when the
+    # cluster is created.
+    - arg: --kubelet-arg=eviction-minimum-reclaim=imagefs.available=1%,nodefs.available=1%
+      nodeFilters: ["server:*", "agent:*"]

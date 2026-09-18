@@ -53,8 +53,6 @@ print("==> {} superuser {}".format("Created" if created else "Updated", USERNAME
 # validates with its own CLIENT_SECRET/CLIENT_ID (notesapi/v1/permissions.py),
 # which the notes Deployment feeds from the same two secret keys. All three
 # values have to line up or every notes request 403s.
-#
-# Add further OAuth clients here as the stack grows to need them.
 management.call_command(
     "create_dot_application",
     settings.EDXNOTES_CLIENT_NAME,
@@ -66,3 +64,26 @@ management.call_command(
     update=True,
 )
 print("==> Provisioned OAuth application " + settings.EDXNOTES_CLIENT_NAME)
+
+# Studio has no login of its own: its /login/ starts auth_backends' EdXOAuth2
+# flow against the LMS, which rejects the callback unless it is registered
+# here. CMS_ROOT_URL is the Studio address the LMS config carries, so a caller
+# that overrides CMS_BASE_URL registers its own host. The client id and secret
+# are the SOCIAL_AUTH_EDX_OAUTH2_KEY/SECRET the CMS reads from the same Secret.
+#
+# Add further OAuth clients here as the stack grows to need them.
+management.call_command(
+    "create_dot_application",
+    "cms-sso",
+    USERNAME,
+    grant_type="authorization-code",
+    redirect_uris=settings.CMS_ROOT_URL + "/complete/edx-oauth2/",
+    client_id=os.environ["SOCIAL_AUTH_EDX_OAUTH2_KEY"],
+    client_secret=os.environ["SOCIAL_AUTH_EDX_OAUTH2_SECRET"],
+    # auth_backends asks for user_id alongside profile and email, and the LMS
+    # answers invalid_scope unless the application's access record allows it.
+    scopes="user_id",
+    skip_authorization=True,
+    update=True,
+)
+print("==> Provisioned OAuth application cms-sso")

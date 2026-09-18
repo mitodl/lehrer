@@ -74,6 +74,11 @@ def namespace_manifest() -> Path:
     return local_dev_dir() / "manifests" / "namespace.yaml"
 
 
+def traefik_config() -> Path:
+    """Return the path to the k3s Traefik HelmChartConfig."""
+    return local_dev_dir() / "manifests" / "traefik-config.yaml"
+
+
 def secret_defaults() -> Path:
     """Return the path to the shared openedx-secrets defaults.
 

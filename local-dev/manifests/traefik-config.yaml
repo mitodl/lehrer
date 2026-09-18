@@ -1,0 +1,42 @@
+---
+# Gives LMS, Studio and notes a Traefik entrypoint each, so the host port picks
+# the service and any hostname that resolves to 127.0.0.1 reaches it. With one
+# shared entrypoint Traefik could only route by host, and a deployment's
+# dev-hosts.json names its own (generic: localhost, mit-ol: local.openedx.io),
+# which no fixed set of host rules can match.
+#
+# Applied by `lehrer dev setup` to k3s's bundled Traefik. k3d-config.yaml maps
+# each host port to the matching exposedPort on the loadbalancer, and the
+# Ingresses in lehrer-core.star pin themselves to these entrypoint names.
+#
+# `port` is the container port and must not collide with the chart's own
+# entrypoints (web 8000, websecure 8443, traefik 9000, metrics 9100).
+# The values follow the chart bundled with the k3s image pinned in
+# k3d-config.yaml (traefik 27.0.201+up27.0.2). Check that chart's values.yaml
+# `ports:` block when bumping the image.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ports:
+      lms:
+        port: 18000
+        expose:
+          default: true
+        exposedPort: 8000
+        protocol: TCP
+      cms:
+        port: 18010
+        expose:
+          default: true
+        exposedPort: 8010
+        protocol: TCP
+      notes:
+        port: 18001
+        expose:
+          default: true
+        exposedPort: 8001
+        protocol: TCP

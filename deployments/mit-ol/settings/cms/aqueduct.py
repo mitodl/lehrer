@@ -9,8 +9,10 @@ Usage::
 
 The typed model is split across two sibling files:
 
-  models/base.py     ← ProductionSettingsMixin (lehrer core; K8s source wiring,
-                       type corrections, structural deferrals, shared validators)
+  models/base.py     ← StudioSettingsMixin, a ProductionSettingsMixin (lehrer
+                       core; K8s source wiring, type corrections, structural
+                       deferrals, shared validators) plus Studio's OAuth2 SSO
+                       fields
   models/aqueduct.py ← AqueductSettings(BaseSettings), pure django-aqueduct
                        codegen v2 output.  Regenerate via::
 
@@ -40,10 +42,14 @@ from pydantic import model_validator
 from django_aqueduct import configure_django_settings
 
 from .models.aqueduct import AqueductSettings
-from .models.base import ProductionSettingsMixin, resolve_derived_settings
+from .models.base import (
+    StudioSettingsMixin,
+    merge_jwt_signing_keys,
+    resolve_derived_settings,
+)
 
 
-class CMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
+class CMSProductionSettings(StudioSettingsMixin, AqueductSettings):
     """Typed CMS (Studio) production settings."""
 
     @model_validator(mode="after")
@@ -58,5 +64,9 @@ class CMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
 # validator) defers to the real common.py value — including the structural
 # settings openedx augments at runtime via add_plugins (INSTALLED_APPS, …),
 # which the static model carries only as a plugin-incomplete snapshot.
-configure_django_settings(CMSProductionSettings, base="cms.envs.common")
+configure_django_settings(
+    CMSProductionSettings,
+    base="cms.envs.common",
+    post_configure=merge_jwt_signing_keys,
+)
 resolve_derived_settings(__name__)
