@@ -37,7 +37,10 @@ data:
 
   # edx-notes service
   EDXNOTES_INTERNAL_API: "http://notes.openedx.svc.cluster.local:8000/api/v1"
-  EDXNOTES_PUBLIC_API: "http://localhost:8001/api/v1"
+  # The browser calls this. Host port 8001 is the k3d loadbalancer, which
+  # hands everything to Traefik, and Traefik routes by host: a bare
+  # localhost:8001 matches no Ingress rule and 404s.
+  EDXNOTES_PUBLIC_API: "http://notes.localhost:8001/api/v1"
   ENABLE_EDXNOTES: "true"
 
   # Service URLs (accessible from the browser)

@@ -15,9 +15,11 @@ registries:
     host: "0.0.0.0"
     hostPort: "5100"
 
-# Bind Traefik ingress ports to localhost for browser access.
-# Tilt also configures kubectl port-forward on specific ports for each service,
-# which is more reliable for local dev than hostname-based Traefik routing.
+# Bind Traefik ingress ports to localhost for browser access. Every port lands
+# on Traefik's one entrypoint, so the port does not pick the service: the
+# Ingress in lehrer-core.star routes by host (lms.localhost, studio.localhost,
+# notes.localhost, <site>.localhost). Tilt must not port-forward any of these
+# host ports, or the forward fails with "address already in use".
 ports:
 - port: 8000:80
   nodeFilters: ["loadbalancer"]

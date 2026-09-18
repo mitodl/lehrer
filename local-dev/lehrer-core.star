@@ -701,7 +701,8 @@ def setup(cfg):
     platform_deps = infra_deps + ["edxapp-migrate", "edxapp-provision"]
     # LMS and CMS are exposed on host ports 8000/8010 via the k3d load
     # balancer → Traefik ingress.  Port-forwards are omitted here to avoid
-    # conflicting with that binding ("address already in use").
+    # conflicting with that binding ("address already in use"). The same
+    # applies to notes on 8001.
     k8s_resource(
         "lms",
         resource_deps=platform_deps,
@@ -776,7 +777,6 @@ def setup(cfg):
     k8s_resource(
         "notes",
         resource_deps=infra_deps + ["notes-migrate"],
-        port_forwards=["8001:8000"],
         labels=["notes"],
     )
 
