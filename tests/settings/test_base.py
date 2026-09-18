@@ -33,35 +33,46 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 class TestDeriveCaches:
     def test_left_alone_without_a_db(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CELERY_BROKER_TRANSPORT", "redis")
         monkeypatch.setenv("CELERY_BROKER_HOSTNAME", "valkey")
         assert getattr(ProductionSettingsMixin(), "CACHES", None) is None
 
     def test_every_alias_shares_the_broker_host_under_its_own_prefix(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        monkeypatch.setenv("CELERY_BROKER_TRANSPORT", "redis")
         monkeypatch.setenv("CELERY_BROKER_HOSTNAME", "valkey.local-infra")
         monkeypatch.setenv("CACHE_REDIS_DB", "1")
         caches = ProductionSettingsMixin().CACHES  # type: ignore[attr-defined]
         assert {c["LOCATION"] for c in caches.values()} == {
-            "redis://valkey.local-infra/1"
+            "redis://:@valkey.local-infra/1"
         }
         prefixes = [c["KEY_PREFIX"] for c in caches.values()]
         assert len(prefixes) == len(set(prefixes))
         # The cache-backed session engine reads this one.
         assert "default" in caches
 
-    def test_carries_the_broker_password(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("CELERY_BROKER_HOSTNAME", "valkey")
+    def test_follows_the_broker_scheme_and_credentials(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("CELERY_BROKER_TRANSPORT", "rediss")
+        monkeypatch.setenv("CELERY_BROKER_HOSTNAME", "cache.example")
+        monkeypatch.setenv("CELERY_BROKER_USER", "default")
         monkeypatch.setenv("CELERY_BROKER_PASSWORD", "p@ss")
-        monkeypatch.setenv("CACHE_REDIS_DB", "1")
+        monkeypatch.setenv("CACHE_REDIS_DB", "3")
         caches = ProductionSettingsMixin().CACHES  # type: ignore[attr-defined]
-        assert caches["default"]["LOCATION"] == "redis://:p%40ss@valkey/1"
+        assert (
+            caches["default"]["LOCATION"]
+            == "rediss://default:p%40ss@cache.example/3"  # pragma: allowlist secret
+        )
 
     def test_refuses_a_db_without_a_broker_host(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("CACHE_REDIS_DB", "1")
-        with pytest.raises(ValueError, match="CELERY_BROKER_HOSTNAME"):
+        with pytest.raises(
+            ValueError, match="CELERY_BROKER_TRANSPORT or CELERY_BROKER_HOSTNAME"
+        ):
             ProductionSettingsMixin()
 
 

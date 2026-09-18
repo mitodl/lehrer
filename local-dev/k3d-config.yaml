@@ -67,6 +67,7 @@ options:
     # image behind, so a busy laptop disk crosses 5% during a session and the
     # taint then outlives the cleanup that brought it back above 5%: nothing
     # schedules until 15% is free. Keep the 5% floor but let the taint clear
-    # just above it.
+    # just above it. Like the port mappings, this only takes effect when the
+    # cluster is created.
     - arg: --kubelet-arg=eviction-minimum-reclaim=imagefs.available=1%,nodefs.available=1%
       nodeFilters: ["server:*", "agent:*"]

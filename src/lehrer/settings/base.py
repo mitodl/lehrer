@@ -315,9 +315,10 @@ class ProductionSettingsMixin(BaseSettings):
     DB_PASSWORD: str = Field(default="")
 
     # Celery broker scalars — consumed by _derive_broker_url and _derive_caches.
-    # Neither upstream common.py nor the generated model declares them, so
-    # until they are declared here the env source drops them and BROKER_URL is
-    # built with an empty host.
+    # openedx/envs/common.py defines them (as ""), but lms/cms common.py only
+    # star-import them, which codegen's static pass does not follow, so the
+    # generated model never declares them. Until they are declared here the env
+    # source drops them and BROKER_URL is built with an empty host.
     CELERY_BROKER_TRANSPORT: str = Field(default="")
     CELERY_BROKER_HOSTNAME: str = Field(default="")
     CELERY_BROKER_USER: str = Field(default="")
@@ -395,6 +396,19 @@ class ProductionSettingsMixin(BaseSettings):
                 self.CELERY_DEFAULT_EXCHANGE = queue  # type: ignore[attr-defined]
         return self
 
+    def _broker_server_url(self) -> str:
+        """The broker's server URL (scheme, credentials, host), with no DB or vhost.
+
+        Shared by BROKER_URL and CACHES so the caches reach the broker's server
+        with the same scheme (e.g. ``rediss`` for TLS) and credentials.
+        """
+        user = quote(self.CELERY_BROKER_USER, safe="")
+        password = quote(self.CELERY_BROKER_PASSWORD, safe="")
+        return (
+            f"{self.CELERY_BROKER_TRANSPORT}://{user}:{password}"
+            f"@{self.CELERY_BROKER_HOSTNAME}"
+        )
+
     @model_validator(mode="after")
     def _derive_broker_url(self) -> ProductionSettingsMixin:
         """Build BROKER_URL from CELERY_BROKER_* components.
@@ -404,11 +418,8 @@ class ProductionSettingsMixin(BaseSettings):
         """
         transport = self.CELERY_BROKER_TRANSPORT
         if transport and not getattr(self, "BROKER_URL", None):
-            user = quote(self.CELERY_BROKER_USER, safe="")
-            password = quote(self.CELERY_BROKER_PASSWORD, safe="")
             self.BROKER_URL = (  # type: ignore[attr-defined]
-                f"{transport}://{user}:{password}"
-                f"@{self.CELERY_BROKER_HOSTNAME}/{self.CELERY_BROKER_VHOST}"
+                f"{self._broker_server_url()}/{self.CELERY_BROKER_VHOST}"
             )
         if isinstance(self.CELERY_BROKER_USE_SSL, dict):
             self.BROKER_USE_SSL = self.CELERY_BROKER_USE_SSL
@@ -609,13 +620,13 @@ class ProductionSettingsMixin(BaseSettings):
         """
         if self.CACHE_REDIS_DB is None:
             return self
-        hostname = self.CELERY_BROKER_HOSTNAME
-        if not hostname:
-            msg = "CACHE_REDIS_DB is set but CELERY_BROKER_HOSTNAME is not"
+        if not (self.CELERY_BROKER_TRANSPORT and self.CELERY_BROKER_HOSTNAME):
+            msg = (
+                "CACHE_REDIS_DB is set but CELERY_BROKER_TRANSPORT or "
+                "CELERY_BROKER_HOSTNAME is not"
+            )
             raise ValueError(msg)
-        password = self.CELERY_BROKER_PASSWORD
-        auth = f":{quote(password, safe='')}@" if password else ""
-        location = f"redis://{auth}{hostname}/{self.CACHE_REDIS_DB}"
+        location = f"{self._broker_server_url()}/{self.CACHE_REDIS_DB}"
 
         def _cache(prefix: str, timeout: int | None = None) -> dict:
             cache: dict = {
