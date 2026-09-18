@@ -42,7 +42,11 @@ from pydantic import Field, model_validator
 from django_aqueduct import configure_django_settings
 
 from .models.aqueduct import AqueductSettings
-from .models.base import ProductionSettingsMixin, resolve_derived_settings
+from .models.base import (
+    ProductionSettingsMixin,
+    merge_jwt_signing_keys,
+    resolve_derived_settings,
+)
 
 
 class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
@@ -192,6 +196,9 @@ class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
 def _apply_structural_overrides(merged: dict[str, Any], model: Any) -> None:
     """Post-overlay adjustments to plugin-complete INSTALLED_APPS / AUTH_BACKENDS.
 
+    Also merges the JWT signing key scalars into JWT_AUTH, which every entry
+    module's post_configure does (``merge_jwt_signing_keys``).
+
     Passed as ``configure_django_settings(post_configure=…)``; runs *after* the
     ``base="lms.envs.common"`` overlay, so ``INSTALLED_APPS`` and
     ``AUTHENTICATION_BACKENDS`` here are the live, plugin-complete base lists
@@ -227,6 +234,8 @@ def _apply_structural_overrides(merged: dict[str, Any], model: Any) -> None:
             backends.append(lti_backend)
 
     merged["AUTHENTICATION_BACKENDS"] = backends
+
+    merge_jwt_signing_keys(merged, model)
 
 
 # base="lms.envs.common" overlays the model onto edx-platform's upstream

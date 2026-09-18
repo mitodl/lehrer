@@ -12,6 +12,10 @@ data:
 
   CELERY_BROKER_TRANSPORT: "redis"
   CELERY_BROKER_HOSTNAME: "redis-valkey.openedx.svc.cluster.local"
+  # Django caches (and the cache-backed sessions) on the same Valkey, in DB 1
+  # so they stay out of the broker's DB 0. Without it every cache alias
+  # points at a memcached nobody runs and no login can hold a session.
+  CACHE_REDIS_URL: "redis://redis-valkey.openedx.svc.cluster.local:6379/1"
   CELERY_BROKER_USER: ""
   CELERY_BROKER_PASSWORD: ""
   CELERY_BROKER_VHOST: ""
@@ -28,6 +32,21 @@ data:
 
   LMS_BASE_URL: "http://localhost:8000"
   CMS_BASE_URL: "http://localhost:8010"
+  LMS_BASE: "localhost:8000"
+  CMS_BASE: "localhost:8010"
+
+  # Studio login goes through the LMS's OAuth2 provider. The browser is sent to
+  # authorize at LMS_BASE_URL (SOCIAL_AUTH_EDX_OAUTH2_PUBLIC_URL_ROOT defaults
+  # to it), but the token exchange runs from this pod, which cannot reach the
+  # LMS through the host's localhost. The key and secret come from
+  # openedx-secrets and match the cms-sso application edxapp-provision creates.
+  SOCIAL_AUTH_EDX_OAUTH2_URL_ROOT: "http://lms.openedx.svc.cluster.local:8000"
+  # Local dev is plain http; the auth_backends default would send the LMS an
+  # https:// callback that matches no registered redirect URI.
+  SOCIAL_AUTH_REDIRECT_IS_HTTPS: "false"
+  # LMS and Studio share the host `localhost` (cookies ignore the port), so
+  # with the default name each login would overwrite the other's session.
+  SESSION_COOKIE_NAME: "studio_sessionid"
 
   STATIC_ROOT_BASE: "/openedx/staticfiles"
 

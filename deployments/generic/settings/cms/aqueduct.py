@@ -9,8 +9,9 @@ Usage::
 
     DJANGO_SETTINGS_MODULE=cms.envs.aqueduct
 
-The typed model is split across models/base.py (ProductionSettingsMixin, lehrer
-core) and models/aqueduct.py (AqueductSettings(BaseSettings), pure django-aqueduct
+The typed model is split across models/base.py (StudioSettingsMixin, lehrer
+core's ProductionSettingsMixin plus Studio's OAuth2 SSO fields) and
+models/aqueduct.py (AqueductSettings(BaseSettings), pure django-aqueduct
 codegen v2 output).  The mixin is listed first so its declarations win in the
 pydantic MRO — see the generic LMS entry module and models/base.py.
 """
@@ -22,10 +23,14 @@ from pydantic import model_validator
 from django_aqueduct import configure_django_settings
 
 from .models.aqueduct import AqueductSettings
-from .models.base import ProductionSettingsMixin, resolve_derived_settings
+from .models.base import (
+    StudioSettingsMixin,
+    merge_jwt_signing_keys,
+    resolve_derived_settings,
+)
 
 
-class CMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
+class CMSProductionSettings(StudioSettingsMixin, AqueductSettings):
     """Typed CMS (Studio) production settings — generic Open edX deployment."""
 
     @model_validator(mode="after")
@@ -40,5 +45,9 @@ class CMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
 # validator) defers to the real common.py value — including the structural
 # settings openedx augments at runtime via add_plugins (INSTALLED_APPS, …),
 # which the static model carries only as a plugin-incomplete snapshot.
-configure_django_settings(CMSProductionSettings, base="cms.envs.common")
+configure_django_settings(
+    CMSProductionSettings,
+    base="cms.envs.common",
+    post_configure=merge_jwt_signing_keys,
+)
 resolve_derived_settings(__name__)

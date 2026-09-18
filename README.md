@@ -55,6 +55,23 @@ Use a deployment-specific config and MFE hot-reload:
 lehrer dev start --deployment-config ./deployments/mit-ol --mfe-hot-reload
 ```
 
+Once the stack is up, the port picks the service and any hostname that
+resolves to 127.0.0.1 works (`localhost`, or `local.openedx.io` for mit-ol):
+
+| Service | URL |
+|---|---|
+| LMS    | http://localhost:8000 |
+| Studio | http://localhost:8010 (logs in through the LMS) |
+| notes  | http://localhost:8001 |
+
+Each of those host ports reaches a Traefik entrypoint of its own
+(`local-dev/manifests/traefik-config.yaml`), which k3d wires up when it creates
+the cluster. A cluster created before that change sends all three to one
+host-routed entrypoint where nothing matches, so every request 404s.
+`lehrer dev setup` and `lehrer dev start` print a warning when they find one;
+recreate it with `lehrer dev teardown && lehrer dev setup` (this deletes the
+cluster's databases).
+
 #### MFE hot reload
 
 `--mfe-hot-reload` serves the MFEs from host dev servers *instead of* from the
@@ -120,6 +137,10 @@ fall back to safe local-dev defaults. They all land in the `openedx-secrets`
 Secret, which the MariaDB and MongoDB CRs read too — so an override reaches the
 operators rather than only the application.
 
+That includes the RSA pair the LMS signs every JWT with
+(`JWT_PRIVATE_SIGNING_JWK` / `JWT_PUBLIC_SIGNING_JWK_SET`). Without it no login
+completes.
+
 > **Existing clusters:** the MariaDB CR used to carry its own root-password
 > Secret, and `spec.rootPasswordSecretKeyRef` is immutable. A cluster created
 > before that change rejects the new manifest and `lehrer dev start` fails on
@@ -151,7 +172,7 @@ usable stack:
 
 | Job | Trigger | What it does |
 |---|---|---|
-| `edxapp-provision`  | on `tilt up`, then manual | Superuser, notes OAuth client, waffle flags |
+| `edxapp-provision`  | on `tilt up`, then manual | Superuser, notes and Studio OAuth clients, waffle flags |
 | `notes-migrate`     | automatic | edx-notes-api schema and search index |
 | `edxapp-demo-course`| manual    | Imports the Open edX demo course |
 
@@ -163,7 +184,8 @@ Trigger `edxapp-migrate` after a change that brings new migrations, such as a
 
 `edxapp-provision` creates the `edx` / `edx` superuser (override the password
 with `PROVISION_SUPERUSER_PASSWORD` before `lehrer dev setup`), the DOT OAuth
-Application that LMS↔notes SSO signs its tokens with, and the waffle flags in
+Application that LMS↔notes SSO signs its tokens with, the `cms-sso` Application
+Studio logs in through, and the waffle flags in
 `local-dev/provision/waffle-flags.yaml`. It is idempotent, so trigger it again
 whenever you edit either file. Add OAuth clients in
 `local-dev/provision/provision.py`; both files are mounted into the Job as a

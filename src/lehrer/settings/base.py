@@ -194,6 +194,23 @@ def _sorted_yaml_files(settings_dir: str) -> list[Path]:
     return nested if nested else sorted(base.glob("*.yaml"))
 
 
+def merge_jwt_signing_keys(merged: dict[str, Any], model: Any) -> None:
+    """Merge the JWT_*_SIGNING_JWK* scalars into the overlaid JWT_AUTH dict.
+
+    A ``configure_django_settings(post_configure=…)`` hook for every entry
+    module. edx-platform signs JWTs with ``JWT_AUTH["JWT_PRIVATE_SIGNING_JWK"]``
+    and fails the login outright when it is unset. A deployment that supplies
+    JWT_AUTH through YAML sets neither scalar, so this leaves it alone.
+    """
+    keys = {
+        name: getattr(model, name)
+        for name in ("JWT_PRIVATE_SIGNING_JWK", "JWT_PUBLIC_SIGNING_JWK_SET")
+        if getattr(model, name, "")
+    }
+    if keys:
+        merged["JWT_AUTH"] = {**merged["JWT_AUTH"], **keys}
+
+
 # ---------------------------------------------------------------------------
 # Shared base settings model
 # ---------------------------------------------------------------------------
@@ -296,6 +313,16 @@ class ProductionSettingsMixin(BaseSettings):
     MYSQL_USER: str = Field(default="")
     MYSQL_DB_NAME: str = Field(default="edxapp")
     DB_PASSWORD: str = Field(default="")
+
+    # Redis/Valkey URL — consumed by _derive_caches. Unset, CACHES comes from
+    # YAML or falls through to common.py's memcached on localhost:11211.
+    CACHE_REDIS_URL: str = Field(default="")
+
+    # JWT signing keys — merged into JWT_AUTH by merge_jwt_signing_keys. JWT_AUTH
+    # is a common.py dict the model never declares, so only a post_configure
+    # hook can see it to merge into; a validator here would replace it whole.
+    JWT_PRIVATE_SIGNING_JWK: str = Field(default="")
+    JWT_PUBLIC_SIGNING_JWK_SET: str = Field(default="")
 
     # Service URL scalars — consumed by _derive_service_root_urls to populate
     # LMS_ROOT_URL / CMS_ROOT_URL when the generated model leaves them as None.
@@ -553,6 +580,46 @@ class ProductionSettingsMixin(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _derive_caches(self) -> ProductionSettingsMixin:
+        """Build CACHES on one Redis/Valkey server from CACHE_REDIS_URL.
+
+        Without a CACHES source, every alias falls through to common.py's
+        memcached on localhost:11211, which no container runs. Cache writes
+        then fail silently, and the cache-backed session engine cannot create
+        a session, so no one can log in to the LMS or Studio.
+
+        Only runs when CACHE_REDIS_URL is set. A deployment that supplies
+        CACHES through YAML is left alone. The aliases and key prefixes match
+        the ones ol-infrastructure writes for deployed environments. The
+        backend is Django's own RedisCache, which needs only redis-py (already
+        present for the Celery broker), not django-redis.
+        """
+        if not self.CACHE_REDIS_URL:
+            return self
+
+        def _cache(prefix: str, timeout: int | None = None) -> dict:
+            cache: dict = {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": self.CACHE_REDIS_URL,
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "KEY_PREFIX": prefix,
+            }
+            if timeout is not None:
+                cache["TIMEOUT"] = timeout
+            return cache
+
+        self.CACHES = {  # type: ignore[attr-defined]
+            "celery": _cache("celery", 7200),
+            "configuration": _cache("configuration"),
+            "course_structure_cache": _cache("course_structure", 7200),
+            "default": _cache("default"),
+            "general": _cache("general"),
+            "mongo_metadata_inheritance": _cache("mongo_metadata_inheritance", 300),
+            "staticfiles": _cache("staticfiles"),
+        }
+        return self
+
+    @model_validator(mode="after")
     def _derive_service_root_urls(self) -> ProductionSettingsMixin:
         """Populate LMS_ROOT_URL / CMS_ROOT_URL from the *_BASE_URL scalars.
 
@@ -626,4 +693,45 @@ class ProductionSettingsMixin(BaseSettings):
             value = getattr(self, setting_name, None)
             if isinstance(value, str) and not isinstance(value, PathString):
                 setattr(self, setting_name, PathString(value))  # type: ignore[attr-defined]
+        return self
+
+
+class StudioSettingsMixin(ProductionSettingsMixin):
+    """CMS-only additions to ``ProductionSettingsMixin``.
+
+    Studio logs users in through the LMS's OAuth2 provider (auth_backends'
+    ``EdXOAuth2``). Its settings live in ``cms/envs/production.py``, not
+    ``common.py``, so codegen never declared them and an env var of the same
+    name would be dropped: the env source only reads declared fields. YAML
+    sources carry undeclared keys through ``extra="allow"``, which is how a
+    Kubernetes deployment has been setting them; declaring them here lets a
+    flat ConfigMap/Secret do it too.
+
+    A ``None`` default defers to the ``common.py`` value where there is one
+    (``SESSION_COOKIE_NAME`` stays ``"sessionid"``). The OAuth2 keys have none,
+    so unset they read as ``None`` rather than being absent, which is what
+    auth_backends' ``setting()`` lookup returns for them either way.
+    """
+
+    SOCIAL_AUTH_EDX_OAUTH2_KEY: str | None = Field(default=None)
+    SOCIAL_AUTH_EDX_OAUTH2_SECRET: str | None = Field(default=None)
+    # Server-to-server: the token exchange runs from the CMS pod, so this is an
+    # address the pod can reach, not necessarily the browser.
+    SOCIAL_AUTH_EDX_OAUTH2_URL_ROOT: str | None = Field(default=None)
+    # Where the browser is sent to authorize.
+    SOCIAL_AUTH_EDX_OAUTH2_PUBLIC_URL_ROOT: str | None = Field(default=None)
+    # auth_backends' strategy defaults this to True, which rewrites the
+    # callback to https:// and breaks the redirect_uri match on plain http.
+    SOCIAL_AUTH_REDIRECT_IS_HTTPS: bool | None = Field(default=None)
+    # LMS and Studio must not share a session cookie name when they share a
+    # host (cookies ignore the port), or each login logs the other one out.
+    SESSION_COOKIE_NAME: str | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def _derive_oauth2_public_url_root(self) -> StudioSettingsMixin:
+        """Default the authorize URL to the LMS's public root URL."""
+        if self.SOCIAL_AUTH_EDX_OAUTH2_PUBLIC_URL_ROOT is None:
+            self.SOCIAL_AUTH_EDX_OAUTH2_PUBLIC_URL_ROOT = getattr(
+                self, "LMS_ROOT_URL", None
+            )
         return self

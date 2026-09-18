@@ -83,6 +83,124 @@ class TestRequiredHostPorts:
         assert local_dev._required_host_ports() == []
 
 
+class TestPortPairs:
+    def test_parses_both_sides(self, monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+        config = tmp_path / "k3d-config.yaml"
+        config.write_text("ports:\n- port: 8000:8000\n- port: 8090:80\n")
+        monkeypatch.setattr(local_dev._paths, "k3d_config", lambda: config)
+        assert local_dev._port_pairs() == [(8000, 8000), (8090, 80)]
+
+
+def _loadbalancer_json(port_mappings: dict[str, list[str]]) -> str:
+    return json.dumps(
+        [
+            {
+                "name": local_dev.CLUSTER,
+                "nodes": [
+                    {"role": "server", "portMappings": {}},
+                    {
+                        "role": "loadbalancer",
+                        "portMappings": {
+                            container: [
+                                {"HostIp": "", "HostPort": host} for host in hosts
+                            ]
+                            for container, hosts in port_mappings.items()
+                        },
+                    },
+                ],
+            }
+        ]
+    )
+
+
+class TestStaleLoadbalancerPorts:
+    @pytest.fixture
+    def printed(self, monkeypatch: pytest.MonkeyPatch, tmp_path) -> list[str]:
+        config = tmp_path / "k3d-config.yaml"
+        config.write_text("ports:\n- port: 8000:8000\n- port: 8090:80\n")
+        monkeypatch.setattr(local_dev._paths, "k3d_config", lambda: config)
+        lines: list[str] = []
+        monkeypatch.setattr("builtins.print", lambda *a: lines.append(" ".join(a)))
+        return lines
+
+    def test_reads_host_to_loadbalancer_mappings(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            local_dev,
+            "capture",
+            lambda *a, **k: _loadbalancer_json(
+                {"6443/tcp": ["46169"], "80/tcp": ["8000", "8090"]}
+            ),
+        )
+        assert local_dev._loadbalancer_port_mappings() == {
+            46169: 6443,
+            8000: 80,
+            8090: 80,
+        }
+
+    def test_warns_on_a_cluster_from_the_old_mapping(
+        self, monkeypatch: pytest.MonkeyPatch, printed: list[str]
+    ) -> None:
+        monkeypatch.setattr(
+            local_dev,
+            "capture",
+            lambda *a, **k: _loadbalancer_json({"80/tcp": ["8000", "8090"]}),
+        )
+        local_dev._warn_on_stale_loadbalancer_ports()
+        assert "8000 -> 80 (want 8000)" in printed[0]
+        assert "8090" not in printed[0]
+        assert "lehrer dev teardown && lehrer dev setup" in printed[0]
+
+    def test_silent_when_the_cluster_matches(
+        self, monkeypatch: pytest.MonkeyPatch, printed: list[str]
+    ) -> None:
+        monkeypatch.setattr(
+            local_dev,
+            "capture",
+            lambda *a, **k: _loadbalancer_json(
+                {"8000/tcp": ["8000"], "80/tcp": ["8090"]}
+            ),
+        )
+        local_dev._warn_on_stale_loadbalancer_ports()
+        assert printed == []
+
+    def test_silent_without_a_cluster(
+        self, monkeypatch: pytest.MonkeyPatch, printed: list[str]
+    ) -> None:
+        monkeypatch.setattr(local_dev, "capture", lambda *a, **k: "[]")
+        local_dev._warn_on_stale_loadbalancer_ports()
+        assert printed == []
+
+
+class TestTraefikEntrypoints:
+    """k3d-config.yaml, traefik-config.yaml and lehrer-core.star must agree.
+
+    A host port reaches a service only if the loadbalancer maps it to a Traefik
+    exposedPort and an Ingress is pinned to that entrypoint by name. Nothing at
+    runtime reports a mismatch: the request just 404s.
+    """
+
+    @pytest.fixture
+    def entrypoints(self) -> dict[str, int]:
+        doc = yaml.safe_load(_paths.traefik_config().read_text())
+        ports = yaml.safe_load(doc["spec"]["valuesContent"])["ports"]
+        return {name: spec["exposedPort"] for name, spec in ports.items()}
+
+    def test_every_entrypoint_has_a_loadbalancer_mapping(
+        self, entrypoints: dict[str, int]
+    ) -> None:
+        mapped = {lb for _, lb in local_dev._port_pairs()}
+        assert set(entrypoints.values()) <= mapped
+
+    def test_every_ingress_names_a_declared_entrypoint(
+        self, entrypoints: dict[str, int]
+    ) -> None:
+        core = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
+        pinned = set(re.findall(r'_entrypoint_ingress\(namespace, "(\w+)"', core))
+        assert pinned == set(entrypoints)
+
+
 class TestPortInUse:
     def test_bound_port_reports_in_use(self) -> None:
         # A loopback-only bind still blocks _port_in_use's own 0.0.0.0 bind
@@ -142,6 +260,8 @@ class TestProvisioningManifests:
             "PROVISION_SUPERUSER_PASSWORD",
             "NOTES_OAUTH_CLIENT_ID",
             "NOTES_OAUTH_CLIENT_SECRET",
+            "SOCIAL_AUTH_EDX_OAUTH2_KEY",
+            "SOCIAL_AUTH_EDX_OAUTH2_SECRET",
         } <= provisioned
 
     def test_provision_script_is_valid_python(self) -> None:

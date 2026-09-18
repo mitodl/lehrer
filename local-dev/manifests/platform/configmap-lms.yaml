@@ -14,6 +14,10 @@ data:
   # Redis (standalone in openedx namespace; overridden in integrated mode to use valkey)
   CELERY_BROKER_TRANSPORT: "redis"
   CELERY_BROKER_HOSTNAME: "redis-valkey.openedx.svc.cluster.local"
+  # Django caches (and the cache-backed sessions) on the same Valkey, in DB 1
+  # so they stay out of the broker's DB 0. Without it every cache alias
+  # points at a memcached nobody runs and no login can hold a session.
+  CACHE_REDIS_URL: "redis://redis-valkey.openedx.svc.cluster.local:6379/1"
   CELERY_BROKER_USER: ""
   CELERY_BROKER_PASSWORD: ""
   CELERY_BROKER_VHOST: ""
@@ -37,15 +41,17 @@ data:
 
   # edx-notes service
   EDXNOTES_INTERNAL_API: "http://notes.openedx.svc.cluster.local:8000/api/v1"
-  # The browser calls this. Host port 8001 is the k3d loadbalancer, which
-  # hands everything to Traefik, and Traefik routes by host: a bare
-  # localhost:8001 matches no Ingress rule and 404s.
-  EDXNOTES_PUBLIC_API: "http://notes.localhost:8001/api/v1"
+  EDXNOTES_PUBLIC_API: "http://localhost:8001/api/v1"
   ENABLE_EDXNOTES: "true"
 
   # Service URLs (accessible from the browser)
   LMS_BASE_URL: "http://localhost:8000"
   CMS_BASE_URL: "http://localhost:8010"
+  # Host-and-port forms of the two above. Unset, they fall back to upstream's
+  # defaults (CMS_BASE is studio.edx.org), which is where Studio links and
+  # LMS_BASE-derived cookies end up.
+  LMS_BASE: "localhost:8000"
+  CMS_BASE: "localhost:8010"
 
   # Static files
   STATIC_ROOT_BASE: "/openedx/staticfiles"
