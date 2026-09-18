@@ -55,8 +55,11 @@ Use a deployment-specific config and MFE hot-reload:
 lehrer dev start --deployment-config ./deployments/mit-ol --mfe-hot-reload
 ```
 
-Once the stack is up, the port picks the service and any hostname that
-resolves to 127.0.0.1 works (`localhost`, or `local.openedx.io` for mit-ol):
+Once the stack is up, the port picks the service, so any hostname that
+resolves to 127.0.0.1 reaches it (`localhost`, or `local.openedx.io` for
+mit-ol). Log in at `localhost`, though: the LMS and Studio base URLs in the
+platform ConfigMaps name it, and Studio's SSO callback is registered for
+`http://localhost:8010` only.
 
 | Service | URL |
 |---|---|

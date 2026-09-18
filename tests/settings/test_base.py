@@ -12,7 +12,12 @@ from lehrer.settings.base import (
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in (
-        "CACHE_REDIS_URL",
+        "CACHE_REDIS_DB",
+        "CELERY_BROKER_HOSTNAME",
+        "CELERY_BROKER_PASSWORD",
+        "CELERY_BROKER_TRANSPORT",
+        "CELERY_BROKER_USER",
+        "CELERY_BROKER_VHOST",
         "CACHES",
         "LMS_BASE_URL",
         "LMS_ROOT_URL",
@@ -27,19 +32,37 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 class TestDeriveCaches:
-    def test_left_alone_without_a_url(self) -> None:
+    def test_left_alone_without_a_db(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CELERY_BROKER_HOSTNAME", "valkey")
         assert getattr(ProductionSettingsMixin(), "CACHES", None) is None
 
-    def test_every_alias_shares_the_server_under_its_own_prefix(
+    def test_every_alias_shares_the_broker_host_under_its_own_prefix(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("CACHE_REDIS_URL", "redis://valkey:6379/1")
+        monkeypatch.setenv("CELERY_BROKER_HOSTNAME", "valkey.local-infra")
+        monkeypatch.setenv("CACHE_REDIS_DB", "1")
         caches = ProductionSettingsMixin().CACHES  # type: ignore[attr-defined]
-        assert {c["LOCATION"] for c in caches.values()} == {"redis://valkey:6379/1"}
+        assert {c["LOCATION"] for c in caches.values()} == {
+            "redis://valkey.local-infra/1"
+        }
         prefixes = [c["KEY_PREFIX"] for c in caches.values()]
         assert len(prefixes) == len(set(prefixes))
         # The cache-backed session engine reads this one.
         assert "default" in caches
+
+    def test_carries_the_broker_password(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CELERY_BROKER_HOSTNAME", "valkey")
+        monkeypatch.setenv("CELERY_BROKER_PASSWORD", "p@ss")
+        monkeypatch.setenv("CACHE_REDIS_DB", "1")
+        caches = ProductionSettingsMixin().CACHES  # type: ignore[attr-defined]
+        assert caches["default"]["LOCATION"] == "redis://:p%40ss@valkey/1"
+
+    def test_refuses_a_db_without_a_broker_host(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("CACHE_REDIS_DB", "1")
+        with pytest.raises(ValueError, match="CELERY_BROKER_HOSTNAME"):
+            ProductionSettingsMixin()
 
 
 class TestStudioSettings:
@@ -105,3 +128,18 @@ class TestMergeJwtSigningKeys:
 def test_redirect_is_https_parses_false(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SOCIAL_AUTH_REDIRECT_IS_HTTPS", "false")
     assert StudioSettingsMixin().SOCIAL_AUTH_REDIRECT_IS_HTTPS is False
+
+
+def test_redirect_is_https_defaults_to_the_auth_backends_default() -> None:
+    assert StudioSettingsMixin().SOCIAL_AUTH_REDIRECT_IS_HTTPS is True
+
+
+def test_broker_url_is_built_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CELERY_BROKER_TRANSPORT", "redis")
+    monkeypatch.setenv(
+        "CELERY_BROKER_HOSTNAME", "redis-valkey.openedx.svc.cluster.local"
+    )
+    settings = ProductionSettingsMixin()
+    assert settings.BROKER_URL == (  # type: ignore[attr-defined]
+        "redis://:@redis-valkey.openedx.svc.cluster.local/"
+    )

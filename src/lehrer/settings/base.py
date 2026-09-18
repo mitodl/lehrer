@@ -314,9 +314,20 @@ class ProductionSettingsMixin(BaseSettings):
     MYSQL_DB_NAME: str = Field(default="edxapp")
     DB_PASSWORD: str = Field(default="")
 
-    # Redis/Valkey URL — consumed by _derive_caches. Unset, CACHES comes from
-    # YAML or falls through to common.py's memcached on localhost:11211.
-    CACHE_REDIS_URL: str = Field(default="")
+    # Celery broker scalars — consumed by _derive_broker_url and _derive_caches.
+    # Neither upstream common.py nor the generated model declares them, so
+    # until they are declared here the env source drops them and BROKER_URL is
+    # built with an empty host.
+    CELERY_BROKER_TRANSPORT: str = Field(default="")
+    CELERY_BROKER_HOSTNAME: str = Field(default="")
+    CELERY_BROKER_USER: str = Field(default="")
+    CELERY_BROKER_PASSWORD: str = Field(default="")
+    CELERY_BROKER_VHOST: str = Field(default="")
+
+    # Redis/Valkey DB for Django's caches on the Celery broker's host — consumed
+    # by _derive_caches. Unset, CACHES comes from YAML or falls through to
+    # common.py's memcached on localhost:11211.
+    CACHE_REDIS_DB: int | None = Field(default=None)
 
     # JWT signing keys — merged into JWT_AUTH by merge_jwt_signing_keys. JWT_AUTH
     # is a common.py dict the model never declares, so only a post_configure
@@ -391,18 +402,13 @@ class ProductionSettingsMixin(BaseSettings):
         CELERY_BROKER_HOSTNAME and CELERY_BROKER_PASSWORD arrive as flat env
         vars (hostname from a ConfigMap, password from a Secret).
         """
-        # CELERY_BROKER_* fields below come from the generated AqueductSettings
-        # sibling class (see module docstring), unknown to mypy when checking
-        # this mixin in isolation — read via getattr, like the other
-        # cross-class fields in this file (e.g. SERVICE_VARIANT below).
-        transport = getattr(self, "CELERY_BROKER_TRANSPORT", "")
+        transport = self.CELERY_BROKER_TRANSPORT
         if transport and not getattr(self, "BROKER_URL", None):
-            user = quote(getattr(self, "CELERY_BROKER_USER", "") or "", safe="")
-            password = quote(getattr(self, "CELERY_BROKER_PASSWORD", "") or "", safe="")
-            hostname = getattr(self, "CELERY_BROKER_HOSTNAME", "")
-            vhost = getattr(self, "CELERY_BROKER_VHOST", "")
+            user = quote(self.CELERY_BROKER_USER, safe="")
+            password = quote(self.CELERY_BROKER_PASSWORD, safe="")
             self.BROKER_URL = (  # type: ignore[attr-defined]
-                f"{transport}://{user}:{password}@{hostname}/{vhost}"
+                f"{transport}://{user}:{password}"
+                f"@{self.CELERY_BROKER_HOSTNAME}/{self.CELERY_BROKER_VHOST}"
             )
         if isinstance(self.CELERY_BROKER_USE_SSL, dict):
             self.BROKER_USE_SSL = self.CELERY_BROKER_USE_SSL
@@ -581,26 +587,40 @@ class ProductionSettingsMixin(BaseSettings):
 
     @model_validator(mode="after")
     def _derive_caches(self) -> ProductionSettingsMixin:
-        """Build CACHES on one Redis/Valkey server from CACHE_REDIS_URL.
+        """Build CACHES on the Celery broker's Redis/Valkey host, in CACHE_REDIS_DB.
 
         Without a CACHES source, every alias falls through to common.py's
         memcached on localhost:11211, which no container runs. Cache writes
         then fail silently, and the cache-backed session engine cannot create
         a session, so no one can log in to the LMS or Studio.
 
-        Only runs when CACHE_REDIS_URL is set. A deployment that supplies
-        CACHES through YAML is left alone. The aliases and key prefixes match
-        the ones ol-infrastructure writes for deployed environments. The
-        backend is Django's own RedisCache, which needs only redis-py (already
-        present for the Celery broker), not django-redis.
+        The host comes from CELERY_BROKER_HOSTNAME rather than a key of its
+        own, so a caller that repoints the broker (ol-infrastructure's
+        local-dev points it at a shared Valkey) moves the caches with it
+        instead of leaving them on a host that caller does not run. Django's
+        RedisCache raises on an unreachable server where the memcached default
+        failed silently, so the two must not drift apart.
+
+        Only runs when CACHE_REDIS_DB is set, and then replaces any CACHES from
+        YAML. The aliases and key prefixes match the ones ol-infrastructure
+        writes for deployed environments. The backend is Django's own
+        RedisCache, which needs only redis-py (already present for the Celery
+        broker), not django-redis.
         """
-        if not self.CACHE_REDIS_URL:
+        if self.CACHE_REDIS_DB is None:
             return self
+        hostname = self.CELERY_BROKER_HOSTNAME
+        if not hostname:
+            msg = "CACHE_REDIS_DB is set but CELERY_BROKER_HOSTNAME is not"
+            raise ValueError(msg)
+        password = self.CELERY_BROKER_PASSWORD
+        auth = f":{quote(password, safe='')}@" if password else ""
+        location = f"redis://{auth}{hostname}/{self.CACHE_REDIS_DB}"
 
         def _cache(prefix: str, timeout: int | None = None) -> dict:
             cache: dict = {
                 "BACKEND": "django.core.cache.backends.redis.RedisCache",
-                "LOCATION": self.CACHE_REDIS_URL,
+                "LOCATION": location,
                 "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
                 "KEY_PREFIX": prefix,
             }
@@ -700,17 +720,20 @@ class StudioSettingsMixin(ProductionSettingsMixin):
     """CMS-only additions to ``ProductionSettingsMixin``.
 
     Studio logs users in through the LMS's OAuth2 provider (auth_backends'
-    ``EdXOAuth2``). Its settings live in ``cms/envs/production.py``, not
-    ``common.py``, so codegen never declared them and an env var of the same
-    name would be dropped: the env source only reads declared fields. YAML
-    sources carry undeclared keys through ``extra="allow"``, which is how a
-    Kubernetes deployment has been setting them; declaring them here lets a
-    flat ConfigMap/Secret do it too.
+    ``EdXOAuth2``). ``common.py`` never defines its settings (upstream names
+    them only in ``devstack.py``; ``production.py`` takes them from its YAML),
+    so codegen never declared them and an env var of the same name would be
+    dropped: the env source only reads declared fields. YAML sources carry
+    undeclared keys through ``extra="allow"``, which is how a Kubernetes
+    deployment sets them; declaring them here lets a flat ConfigMap/Secret do
+    it too.
 
-    A ``None`` default defers to the ``common.py`` value where there is one
-    (``SESSION_COOKIE_NAME`` stays ``"sessionid"``). The OAuth2 keys have none,
-    so unset they read as ``None`` rather than being absent, which is what
-    auth_backends' ``setting()`` lookup returns for them either way.
+    A field ``common.py`` does define defers to it while unset
+    (``SESSION_COOKIE_NAME`` stays ``"sessionid"``). One it does not is added
+    to Django's settings at its default, so each default here must read the
+    same as the setting being absent: ``None`` for the OAuth2 keys (what
+    auth_backends' lookup returns for a missing one), and ``True`` for
+    ``SOCIAL_AUTH_REDIRECT_IS_HTTPS`` (auth_backends' own default).
     """
 
     SOCIAL_AUTH_EDX_OAUTH2_KEY: str | None = Field(default=None)
@@ -722,7 +745,9 @@ class StudioSettingsMixin(ProductionSettingsMixin):
     SOCIAL_AUTH_EDX_OAUTH2_PUBLIC_URL_ROOT: str | None = Field(default=None)
     # auth_backends' strategy defaults this to True, which rewrites the
     # callback to https:// and breaks the redirect_uri match on plain http.
-    SOCIAL_AUTH_REDIRECT_IS_HTTPS: bool | None = Field(default=None)
+    # The default matches it, since an explicit None would switch the rewrite
+    # off rather than fall back to it.
+    SOCIAL_AUTH_REDIRECT_IS_HTTPS: bool = Field(default=True)
     # LMS and Studio must not share a session cookie name when they share a
     # host (cookies ignore the port), or each login logs the other one out.
     SESSION_COOKIE_NAME: str | None = Field(default=None)

@@ -14,10 +14,12 @@ data:
   # Redis (standalone in openedx namespace; overridden in integrated mode to use valkey)
   CELERY_BROKER_TRANSPORT: "redis"
   CELERY_BROKER_HOSTNAME: "redis-valkey.openedx.svc.cluster.local"
-  # Django caches (and the cache-backed sessions) on the same Valkey, in DB 1
-  # so they stay out of the broker's DB 0. Without it every cache alias
-  # points at a memcached nobody runs and no login can hold a session.
-  CACHE_REDIS_URL: "redis://redis-valkey.openedx.svc.cluster.local:6379/1"
+  # Django caches (and the cache-backed sessions) on the broker's Valkey, in
+  # DB 1 so they stay out of the broker's DB 0. The host follows
+  # CELERY_BROKER_HOSTNAME, so a caller that repoints the broker moves the
+  # caches too. Without it every cache alias points at a memcached nobody
+  # runs and no login can hold a session.
+  CACHE_REDIS_DB: "1"
   CELERY_BROKER_USER: ""
   CELERY_BROKER_PASSWORD: ""
   CELERY_BROKER_VHOST: ""
