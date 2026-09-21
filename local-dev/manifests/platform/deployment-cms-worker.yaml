@@ -57,7 +57,10 @@ spec:
             - "--timeout=5"
           initialDelaySeconds: 60
           periodSeconds: 60
-          timeoutSeconds: 10
+          # The probe starts a whole celery CLI, which loads the Django settings
+          # before it sends the 5s ping. That alone takes about 10s here, so a
+          # 10s timeout kills a healthy worker that has just answered pong.
+          timeoutSeconds: 30
           failureThreshold: 5
         resources:
           requests:

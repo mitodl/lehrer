@@ -194,6 +194,23 @@ def _sorted_yaml_files(settings_dir: str) -> list[Path]:
     return nested if nested else sorted(base.glob("*.yaml"))
 
 
+def merge_jwt_signing_keys(merged: dict[str, Any], model: Any) -> None:
+    """Merge the JWT_*_SIGNING_JWK* scalars into the overlaid JWT_AUTH dict.
+
+    A ``configure_django_settings(post_configure=…)`` hook for every entry
+    module. edx-platform signs JWTs with ``JWT_AUTH["JWT_PRIVATE_SIGNING_JWK"]``
+    and fails the login outright when it is unset. A deployment that supplies
+    JWT_AUTH through YAML sets neither scalar, so this leaves it alone.
+    """
+    keys = {
+        name: getattr(model, name)
+        for name in ("JWT_PRIVATE_SIGNING_JWK", "JWT_PUBLIC_SIGNING_JWK_SET")
+        if getattr(model, name, "")
+    }
+    if keys:
+        merged["JWT_AUTH"] = {**merged["JWT_AUTH"], **keys}
+
+
 # ---------------------------------------------------------------------------
 # Shared base settings model
 # ---------------------------------------------------------------------------
@@ -297,6 +314,28 @@ class ProductionSettingsMixin(BaseSettings):
     MYSQL_DB_NAME: str = Field(default="edxapp")
     DB_PASSWORD: str = Field(default="")
 
+    # Celery broker scalars — consumed by _derive_broker_url and _derive_caches.
+    # openedx/envs/common.py defines them (as ""), but lms/cms common.py only
+    # star-import them, which codegen's static pass does not follow, so the
+    # generated model never declares them. Until they are declared here the env
+    # source drops them and BROKER_URL is built with an empty host.
+    CELERY_BROKER_TRANSPORT: str = Field(default="")
+    CELERY_BROKER_HOSTNAME: str = Field(default="")
+    CELERY_BROKER_USER: str = Field(default="")
+    CELERY_BROKER_PASSWORD: str = Field(default="")
+    CELERY_BROKER_VHOST: str = Field(default="")
+
+    # Redis/Valkey DB for Django's caches on the Celery broker's host — consumed
+    # by _derive_caches. Unset, CACHES comes from YAML or falls through to
+    # common.py's memcached on localhost:11211.
+    CACHE_REDIS_DB: int | None = Field(default=None)
+
+    # JWT signing keys — merged into JWT_AUTH by merge_jwt_signing_keys. JWT_AUTH
+    # is a common.py dict the model never declares, so only a post_configure
+    # hook can see it to merge into; a validator here would replace it whole.
+    JWT_PRIVATE_SIGNING_JWK: str = Field(default="")
+    JWT_PUBLIC_SIGNING_JWK_SET: str = Field(default="")
+
     # Service URL scalars — consumed by _derive_service_root_urls to populate
     # LMS_ROOT_URL / CMS_ROOT_URL when the generated model leaves them as None.
     # openassessment's LoadStatic crashes at import time if LMS_ROOT_URL is None.
@@ -357,6 +396,21 @@ class ProductionSettingsMixin(BaseSettings):
                 self.CELERY_DEFAULT_EXCHANGE = queue  # type: ignore[attr-defined]
         return self
 
+    def _broker_server_url(self, scheme: str | None = None) -> str:
+        """The broker's server URL (scheme, credentials, host), with no DB or vhost.
+
+        Shared by BROKER_URL and CACHES so the caches reach the broker's server
+        with the same scheme (e.g. ``rediss`` for TLS) and credentials.
+        ``scheme`` overrides CELERY_BROKER_TRANSPORT, which _derive_caches uses
+        to turn a TLS broker's ``redis`` into ``rediss``.
+        """
+        user = quote(self.CELERY_BROKER_USER, safe="")
+        password = quote(self.CELERY_BROKER_PASSWORD, safe="")
+        return (
+            f"{scheme or self.CELERY_BROKER_TRANSPORT}://{user}:{password}"
+            f"@{self.CELERY_BROKER_HOSTNAME}"
+        )
+
     @model_validator(mode="after")
     def _derive_broker_url(self) -> ProductionSettingsMixin:
         """Build BROKER_URL from CELERY_BROKER_* components.
@@ -364,18 +418,10 @@ class ProductionSettingsMixin(BaseSettings):
         CELERY_BROKER_HOSTNAME and CELERY_BROKER_PASSWORD arrive as flat env
         vars (hostname from a ConfigMap, password from a Secret).
         """
-        # CELERY_BROKER_* fields below come from the generated AqueductSettings
-        # sibling class (see module docstring), unknown to mypy when checking
-        # this mixin in isolation — read via getattr, like the other
-        # cross-class fields in this file (e.g. SERVICE_VARIANT below).
-        transport = getattr(self, "CELERY_BROKER_TRANSPORT", "")
+        transport = self.CELERY_BROKER_TRANSPORT
         if transport and not getattr(self, "BROKER_URL", None):
-            user = quote(getattr(self, "CELERY_BROKER_USER", "") or "", safe="")
-            password = quote(getattr(self, "CELERY_BROKER_PASSWORD", "") or "", safe="")
-            hostname = getattr(self, "CELERY_BROKER_HOSTNAME", "")
-            vhost = getattr(self, "CELERY_BROKER_VHOST", "")
             self.BROKER_URL = (  # type: ignore[attr-defined]
-                f"{transport}://{user}:{password}@{hostname}/{vhost}"
+                f"{self._broker_server_url()}/{self.CELERY_BROKER_VHOST}"
             )
         if isinstance(self.CELERY_BROKER_USE_SSL, dict):
             self.BROKER_USE_SSL = self.CELERY_BROKER_USE_SSL
@@ -553,6 +599,76 @@ class ProductionSettingsMixin(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _derive_caches(self) -> ProductionSettingsMixin:
+        """Build CACHES on the Celery broker's Redis/Valkey host, in CACHE_REDIS_DB.
+
+        Without a CACHES source, every alias falls through to common.py's
+        memcached on localhost:11211, which no container runs. Cache writes
+        then fail silently, and the cache-backed session engine cannot create
+        a session, so no one can log in to the LMS or Studio.
+
+        The host comes from CELERY_BROKER_HOSTNAME rather than a key of its
+        own, so a caller that repoints the broker (ol-infrastructure's
+        local-dev points it at a shared Valkey) moves the caches with it
+        instead of leaving them on a host that caller does not run. Django's
+        RedisCache raises on an unreachable server where the memcached default
+        failed silently, so the two must not drift apart.
+
+        Only runs when CACHE_REDIS_DB is set, and then replaces any CACHES from
+        YAML. The aliases and key prefixes match the ones ol-infrastructure
+        writes for deployed environments. The backend is Django's own
+        RedisCache, which needs only redis-py (already present for the Celery
+        broker), not django-redis.
+        """
+        if self.CACHE_REDIS_DB is None:
+            return self
+        if not (self.CELERY_BROKER_TRANSPORT and self.CELERY_BROKER_HOSTNAME):
+            msg = (
+                "CACHE_REDIS_DB is set but CELERY_BROKER_TRANSPORT or "
+                "CELERY_BROKER_HOSTNAME is not"
+            )
+            raise ValueError(msg)
+        scheme = self.CELERY_BROKER_TRANSPORT
+        options: dict[str, Any] = {}
+        if self.CELERY_BROKER_USE_SSL:
+            # Celery signals TLS out of band: the transport stays "redis" and
+            # BROKER_USE_SSL carries the options. redis-py has no such channel,
+            # so a cache URL built from the transport alone would talk plaintext
+            # to a TLS-only server. "rediss" selects redis-py's SSLConnection,
+            # and the options dict (ssl_cert_reqs, ssl_ca_certs, ...) reaches it
+            # through cache OPTIONS, which RedisCacheClient forwards to
+            # ConnectionPool.from_url.
+            if scheme == "redis":
+                scheme = "rediss"
+            if isinstance(self.CELERY_BROKER_USE_SSL, dict):
+                options = dict(self.CELERY_BROKER_USE_SSL)
+        location = f"{self._broker_server_url(scheme)}/{self.CACHE_REDIS_DB}"
+
+        def _cache(prefix: str, timeout: int | None = None) -> dict:
+            cache: dict = {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": location,
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "KEY_PREFIX": prefix,
+            }
+            if options:
+                cache["OPTIONS"] = dict(options)
+            if timeout is not None:
+                cache["TIMEOUT"] = timeout
+            return cache
+
+        self.CACHES = {  # type: ignore[attr-defined]
+            "celery": _cache("celery", 7200),
+            "configuration": _cache("configuration"),
+            "course_structure_cache": _cache("course_structure", 7200),
+            "default": _cache("default"),
+            "general": _cache("general"),
+            "mongo_metadata_inheritance": _cache("mongo_metadata_inheritance", 300),
+            "staticfiles": _cache("staticfiles"),
+        }
+        return self
+
+    @model_validator(mode="after")
     def _derive_service_root_urls(self) -> ProductionSettingsMixin:
         """Populate LMS_ROOT_URL / CMS_ROOT_URL from the *_BASE_URL scalars.
 
@@ -626,4 +742,50 @@ class ProductionSettingsMixin(BaseSettings):
             value = getattr(self, setting_name, None)
             if isinstance(value, str) and not isinstance(value, PathString):
                 setattr(self, setting_name, PathString(value))  # type: ignore[attr-defined]
+        return self
+
+
+class StudioSettingsMixin(ProductionSettingsMixin):
+    """CMS-only additions to ``ProductionSettingsMixin``.
+
+    Studio logs users in through the LMS's OAuth2 provider (auth_backends'
+    ``EdXOAuth2``). ``common.py`` never defines its settings (upstream names
+    them only in ``devstack.py``; ``production.py`` takes them from its YAML),
+    so codegen never declared them and an env var of the same name would be
+    dropped: the env source only reads declared fields. YAML sources carry
+    undeclared keys through ``extra="allow"``, which is how a Kubernetes
+    deployment sets them; declaring them here lets a flat ConfigMap/Secret do
+    it too.
+
+    A field ``common.py`` does define defers to it while unset
+    (``SESSION_COOKIE_NAME`` stays ``"sessionid"``). One it does not is added
+    to Django's settings at its default, so each default here must read the
+    same as the setting being absent: ``None`` for the OAuth2 keys (what
+    auth_backends' lookup returns for a missing one), and ``True`` for
+    ``SOCIAL_AUTH_REDIRECT_IS_HTTPS`` (auth_backends' own default).
+    """
+
+    SOCIAL_AUTH_EDX_OAUTH2_KEY: str | None = Field(default=None)
+    SOCIAL_AUTH_EDX_OAUTH2_SECRET: str | None = Field(default=None)
+    # Server-to-server: the token exchange runs from the CMS pod, so this is an
+    # address the pod can reach, not necessarily the browser.
+    SOCIAL_AUTH_EDX_OAUTH2_URL_ROOT: str | None = Field(default=None)
+    # Where the browser is sent to authorize.
+    SOCIAL_AUTH_EDX_OAUTH2_PUBLIC_URL_ROOT: str | None = Field(default=None)
+    # auth_backends' strategy defaults this to True, which rewrites the
+    # callback to https:// and breaks the redirect_uri match on plain http.
+    # The default matches it, since an explicit None would switch the rewrite
+    # off rather than fall back to it.
+    SOCIAL_AUTH_REDIRECT_IS_HTTPS: bool = Field(default=True)
+    # LMS and Studio must not share a session cookie name when they share a
+    # host (cookies ignore the port), or each login logs the other one out.
+    SESSION_COOKIE_NAME: str | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def _derive_oauth2_public_url_root(self) -> StudioSettingsMixin:
+        """Default the authorize URL to the LMS's public root URL."""
+        if self.SOCIAL_AUTH_EDX_OAUTH2_PUBLIC_URL_ROOT is None:
+            self.SOCIAL_AUTH_EDX_OAUTH2_PUBLIC_URL_ROOT = getattr(
+                self, "LMS_ROOT_URL", None
+            )
         return self

@@ -110,38 +110,100 @@ def _cluster_state() -> ClusterState:
     the API unreachable. We inspect every node's running flag so callers can
     tell a healthy cluster from a wedged one.
     """
+    cluster = _cluster_record()
+    if cluster is None:
+        return "absent"
+    nodes = cluster.get("nodes") or []
+    running = sum(1 for n in nodes if n.get("State", {}).get("Running"))
+    if running == 0:
+        return "stopped"
+    if running == len(nodes):
+        return "running"
+    return "partial"
+
+
+def _cluster_record() -> dict | None:
+    """Return the lehrer-dev entry of ``k3d cluster list -o json``, if any."""
     out = capture("k3d", "cluster", "list", "-o", "json", check=False)
     try:
         clusters = json.loads(out or "[]")
     except json.JSONDecodeError:
-        return "absent"
+        return None
     for cluster in clusters:
-        if cluster.get("name") != CLUSTER:
-            continue
-        nodes = cluster.get("nodes") or []
-        running = sum(1 for n in nodes if n.get("State", {}).get("Running"))
-        if running == 0:
-            return "stopped"
-        if running == len(nodes):
-            return "running"
-        return "partial"
-    return "absent"
+        if cluster.get("name") == CLUSTER:
+            return cluster
+    return None
 
 
 def _current_context() -> str:
     return capture("kubectl", "config", "current-context", check=False) or "(none)"
 
 
-def _required_host_ports() -> list[int]:
-    """Host ports the k3d loadbalancer must bind, parsed from k3d-config.yaml.
+def _port_pairs() -> list[tuple[int, int]]:
+    """(host, loadbalancer) port pairs, parsed from k3d-config.yaml.
 
-    Lines look like ``- port: 8000:80`` — the host side is the first number.
+    Lines look like ``- port: 8000:8000`` — host side first.
     """
     text = _paths.k3d_config().read_text()
-    ports: list[int] = []
-    for match in re.finditer(r"port:\s*(\d+):\d+", text):
-        ports.append(int(match.group(1)))
-    return ports
+    return [
+        (int(match.group(1)), int(match.group(2)))
+        for match in re.finditer(r"port:\s*(\d+):(\d+)", text)
+    ]
+
+
+def _required_host_ports() -> list[int]:
+    """Host ports the k3d loadbalancer must bind."""
+    return [host for host, _ in _port_pairs()]
+
+
+def _loadbalancer_port_mappings() -> dict[int, int]:
+    """Map each host port the existing cluster's loadbalancer binds to its own port.
+
+    Empty when there is no cluster. Read from the node's ``portMappings``,
+    which Docker keys by the container side (``"8000/tcp"``).
+    """
+    cluster = _cluster_record()
+    if cluster is None:
+        return {}
+    mapped: dict[int, int] = {}
+    for node in cluster.get("nodes") or []:
+        if node.get("role") != "loadbalancer":
+            continue
+        for container_port, bindings in (node.get("portMappings") or {}).items():
+            for binding in bindings:
+                mapped[int(binding["HostPort"])] = int(container_port.split("/")[0])
+    return mapped
+
+
+def _warn_on_stale_loadbalancer_ports() -> None:
+    """Warn when the cluster predates the loadbalancer ports in k3d-config.yaml.
+
+    k3d fixes port mappings when it creates a cluster, and ``k3d cluster
+    edit`` can add a mapping but not change one. A cluster created before
+    LMS, Studio and notes each got their own Traefik entrypoint still sends
+    all of them to Traefik's host-routed ``web`` entrypoint, where nothing
+    matches and every request 404s. Only recreating the cluster fixes it.
+
+    A host port the older cluster never bound at all is reported the same
+    way: the service behind it is just as unreachable as a misrouted one.
+    """
+    mapped = _loadbalancer_port_mappings()
+    if not mapped:
+        return
+    stale = [
+        f"{host} -> {mapped.get(host, 'unmapped')} (want {want})"
+        for host, want in _port_pairs()
+        if mapped.get(host) != want
+    ]
+    if not stale:
+        return
+    print(
+        f"WARNING: cluster {CLUSTER} was created from an older k3d-config.yaml.\n"
+        f"    Loadbalancer host ports: {', '.join(stale)}\n"
+        "    LMS, Studio and notes will 404 until the cluster is recreated,\n"
+        "    which also deletes its databases:\n"
+        "        lehrer dev teardown && lehrer dev setup"
+    )
 
 
 def _port_in_use(port: int) -> bool:
@@ -630,6 +692,12 @@ def setup() -> None:
     )
 
     run("kubectl", "apply", "-f", str(_paths.namespace_manifest()))
+    # Gives LMS, Studio and notes a Traefik entrypoint each. Applied here rather
+    # than from lehrer-core.star because it configures this cluster's bundled
+    # Traefik, which a caller composing the stack into its own cluster (e.g.
+    # on APISIX) does not have.
+    run("kubectl", "apply", "-f", str(_paths.traefik_config()))
+    _warn_on_stale_loadbalancer_ports()
 
     print("==> Adding Helm repositories...")
     for name, url in _HELM_REPOS:
@@ -737,6 +805,7 @@ def start(
     # immutable-field admission error with no idea what to do about it.
     _warn_on_stale_mariadb_secret_ref()
     _warn_on_uncollated_edxapp_database()
+    _warn_on_stale_loadbalancer_ports()
 
     tilt_args: list[str] = []
     if deployment_config is not None:
