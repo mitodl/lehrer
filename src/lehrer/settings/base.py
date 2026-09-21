@@ -396,16 +396,18 @@ class ProductionSettingsMixin(BaseSettings):
                 self.CELERY_DEFAULT_EXCHANGE = queue  # type: ignore[attr-defined]
         return self
 
-    def _broker_server_url(self) -> str:
+    def _broker_server_url(self, scheme: str | None = None) -> str:
         """The broker's server URL (scheme, credentials, host), with no DB or vhost.
 
         Shared by BROKER_URL and CACHES so the caches reach the broker's server
         with the same scheme (e.g. ``rediss`` for TLS) and credentials.
+        ``scheme`` overrides CELERY_BROKER_TRANSPORT, which _derive_caches uses
+        to turn a TLS broker's ``redis`` into ``rediss``.
         """
         user = quote(self.CELERY_BROKER_USER, safe="")
         password = quote(self.CELERY_BROKER_PASSWORD, safe="")
         return (
-            f"{self.CELERY_BROKER_TRANSPORT}://{user}:{password}"
+            f"{scheme or self.CELERY_BROKER_TRANSPORT}://{user}:{password}"
             f"@{self.CELERY_BROKER_HOSTNAME}"
         )
 
@@ -626,7 +628,21 @@ class ProductionSettingsMixin(BaseSettings):
                 "CELERY_BROKER_HOSTNAME is not"
             )
             raise ValueError(msg)
-        location = f"{self._broker_server_url()}/{self.CACHE_REDIS_DB}"
+        scheme = self.CELERY_BROKER_TRANSPORT
+        options: dict[str, Any] = {}
+        if self.CELERY_BROKER_USE_SSL:
+            # Celery signals TLS out of band: the transport stays "redis" and
+            # BROKER_USE_SSL carries the options. redis-py has no such channel,
+            # so a cache URL built from the transport alone would talk plaintext
+            # to a TLS-only server. "rediss" selects redis-py's SSLConnection,
+            # and the options dict (ssl_cert_reqs, ssl_ca_certs, ...) reaches it
+            # through cache OPTIONS, which RedisCacheClient forwards to
+            # ConnectionPool.from_url.
+            if scheme == "redis":
+                scheme = "rediss"
+            if isinstance(self.CELERY_BROKER_USE_SSL, dict):
+                options = dict(self.CELERY_BROKER_USE_SSL)
+        location = f"{self._broker_server_url(scheme)}/{self.CACHE_REDIS_DB}"
 
         def _cache(prefix: str, timeout: int | None = None) -> dict:
             cache: dict = {
@@ -635,6 +651,8 @@ class ProductionSettingsMixin(BaseSettings):
                 "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
                 "KEY_PREFIX": prefix,
             }
+            if options:
+                cache["OPTIONS"] = dict(options)
             if timeout is not None:
                 cache["TIMEOUT"] = timeout
             return cache

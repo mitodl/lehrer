@@ -66,6 +66,32 @@ class TestDeriveCaches:
             == "rediss://default:p%40ss@cache.example/3"  # pragma: allowlist secret
         )
 
+    def test_follows_the_broker_tls_options(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Celery keeps the transport at "redis" and carries TLS in
+        # CELERY_BROKER_USE_SSL; redis-py needs the rediss scheme and the
+        # options on the connection.
+        monkeypatch.setenv("CELERY_BROKER_TRANSPORT", "redis")
+        monkeypatch.setenv("CELERY_BROKER_HOSTNAME", "cache.example")
+        monkeypatch.setenv("CACHE_REDIS_DB", "3")
+        monkeypatch.setenv(
+            "CELERY_BROKER_USE_SSL", '{"ssl_cert_reqs": "CERT_OPTIONAL"}'
+        )
+        caches = ProductionSettingsMixin().CACHES  # type: ignore[attr-defined]
+        assert caches["default"]["LOCATION"] == "rediss://:@cache.example/3"
+        assert caches["default"]["OPTIONS"] == {"ssl_cert_reqs": "CERT_OPTIONAL"}
+
+    def test_plaintext_broker_gets_no_tls_options(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("CELERY_BROKER_TRANSPORT", "redis")
+        monkeypatch.setenv("CELERY_BROKER_HOSTNAME", "cache.example")
+        monkeypatch.setenv("CACHE_REDIS_DB", "3")
+        caches = ProductionSettingsMixin().CACHES  # type: ignore[attr-defined]
+        assert caches["default"]["LOCATION"] == "redis://:@cache.example/3"
+        assert "OPTIONS" not in caches["default"]
+
     def test_refuses_a_db_without_a_broker_host(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
