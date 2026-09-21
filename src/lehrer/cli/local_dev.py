@@ -183,14 +183,17 @@ def _warn_on_stale_loadbalancer_ports() -> None:
     LMS, Studio and notes each got their own Traefik entrypoint still sends
     all of them to Traefik's host-routed ``web`` entrypoint, where nothing
     matches and every request 404s. Only recreating the cluster fixes it.
+
+    A host port the older cluster never bound at all is reported the same
+    way: the service behind it is just as unreachable as a misrouted one.
     """
     mapped = _loadbalancer_port_mappings()
     if not mapped:
         return
     stale = [
-        f"{host} -> {mapped[host]} (want {want})"
+        f"{host} -> {mapped.get(host, 'unmapped')} (want {want})"
         for host, want in _port_pairs()
-        if host in mapped and mapped[host] != want
+        if mapped.get(host) != want
     ]
     if not stale:
         return

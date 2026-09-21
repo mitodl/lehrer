@@ -152,6 +152,18 @@ class TestStaleLoadbalancerPorts:
         assert "8090" not in printed[0]
         assert "lehrer dev teardown && lehrer dev setup" in printed[0]
 
+    def test_warns_when_a_required_host_port_is_unmapped(
+        self, monkeypatch: pytest.MonkeyPatch, printed: list[str]
+    ) -> None:
+        # A cluster created before 8000 got a mapping at all binds only 8090.
+        monkeypatch.setattr(
+            local_dev,
+            "capture",
+            lambda *a, **k: _loadbalancer_json({"80/tcp": ["8090"]}),
+        )
+        local_dev._warn_on_stale_loadbalancer_ports()
+        assert "8000 -> unmapped (want 8000)" in printed[0]
+
     def test_silent_when_the_cluster_matches(
         self, monkeypatch: pytest.MonkeyPatch, printed: list[str]
     ) -> None:
@@ -187,11 +199,16 @@ class TestTraefikEntrypoints:
         ports = yaml.safe_load(doc["spec"]["valuesContent"])["ports"]
         return {name: spec["exposedPort"] for name, spec in ports.items()}
 
-    def test_every_entrypoint_has_a_loadbalancer_mapping(
+    def test_every_entrypoint_is_mapped_from_its_own_host_port(
         self, entrypoints: dict[str, int]
     ) -> None:
-        mapped = {lb for _, lb in local_dev._port_pairs()}
-        assert set(entrypoints.values()) <= mapped
+        # Asserting only that the entrypoint appears on the loadbalancer side
+        # would pass on a swapped pair (8000:8010, 8010:8000), which routes
+        # every LMS request to Studio and vice versa.
+        mapped = dict(local_dev._port_pairs())
+        assert {port: mapped.get(port) for port in entrypoints.values()} == {
+            port: port for port in entrypoints.values()
+        }
 
     def test_every_ingress_names_a_declared_entrypoint(
         self, entrypoints: dict[str, int]
