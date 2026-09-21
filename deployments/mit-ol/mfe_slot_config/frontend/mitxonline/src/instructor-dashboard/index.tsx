@@ -50,7 +50,9 @@ export function createMITxOnlineInstructorDashboardApp(): App {
         slotId: ROUTES_SLOT_ID,
         id: 'org.openedx.frontend.widget.instructorDashboard.route.course_sync_actions',
         op: WidgetOperationTypes.APPEND,
-        element: <PlaceholderSlot tabId="course_sync" content={<CourseSyncActionsPage />} />,
+        element: (
+          <PlaceholderSlot tabId="course_sync_actions" content={<CourseSyncActionsPage />} />
+        ),
       },
     ],
   };

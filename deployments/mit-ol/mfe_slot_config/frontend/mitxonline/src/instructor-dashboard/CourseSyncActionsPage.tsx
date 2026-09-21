@@ -70,7 +70,7 @@ const CourseSyncActionsPage = () => {
     setShowConfirm(false);
   }, [courseId]);
 
-  const baseUrl = `${getApiBaseUrl()}/courses/${courseId}/course_sync/api`;
+  const baseUrl = `${getApiBaseUrl()}/courses/${courseId}/course_sync_actions/api`;
 
   const handleSubmit = async () => {
     const submittedCourseId = courseId;
