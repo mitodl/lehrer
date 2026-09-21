@@ -47,7 +47,7 @@ const summarize = (results: ActionResult[]) => {
   return { variant, message: parts.join(', ') };
 };
 
-const CourseSyncPage = () => {
+const CourseSyncActionsPage = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const [action, setAction] = useState(ACTION_RESET_ATTEMPTS);
   const [problemId, setProblemId] = useState('');
@@ -110,7 +110,7 @@ const CourseSyncPage = () => {
   const summary = results && results.length > 0 ? summarize(results) : null;
 
   return (
-    <div className="course-sync-page p-4">
+    <div className="course-sync-actions-page p-4">
       <h3>Course Sync Actions</h3>
       <p>
         Reset attempts or rescore a problem for all learners in this course
@@ -223,4 +223,4 @@ const CourseSyncPage = () => {
   );
 };
 
-export default CourseSyncPage;
+export default CourseSyncActionsPage;

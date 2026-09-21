@@ -11,7 +11,7 @@ import {
   ROUTES_SLOT_ID,
 } from '@shared/instructor-dashboard';
 
-import CourseSyncPage from './CourseSyncPage';
+import CourseSyncActionsPage from './CourseSyncActionsPage';
 import EnrollmentActions from './EnrollmentActions';
 
 // ---------------------------------------------------------------------------
@@ -24,10 +24,10 @@ import EnrollmentActions from './EnrollmentActions';
 //     Add Beta Testers buttons with permission-gated ones — Enroll Learners →
 //     platform staff (permissions.admin), Add Beta Testers → course Admin
 //     (permissions.instructor) — matching the legacy MITx Online dashboard.
-//   - Course Sync: adds the problem reset/rescore page (route only). Like the
-//     shared Canvas / Rapid Responses pages, the nav tab comes from the LMS via
-//     the InstructorDashboardTabsRequested filter (ol_openedx_course_sync), so it
-//     only surfaces for staff on courses that are an active sync source.
+//   - Course Sync Actions: adds the problem reset/rescore page (route only). Like
+//     the shared Canvas / Rapid Responses pages, the nav tab comes from the LMS
+//     via the InstructorDashboardTabsRequested filter (ol_openedx_course_sync), so
+//     it only surfaces for staff on courses that are an active sync source.
 //
 // Both are scoped here (not in @shared) so xpro / mitx keep the shared factory's
 // defaults — ol_openedx_course_sync is only installed on mitxonline.
@@ -48,9 +48,9 @@ export function createMITxOnlineInstructorDashboardApp(): App {
       },
       {
         slotId: ROUTES_SLOT_ID,
-        id: 'org.openedx.frontend.widget.instructorDashboard.route.course_sync',
+        id: 'org.openedx.frontend.widget.instructorDashboard.route.course_sync_actions',
         op: WidgetOperationTypes.APPEND,
-        element: <PlaceholderSlot tabId="course_sync" content={<CourseSyncPage />} />,
+        element: <PlaceholderSlot tabId="course_sync" content={<CourseSyncActionsPage />} />,
       },
     ],
   };
