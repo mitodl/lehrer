@@ -12,12 +12,18 @@ data:
 
   CELERY_BROKER_TRANSPORT: "redis"
   CELERY_BROKER_HOSTNAME: "redis-valkey.openedx.svc.cluster.local"
-  # Django caches (and the cache-backed sessions) on the broker's Valkey, in
-  # DB 1 so they stay out of the broker's DB 0. The host follows
-  # CELERY_BROKER_HOSTNAME, so a caller that repoints the broker moves the
-  # caches too. Without it every cache alias points at a memcached nobody
-  # runs and no login can hold a session.
-  CACHE_REDIS_DB: "1"
+  # Django caches (and the cache-backed sessions) on the broker's Valkey. The
+  # host follows CELERY_BROKER_HOSTNAME, so a caller that repoints the broker
+  # moves the caches too. Without it every cache alias points at a memcached
+  # nobody runs and no login can hold a session.
+  #
+  # DB 3, not 1: this default is inherited by callers that repoint the broker
+  # at a Valkey they share with other applications (ol-infrastructure's
+  # local-dev, where DB 0-2 are already mit-learn's cache and the Celery
+  # broker of mitxonline, learn-ai and odl-video-service). Django's RedisCache
+  # clear() is a FLUSHDB, so landing on an occupied DB means an LMS or Studio
+  # cache clear drops someone else's data. DB 0 is this broker's own.
+  CACHE_REDIS_DB: "3"
   CELERY_BROKER_USER: ""
   CELERY_BROKER_PASSWORD: ""
   CELERY_BROKER_VHOST: ""
