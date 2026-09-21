@@ -87,6 +87,9 @@ class AqueductSettings(BaseSettings):
     )  # refine type
     COMMENTS_SERVICE_KEY: str = Field(default="password")
     COMMENTS_SERVICE_URL: str = Field(default="http://localhost:18080")
+    COMMON_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     CONTACT_EMAIL: str = Field(default="info@example.com")
     CONTACT_MAILING_ADDRESS: Any = Field(
         default_factory=lambda: _("Your Contact Mailing Address Here")
@@ -102,6 +105,9 @@ class AqueductSettings(BaseSettings):
         ),
         description="Set CORS_ALLOW_HEADERS regardless of whether we've enabled ENABLE_CORS_HEADERS\nbecause that decision might happen in a later config file. (The headers to\nallow is an application logic, and not site policy.)",  # noqa: E501
     )  # refine type
+    COURSES_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     COURSE_EXPORT_DOWNLOAD_CHUNK_SIZE: int = Field(
         default=8192,
         description="Course exports streamed in blocks of this size. 8192 or 8kb is the default\nsetting for the FileWrapper class used to iterate over the export file data.\nSee: https://docs.python.org/2/library/wsgiref.html#wsgiref.util.FileWrapper",  # noqa: E501
@@ -250,6 +256,9 @@ class AqueductSettings(BaseSettings):
     ENTRANCE_EXAMS: bool = Field(
         default=False, description="Toggle course entrance exams feature"
     )
+    ENV_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     EXAMS_SERVICE_URL: str = Field(default="http://localhost:18740/api/v1")
     EXAMS_SERVICE_USERNAME: str = Field(default="edx_exams_worker")
     EXTENDED_VIDEO_TRANSCRIPT_LANGUAGES: Annotated[list[Any], NoDecode] = Field(
@@ -650,6 +659,9 @@ class AqueductSettings(BaseSettings):
     MAX_FAILED_LOGIN_ATTEMPTS_LOCKOUT_PERIOD_SECS: Any = Field(
         default_factory=lambda: 30 * 60
     )  # refine type
+    MEDIA_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     MEILISEARCH_API_KEY: str | None = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
@@ -716,6 +728,9 @@ class AqueductSettings(BaseSettings):
         default=None,
         description="5 minute expiration time for JWT id tokens issued for external API requests.",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
+    OPENEDX_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     OPTIONAL_FIELD_API_RATELIMIT: str = Field(default="10/h")
     ORA2_FILE_PREFIX: str = Field(
         default="default_env-default_deployment/ora2",
@@ -735,6 +750,9 @@ class AqueductSettings(BaseSettings):
         default_factory=dict
     )
     PROJECT_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    REPO_ROOT: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     REQUIRE_JS: str = Field(
@@ -835,6 +853,9 @@ class AqueductSettings(BaseSettings):
     XBLOCK_FS_STORAGE_BUCKET: Any = Field(default=None)  # refine type
     XBLOCK_FS_STORAGE_PREFIX: Any = Field(default=None)  # refine type
     XBLOCK_MIXINS: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    XMODULE_ROOT: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ZENDESK_API_KEY: str | None = Field(

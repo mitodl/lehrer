@@ -144,6 +144,10 @@ class AqueductSettings(BaseSettings):
         default=None,
         description=".. setting_name: CATALOG_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based course catalog page.",  # noqa: E501
     )  # refine type
+    CCX_COACH_MICROFRONTEND_URL: Any = Field(
+        default=None,
+        description=".. setting_name: CCX_COACH_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based CCX Coach app. The CCX Coach\nexperience is served by the Instructor Dashboard MFE; the CCX Coach v2 API uses this to\nbuild absolute tab URLs returned in the course metadata payload.",  # noqa: E501
+    )  # refine type
     CCX_MAX_STUDENTS_ALLOWED: int = Field(
         default=200,
         description=".. setting_name: CCX_MAX_STUDENTS_ALLOWED\n.. setting_default: 200\n.. setting_description: Maximum number of students allowed in a CCX (Custom Courses for edX), This is an arbitrary\nhard limit, chosen so that a CCX does not compete with public MOOCs.",  # noqa: E501
@@ -190,6 +194,9 @@ class AqueductSettings(BaseSettings):
     )
     COMMENTS_SERVICE_KEY: str = Field(default="")
     COMMENTS_SERVICE_URL: str = Field(default="")
+    COMMON_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     COMMUNICATIONS_MICROFRONTEND_URL: Any = Field(
         default=None,
         description=".. setting_name: COMMUNICATIONS_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based communications app.",  # noqa: E501
@@ -233,6 +240,9 @@ class AqueductSettings(BaseSettings):
         default=True,
         description="Can be turned off if course lists need to be hidden. Effects views and templates.\n.. toggle_name: settings.COURSES_ARE_BROWSABLE\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: When this is set to True, all the courses will be listed on the /courses page and Explore\nCourses link will be visible. Set to False if courses list and Explore Courses link need to be hidden.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2013-09-28\n.. toggle_warning: This Effects views and templates.\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/1073",  # noqa: E501
     )
+    COURSES_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     COURSE_BLOCKS_API_EXTRA_FIELDS: Annotated[list[Any], NoDecode] = Field(
         default_factory=list,
         description='Specifies extra XBlock fields that should available when requested via the Course Blocks API\nShould be a list of tuples of (block_type, field_name), where block_type can also be "*" for all block types.\ne.g. COURSE_BLOCKS_API_EXTRA_FIELDS = [  (\'course\', \'other_course_settings\'), ("problem", "weight")  ]',  # noqa: E501
@@ -272,7 +282,6 @@ class AqueductSettings(BaseSettings):
     DATA_CONSENT_SHARE_CACHE_TIMEOUT: Any = Field(
         default_factory=lambda: 8 * 60 * 60
     )  # refine type
-    DATA_DIR: str = Field(default="/edx/var/edxapp/data")
     DEBUG_TRACK_LOG: bool = Field(default=False)
     DEFAULT_ENTERPRISE_API_URL: Any = Field(
         default=None
@@ -666,6 +675,9 @@ class AqueductSettings(BaseSettings):
     ENTITLEMENT_EXPIRED_ALERT_PERIOD: int = Field(
         default=90, description="Days before the expired date that we warn the user"
     )
+    ENV_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     EXAMS_DASHBOARD_MICROFRONTEND_URL: Any = Field(
         default=None,
         description=".. setting_name: EXAMS_DASHBOARD_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the exams dashboard micro-frontend for instructors.",  # noqa: E501
@@ -1072,7 +1084,10 @@ class AqueductSettings(BaseSettings):
         description="Default domain for the e-mail address associated with users who are created\nvia the LTI Provider feature. Note that the generated e-mail addresses are\nnot expected to be active; this setting simply allows administrators to\nroute any messages intended for LTI users to a common domain.",  # noqa: E501
     )
     MAILCHIMP_NEW_USER_LIST_ID: str = Field(default="")
-    MAINTENANCE_BANNER_TEXT: Any = Field(default=None)  # refine type
+    MAINTENANCE_BANNER_TEXT: Any = Field(
+        default=None,
+        description=".. setting_name: MAINTENANCE_BANNER_TEXT\n.. setting_default: None\n.. setting_description: Specifies the text that is rendered on the maintenance banner.\n.. setting_warning: Depends on the `open_edx_util.display_maintenance_warning` waffle switch.\nThe banner is only rendered when the switch is activated.",  # noqa: E501
+    )  # refine type
     MAKO_TEMPLATE_DIRS_BASE: Any = Field(
         default=None
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
@@ -1082,6 +1097,9 @@ class AqueductSettings(BaseSettings):
         default=5000,
         description="Maximum number of rows to include in the csv file for downloading problem responses.",  # noqa: E501
     )
+    MEDIA_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     MFE_CONFIG: Annotated[dict[str, Any], NoDecode] = Field(
         default_factory=dict,
         description='.. setting_name: MFE_CONFIG\n.. setting_implementation: DjangoSetting\n.. setting_default: {}\n.. setting_description: Is a configuration that will be exposed by the MFE Config API to be consumed by the MFEs.\nContains configuration common to all MFEs. When a specific MFE\'s configuration is requested, these values\nwill be treated as a base and then overriden/supplemented by those in `MFE_CONFIG_OVERRIDES`.\nExample: {\n"BASE_URL": "https://name_of_mfe.example.com",\n"LANGUAGE_PREFERENCE_COOKIE_NAME": "example-language-preference",\n"CREDENTIALS_BASE_URL": "https://credentials.example.com",\n"DISCOVERY_API_BASE_URL": "https://discovery.example.com",\n"LMS_BASE_URL": "https://courses.example.com",\n"LOGIN_URL": "https://courses.example.com/login",\n"LOGOUT_URL": "https://courses.example.com/logout",\n"STUDIO_BASE_URL": "https://studio.example.com",\n"LOGO_URL": "https://courses.example.com/logo.png"\n.. setting_use_cases: open_edx\n.. setting_creation_date: 2022-08-05',  # noqa: E501
@@ -1215,6 +1233,9 @@ class AqueductSettings(BaseSettings):
     OAUTH_ID_TOKEN_EXPIRATION: str | None = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
+    OPENEDX_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ORA2_FILE_PREFIX: Any = Field(
         default=None, description="By default, don't use a file prefix"
     )  # refine type
@@ -1349,6 +1370,9 @@ class AqueductSettings(BaseSettings):
             "terms_of_service",
         ],
     )
+    REPO_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     REQUIRE_JS: str = Field(
         default="common/js/vendor/require.js",
         description="The name of the require.js script used by your project, relative to REQUIRE_BASE_URL.",  # noqa: E501
@@ -1775,6 +1799,9 @@ class AqueductSettings(BaseSettings):
         default_factory=lambda: 60 * 15,
         description="Default cache expiration for the cross-domain proxy HTML page.\nThis is a static page that can be iframed into an external page\nto simulate cross-domain requests.",  # noqa: E501
     )  # refine type
+    XMODULE_ROOT: Any = Field(
+        default=None
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ZENDESK_API_KEY: str | None = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
