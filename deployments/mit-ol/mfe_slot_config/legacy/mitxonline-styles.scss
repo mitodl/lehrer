@@ -201,6 +201,32 @@
   }
 }
 
+// Make the notifications bell visible against the dark header.
+// @edx/frontend-plugin-notifications renders the bell as an Icon carrying
+// Paragon's `.text-primary-500` utility class, which forces
+// `color: var(--pgn-color-primary-500)` (#0a3055) with !important. Against the
+// #303337 header background set at the top of this file that is a 1.06:1
+// contrast ratio, so the bell reads as invisible until hover -- hover paints a
+// light (#e1dddb) circle behind it, which is the only reason it appears at all.
+// Paint the resting bell white like the rest of the header chrome, and keep the
+// dark bell on hover/focus so it stays legible against that light circle.
+.learning-header, .site-header-desktop {
+  #notificationIcon .notification-button .pgn__icon {
+    color: #FFF !important;
+  }
+
+  // Whenever Paragon paints its light circle behind the bell -- on hover, on
+  // focus, and via .btn-icon-light-active for as long as the tray is open --
+  // put the dark bell back so it stays legible against that circle. Without the
+  // .btn-icon-light-active case the bell disappears again once the tray is open
+  // and the pointer moves away.
+  #notificationIcon .notification-button:hover .pgn__icon,
+  #notificationIcon .notification-button:focus .pgn__icon,
+  #notificationIcon .notification-button.btn-icon-light-active .pgn__icon {
+    color: var(--pgn-color-primary-500, #0a3055) !important;
+  }
+}
+
 // Hide the settings/gear icon (and its wrapping link) in the notifications tray popover header.
 // Rendered by @edx/frontend-plugin-notifications: a[href*="#notifications"] > Icon[data-testid="setting-icon"].
 #notificationTray a[href*="#notifications"] {
