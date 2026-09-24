@@ -28,7 +28,7 @@ spec:
         # Image tag is managed by Tilt via custom_build (same ref as the notes
         # Deployment). The image entrypoint is gunicorn, so `command`
         # overrides it.
-        image: lehrer-registry:5000/openedx-notes:dev
+        image: openedx-notes
         command:
         - sh
         - -c

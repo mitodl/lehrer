@@ -10,7 +10,7 @@
 #   setup({
 #     "deploy_config":   "/abs/path/to/deployments/generic",
 #     "registry":        "localhost:5100",         # host-side push URL
-#     "registry_k8s":    "k3d-lehrer-registry:5000", # cluster-side pull URL
+#     "registry_k8s":    "lehrer-registry:5000",   # cluster-side pull URL
 #     # Host for the notes ConfigMap. The platform's own OpenSearch/Redis/URL
 #     # settings come from the platform configmaps, which a caller running on
 #     # different infrastructure supplies itself (apply_platform_configmaps).
@@ -212,25 +212,21 @@ def setup(cfg):
     else:
         dep_cfg = (local_dev + "/" + deploy_config).rstrip("/")
 
-    # Set the default registry to the cluster-side address so $EXPECTED_REF uses it.
-    # Build commands then rewrite $EXPECTED_REF to the host-side address for docker push
-    # (since registry_k8s only resolves from inside the cluster, not from the host).
-    # This explicit call also resets any previously-persisted default_registry state.
+    # Images are built and referenced (here and in the static manifests) by bare
+    # name, e.g. "openedx-platform", and Tilt prepends the registry. A registry
+    # host in the ref would tie the manifests to one caller's registry, and Tilt
+    # escapes a foreign host into the repo name ("lehrer-registry_5000_...").
+    #
+    # Tilt takes the registry from the cluster's local-registry-hosting
+    # ConfigMap when there is one (k3d writes it), and from default_registry
+    # otherwise. In the first case $EXPECTED_REF is already the host-side
+    # address; in the second it is registry_k8s, which only resolves inside the
+    # cluster, so the build commands rewrite it to registry before pushing.
     default_registry(registry_k8s)
 
-    def img(name):
-        return registry_k8s + "/" + name + ":dev"
-
-    # Rewrite $EXPECTED_REF to a host-accessible push reference.
-    # Tilt may persist old default_registry state, causing $EXPECTED_REF to have a mangled
-    # repo name (e.g. "lehrer-registry_5000_openedx-codejail" with underscores instead of
-    # "lehrer-registry:5000/openedx-codejail"). Strip the mangled infix first, then replace
-    # the cluster-side host (registry_k8s) with the host-accessible address (registry).
-    # Both transformations are safe no-ops when the other case is active.
     push_rewrite = (
         "PUSH_REF=$(echo \"$EXPECTED_REF\" " +
-        "| sed 's|lehrer-registry_5000_||g' " +
-        "| sed 's|" + registry_k8s + "|" + registry + "|g') && "
+        "| sed 's|^" + registry_k8s + "/|" + registry + "/|') && "
     )
 
     def helm_values(filename):
@@ -361,7 +357,7 @@ def setup(cfg):
     # edx-platform image build
     # ------------------------------------------------------------------ #
 
-    platform_image = img("openedx-platform")
+    platform_image = "openedx-platform"
 
     # Runtime settings edits are synced into the running pods instead of
     # rebuilt. A rebuild re-runs dagger, exports the whole image to a tarball,
@@ -446,7 +442,7 @@ def setup(cfg):
     # codejail image build
     # ------------------------------------------------------------------ #
 
-    codejail_image = img("openedx-codejail")
+    codejail_image = "openedx-codejail"
 
     custom_build(
         ref=codejail_image,
@@ -471,7 +467,7 @@ def setup(cfg):
     # edx-notes-api image build
     # ------------------------------------------------------------------ #
 
-    notes_image = img("openedx-notes")
+    notes_image = "openedx-notes"
 
     custom_build(
         ref=notes_image,
@@ -523,7 +519,7 @@ def setup(cfg):
 
     for site_name in compiled_sites:
         site_dir = frontend_dir + "/" + site_name
-        mfe_ref = img("openedx-mfe-" + site_name)
+        mfe_ref = "openedx-mfe-" + site_name
         mfe_images[site_name] = mfe_ref
         tmp_dir = "/tmp/lehrer-mfe-dist/" + site_name
 
@@ -531,10 +527,8 @@ def setup(cfg):
             ref=mfe_ref,
             command=(
                 "set -e && " +
-                # Push ourselves to the host-side registry (same pattern as the
-                # platform/codejail/notes builds). Without this, Tilt pushes
-                # $EXPECTED_REF itself and mangles the repo name under
-                # default_registry, so the pod's pull ref never resolves.
+                # Push to the host-side registry, same as the platform,
+                # codejail and notes builds.
                 push_rewrite +
                 "mkdir -p " + tmp_dir + " && " +
                 "dagger --progress=plain call mfe build-site" +

@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: cms
-        image: lehrer-registry:5000/openedx-platform:dev
+        image: openedx-platform
         command:
         - opentelemetry-instrument
         - gunicorn

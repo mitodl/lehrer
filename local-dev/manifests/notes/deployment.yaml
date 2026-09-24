@@ -23,7 +23,7 @@ spec:
     spec:
       containers:
       - name: notes
-        image: lehrer-registry:5000/openedx-notes:dev
+        image: openedx-notes
         ports:
         - containerPort: 8000
         envFrom:
