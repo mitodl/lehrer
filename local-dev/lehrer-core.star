@@ -4,7 +4,10 @@
 #
 # Every key below is read by setup(); there are no optional ones, and a key
 # that stops having a consumer should be deleted here and in the callers
-# rather than left as decoration that looks configurable but is not.
+# rather than left as decoration that looks configurable but is not. setup()
+# fails on a missing key and on one it does not read, so a caller written
+# against a newer or older lehrer checkout stops at load instead of running
+# with part of its config silently dropped.
 #
 #   load("./lehrer-core.star", "setup")
 #   setup({
@@ -177,26 +180,40 @@ def setup(cfg):
     # Config helpers
     # ------------------------------------------------------------------ #
 
-    deploy_config = cfg["deploy_config"]
-    registry = cfg["registry"]
-    registry_k8s = cfg["registry_k8s"]
-    namespace = cfg["namespace"]
-    manage_infra = cfg["manage_infra"]
-    mysql_managed = cfg["mysql_managed"]
-    mongo_managed = cfg["mongo_managed"]
-    ingress = cfg["ingress"]
-    mfe_hot_reload = cfg["mfe_hot_reload"]
-    release_name = cfg["release_name"]
-    deploy_name = cfg["deploy_name"]
-    settings_ns = cfg["settings_ns"]
-    opensearch_host = cfg["opensearch_host"]
-    notes_repo = cfg["notes_repo"]
-    helm_override_dir = cfg["helm_override_dir"]
-    local_dev = cfg["local_dev_dir"]
-    apply_configmaps = cfg["apply_platform_configmaps"]
-    manage_secrets = cfg["manage_secrets"]
-    config_override_paths = cfg["config_override_paths"]
-    config_override_extra_hash_input = cfg["config_override_extra_hash_input"]
+    unread = dict(cfg)
+    skew = " The lehrer checkout is likely older or newer than the caller's Tiltfile expects."
+
+    def take(key):
+        if key not in unread:
+            fail("setup() needs cfg key " + key + "." + skew)
+        return unread.pop(key)
+
+    deploy_config = take("deploy_config")
+    registry = take("registry")
+    registry_k8s = take("registry_k8s")
+    namespace = take("namespace")
+    manage_infra = take("manage_infra")
+    mysql_managed = take("mysql_managed")
+    mongo_managed = take("mongo_managed")
+    ingress = take("ingress")
+    mfe_hot_reload = take("mfe_hot_reload")
+    release_name = take("release_name")
+    deploy_name = take("deploy_name")
+    settings_ns = take("settings_ns")
+    opensearch_host = take("opensearch_host")
+    notes_repo = take("notes_repo")
+    helm_override_dir = take("helm_override_dir")
+    local_dev = take("local_dev_dir")
+    apply_configmaps = take("apply_platform_configmaps")
+    manage_secrets = take("manage_secrets")
+    config_override_paths = take("config_override_paths")
+    config_override_extra_hash_input = take("config_override_extra_hash_input")
+
+    if unread:
+        fail(
+            "setup() does not read cfg key(s) " + ", ".join(sorted(unread.keys())) +
+            "." + skew
+        )
 
     # Lehrer core settings — injected directly into the container by inject_aqueduct_settings
     # (dag.current_module().source().file("src/lehrer/settings/base.py")).
