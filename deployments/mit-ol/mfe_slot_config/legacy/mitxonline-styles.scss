@@ -211,6 +211,15 @@
 // Paint the resting bell white like the rest of the header chrome, and keep the
 // dark bell on hover/focus so it stays legible against that light circle.
 .learning-header, .site-header-desktop {
+  // Paragon sizes the `size="inline"` icon button in `em` (`padding: 1em`), so
+  // the 14px font-size this file sets on the header at the top shrinks the bell
+  // to 28x28 while an unstyled header renders it at 36x36. Pin the button back
+  // to Paragon's 1.125rem base so it matches Studio and upstream. The glyph is
+  // sized in `rem` and stays 24x24 either way.
+  #notificationIcon .notification-button {
+    font-size: 1.125rem !important;
+  }
+
   #notificationIcon .notification-button .pgn__icon {
     color: #FFF !important;
   }
