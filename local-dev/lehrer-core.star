@@ -244,6 +244,11 @@ def setup(cfg):
     # Infrastructure (Helm)
     # ------------------------------------------------------------------ #
 
+    # Each helm_repo registers a local_resource named after the repo that runs
+    # `helm repo add`. The extension only orders a helm_resource after the
+    # resources named in its resource_deps, so every chart install names its
+    # repo there; otherwise it races the add and fails with "repo not found".
+
     helm_repo(
         "opensearch-helm",
         "https://opensearch-project.github.io/helm-charts",
@@ -272,6 +277,7 @@ def setup(cfg):
             "mariadb/mariadb-operator",
             namespace="mariadb-operator",
             flags=["--values", helm_values("mariadb-operator-values.yaml"), "--create-namespace"],
+            resource_deps=["mariadb"],
             labels=["infra"],
         )
         k8s_yaml(local_dev + "/manifests/infra/mariadb.yaml")
@@ -300,6 +306,7 @@ def setup(cfg):
             "mongodb/community-operator",
             namespace="mongodb-operator",
             flags=["--values", helm_values("mongodb-operator-values.yaml"), "--create-namespace"],
+            resource_deps=["mongodb"],
             labels=["infra"],
         )
         k8s_yaml(local_dev + "/manifests/infra/mongodb.yaml")
@@ -326,6 +333,7 @@ def setup(cfg):
             "valkey/valkey",
             namespace=namespace,
             flags=["--values", helm_values("valkey-values.yaml"), "--create-namespace"],
+            resource_deps=["valkey"],
             labels=["infra"],
         )
         helm_resource(
@@ -337,6 +345,7 @@ def setup(cfg):
                 helm_values("opensearch-values.yaml"),
                 "--create-namespace",
             ],
+            resource_deps=["opensearch-helm"],
             labels=["infra"],
         )
 
