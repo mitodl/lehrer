@@ -67,15 +67,6 @@ def _parse_version(output: str) -> tuple[int, int, int] | None:
     return int(major), int(minor), int(patch)
 
 
-# Helm repositories needed to install the in-cluster infra operators.
-_HELM_REPOS: tuple[tuple[str, str], ...] = (
-    ("opensearch-helm", "https://opensearch-project.github.io/helm-charts"),
-    ("mariadb", "https://helm.mariadb.com/mariadb-operator"),
-    ("mongodb", "https://mongodb.github.io/helm-charts"),
-    ("valkey", "https://valkey.io/valkey-helm/"),
-)
-
-
 def _load_secret_defaults() -> tuple[
     tuple[tuple[str, str], ...], tuple[tuple[str, str], ...]
 ]:
@@ -658,7 +649,7 @@ def check_deps(*, deployment_config: str | None = None) -> None:
 
 @app.command
 def setup() -> None:
-    """Create the k3d cluster, namespace, helm repos, and bootstrap secrets.
+    """Create the k3d cluster, namespace, and bootstrap secrets.
 
     Idempotent: safe to re-run. Reads secret values from the environment
     (``MYSQL_ROOT_PASSWORD``, ``DJANGO_SECRET_KEY``, ...) falling back to
@@ -698,11 +689,6 @@ def setup() -> None:
     # on APISIX) does not have.
     run("kubectl", "apply", "-f", str(_paths.traefik_config()))
     _warn_on_stale_loadbalancer_ports()
-
-    print("==> Adding Helm repositories...")
-    for name, url in _HELM_REPOS:
-        run("helm", "repo", "add", name, url, check=False)
-    run("helm", "repo", "update")
 
     # Read before the Secret is overwritten: comparing the stored value with
     # the one about to replace it is what distinguishes a changed override from
@@ -857,10 +843,6 @@ def teardown() -> None:
         check=False,
         echo=False,
     )
-
-    print("==> Removing Helm repositories...")
-    for name, _ in _HELM_REPOS:
-        run("helm", "repo", "remove", name, check=False, echo=False)
 
     print("==> Cleaning up temp build artifacts...")
     _clean_temp_artifacts()
