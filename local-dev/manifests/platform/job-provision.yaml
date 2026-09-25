@@ -23,7 +23,7 @@ spec:
       - name: provision
         # Image tag is managed by Tilt via custom_build (same ref as the
         # platform deployments).
-        image: lehrer-registry:5000/openedx-platform:dev
+        image: openedx-platform
         command:
         - sh
         - -c

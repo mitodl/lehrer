@@ -11,10 +11,11 @@ metadata:
 # developer has installed.
 image: rancher/k3s:v1.31.5-k3s1
 
-# Local container registry — accessible as k3d-lehrer-registry:5000 from within
+# Local container registry — accessible as lehrer-registry:5000 from within
 # the cluster (K3d auto-configures the CoreDNS alias), and as localhost:5100 from
-# the host. All custom_build commands push to localhost:5100; all K8s manifests
-# reference k3d-lehrer-registry:5000.
+# the host. k3d advertises both addresses in the local-registry-hosting
+# ConfigMap, so Tilt pushes to localhost:5100 and rewrites the bare image names
+# in the manifests to the in-cluster one.
 registries:
   create:
     name: lehrer-registry

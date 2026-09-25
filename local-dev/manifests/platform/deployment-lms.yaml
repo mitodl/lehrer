@@ -21,9 +21,9 @@ spec:
     spec:
       containers:
       - name: lms
-        # Image tag is managed by Tilt via custom_build; lehrer-core.star
-        # sets the correct registry prefix based on LEHRER_REGISTRY_K8S.
-        image: lehrer-registry:5000/openedx-platform:dev
+        # Bare name: Tilt matches it to the custom_build in lehrer-core.star
+        # and substitutes the built ref, registry included.
+        image: openedx-platform
         command:
         - opentelemetry-instrument
         - gunicorn
