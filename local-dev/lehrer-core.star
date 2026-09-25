@@ -219,15 +219,9 @@ def setup(cfg):
     #
     # Tilt takes the registry from the cluster's local-registry-hosting
     # ConfigMap when there is one (k3d writes it), and from default_registry
-    # otherwise. In the first case $EXPECTED_REF is already the host-side
-    # address; in the second it is registry_k8s, which only resolves inside the
-    # cluster, so the build commands rewrite it to registry before pushing.
-    default_registry(registry_k8s)
-
-    push_rewrite = (
-        "PUSH_REF=$(echo \"$EXPECTED_REF\" " +
-        "| sed 's|^" + registry_k8s + "/|" + registry + "/|') && "
-    )
+    # otherwise. Either way $EXPECTED_REF is the host-side ref the build pushes
+    # to, and the pods get the in-cluster one.
+    default_registry(registry, host_from_cluster=registry_k8s)
 
     def helm_values(filename):
         if helm_override_dir:
@@ -411,7 +405,6 @@ def setup(cfg):
         ref=platform_image,
         command=(
             "set -e && " +
-            push_rewrite +
             # The platform image is several GB, and /tmp is RAM-backed tmpfs
             # wherever systemd's tmp.mount is active; $TMPDIR lets a
             # developer put the tarball on disk instead.
@@ -426,8 +419,8 @@ def setup(cfg):
             " --custom-settings " + dep_cfg + "/settings" +
             " export --path $tmp && " +
             "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
-            "docker tag $loaded $PUSH_REF && " +
-            "docker push $PUSH_REF"
+            "docker tag $loaded $EXPECTED_REF && " +
+            "docker push $EXPECTED_REF"
         ),
         deps=[
             dep_cfg + "/build_manifest.yaml",
@@ -448,7 +441,6 @@ def setup(cfg):
         ref=codejail_image,
         command=(
             "set -e && " +
-            push_rewrite +
             "tmp=$(mktemp \"${TMPDIR:-/tmp}/lehrer-codejail-XXXXXX.tar\") && " +
             "trap 'rm -f \"$tmp\"' EXIT && " +
             "dagger --progress=plain call codejail build" +
@@ -456,8 +448,8 @@ def setup(cfg):
             " --codejail-config " + dep_cfg + "/codejail_config" +
             " export --path $tmp && " +
             "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
-            "docker tag $loaded $PUSH_REF && " +
-            "docker push $PUSH_REF"
+            "docker tag $loaded $EXPECTED_REF && " +
+            "docker push $EXPECTED_REF"
         ),
         deps=[dep_cfg + "/codejail_config"],
         skips_local_docker=True,
@@ -473,7 +465,6 @@ def setup(cfg):
         ref=notes_image,
         command=(
             "set -e && " +
-            push_rewrite +
             "tmp=$(mktemp \"${TMPDIR:-/tmp}/lehrer-notes-XXXXXX.tar\") && " +
             "trap 'rm -f \"$tmp\"' EXIT && " +
             "dagger --progress=plain call notes build" +
@@ -482,8 +473,8 @@ def setup(cfg):
             " --notes-config " + dep_cfg + "/notes_config" +
             " export --path $tmp && " +
             "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
-            "docker tag $loaded $PUSH_REF && " +
-            "docker push $PUSH_REF"
+            "docker tag $loaded $EXPECTED_REF && " +
+            "docker push $EXPECTED_REF"
         ),
         deps=[dep_cfg + "/notes_config"],
         skips_local_docker=True,
@@ -527,19 +518,16 @@ def setup(cfg):
             ref=mfe_ref,
             command=(
                 "set -e && " +
-                # Push to the host-side registry, same as the platform,
-                # codejail and notes builds.
-                push_rewrite +
                 "mkdir -p " + tmp_dir + " && " +
                 "dagger --progress=plain call mfe build-site" +
                 " --site-project " + site_dir +
                 shared_src_flag +
                 " export --path " + tmp_dir + "/dist && " +
                 "cp " + local_dev + "/nginx-mfe.conf " + tmp_dir + "/nginx-mfe.conf && " +
-                "docker build -t $PUSH_REF" +
+                "docker build -t $EXPECTED_REF" +
                 " -f " + local_dev + "/Dockerfile.mfe" +
                 " " + tmp_dir + " && " +
-                "docker push $PUSH_REF"
+                "docker push $EXPECTED_REF"
             ),
             deps=[site_dir] + mfe_deps_base,
             skips_local_docker=True,
