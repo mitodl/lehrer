@@ -185,7 +185,7 @@ cells:
   - openedx-scorm-xblock==19.0.4
   - pydantic-settings[yaml]==2.15.0
   - ol-openedx-chat==0.5.10
-  - ol-openedx-chat-xblock==0.4.6
+  - ol-openedx-chat-xblock==0.5.0
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
   - opentelemetry-instrumentation-django
