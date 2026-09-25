@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import re
 import socket
+import subprocess
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -1315,6 +1317,61 @@ class TestPlatformLiveUpdate:
         star = self.STAR.read_text()
         assert star.count("custom_build(") == star.count("push_and_prune\n")
         assert star.count("docker push $PUSH_REF") == 1
+
+    _PUSH_REF = "localhost:5100/openedx-x:tilt-build-3"
+    _LISTED = f"{_PUSH_REF}\nlocalhost:5100/openedx-x:tilt-build-1\n"
+    _STUB_DOCKER = """#!/bin/sh
+case "$1" in
+push) exit "${PUSH_RC:-0}";;
+images) [ -z "$IMAGES_FAIL" ] || exit 1; printf '%s' "$IMAGES_OUT";;
+rmi) shift; echo "rmi $*"; exit "${RMI_RC:-0}";;
+esac
+"""
+
+    def _run_push_and_prune(
+        self, tmp_path: Path, **env: str
+    ) -> subprocess.CompletedProcess[str]:
+        # The Starlark expression is also a valid Python one.
+        expr = re.search(
+            r"push_and_prune = (\(.*?\n    \))", self.STAR.read_text(), re.DOTALL
+        )
+        assert expr
+        command = eval(expr.group(1))  # noqa: S307 - our own source file
+        docker = tmp_path / "docker"
+        docker.write_text(self._STUB_DOCKER)
+        docker.chmod(0o755)
+        return subprocess.run(  # noqa: S603
+            ["sh", "-c", f"set -e && PUSH_REF={self._PUSH_REF} && {command}"],  # noqa: S607
+            env={"PATH": f"{tmp_path}:{os.environ['PATH']}", **env},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_push_and_prune_removes_only_older_tags(self, tmp_path: Path) -> None:
+        result = self._run_push_and_prune(tmp_path, IMAGES_OUT=self._LISTED)
+        assert result.returncode == 0
+        assert result.stdout == "rmi localhost:5100/openedx-x:tilt-build-1\n"
+
+    def test_push_and_prune_fails_on_a_failed_push(self, tmp_path: Path) -> None:
+        result = self._run_push_and_prune(
+            tmp_path, PUSH_RC="1", IMAGES_OUT=self._LISTED
+        )
+        assert result.returncode != 0
+        assert result.stdout == ""
+
+    @pytest.mark.parametrize("failure", [{"IMAGES_FAIL": "1"}, {"RMI_RC": "1"}])
+    def test_push_and_prune_warns_on_a_failed_prune(
+        self, tmp_path: Path, failure: dict[str, str]
+    ) -> None:
+        result = self._run_push_and_prune(tmp_path, IMAGES_OUT=self._LISTED, **failure)
+        assert result.returncode == 0
+        assert "WARNING: could not prune" in result.stderr
+
+    def test_push_and_prune_skips_rmi_with_nothing_older(self, tmp_path: Path) -> None:
+        result = self._run_push_and_prune(tmp_path, IMAGES_OUT=self._PUSH_REF)
+        assert result.returncode == 0
+        assert result.stdout == ""
 
     def test_teardown_removes_only_pushed_build_images(
         self, monkeypatch: pytest.MonkeyPatch
