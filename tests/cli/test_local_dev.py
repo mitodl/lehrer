@@ -412,6 +412,32 @@ class TestMariaDBTiltGrouping:
         assert 'resource_deps=["mariadb-operator"]' in star
 
 
+class TestHelmChartsWaitForTheirRepo:
+    """Every helm_resource must list the helm_repo its chart comes from.
+
+    The helm_resource extension orders an install only after the resources in
+    its resource_deps. Without the repo there, the install races `helm repo
+    add` and fails with "repo not found" on a host that has never added it.
+    """
+
+    def test_every_chart_install_depends_on_its_repo(self) -> None:
+        star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
+        repos = set(re.findall(r'helm_repo\(\s*"([\w-]+)"', star))
+        installs = re.findall(
+            r'helm_resource\(\s*"([\w-]+)",\s*"([\w-]+)/[\w-]+",(.*?)\n\s*\)',
+            star,
+            re.S,
+        )
+        assert repos, "no helm_repo(...) calls parsed out of lehrer-core.star"
+        assert installs, "no helm_resource(...) calls parsed out of lehrer-core.star"
+        for name, repo, args in installs:
+            assert repo in repos, f"{name}: chart repo {repo} has no helm_repo"
+            deps = re.search(r"resource_deps=\[([^\]]*)\]", args)
+            assert deps and f'"{repo}"' in deps.group(1), (
+                f"{name} does not list {repo} in resource_deps"
+            )
+
+
 class TestMigrationJobsDoNotRetry:
     """MariaDB DDL is not transactional, so a Job-level retry compounds damage.
 
