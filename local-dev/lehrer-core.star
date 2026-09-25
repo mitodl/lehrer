@@ -247,12 +247,15 @@ def setup(cfg):
     # k3s evicted the pods. The pods pull from lehrer-registry, not the host,
     # so only the newest tag is kept (for inspecting what was just deployed).
     # A failed prune warns rather than failing a build whose push succeeded.
+    # The listing is captured before filtering because sh has no pipefail: in
+    # a pipeline, a failed `docker images` would skip the prune silently.
     push_and_prune = (
         "docker push $EXPECTED_REF && { " +
-        "docker images --format '{{.Repository}}:{{.Tag}}'" +
-        " --filter \"reference=${EXPECTED_REF%:*}:tilt-build-*\"" +
-        " | grep -vxF \"$EXPECTED_REF\" | xargs -r docker rmi" +
-        " || echo \"WARNING: could not prune older ${EXPECTED_REF%:*} images\" >&2; }"
+        "imgs=$(docker images --format '{{.Repository}}:{{.Tag}}'" +
+        " --filter \"reference=${EXPECTED_REF%:*}:tilt-build-*\") && " +
+        "old=$(echo \"$imgs\" | grep -vxF \"$EXPECTED_REF\" || :) && " +
+        "{ [ -z \"$old\" ] || docker rmi $old; } || " +
+        "echo \"WARNING: could not prune older ${EXPECTED_REF%:*} images\" >&2; }"
     )
 
     def helm_values(filename):
