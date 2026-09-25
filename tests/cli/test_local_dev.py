@@ -857,9 +857,9 @@ class TestCorruptTableScanReportsFailure:
 class TestSetupContract:
     """The Tiltfile and lehrer-core.star must agree on setup()'s key set.
 
-    Every ``cfg[...]`` access is unconditional, so the two directions fail
-    differently and both matter: an extra key is dead config that looks
-    tunable, while a missing one is a KeyError the moment Tilt loads.
+    setup() fails on a key it is missing and on one it does not read, so a
+    mismatch in either direction stops the standalone stack the moment Tilt
+    loads.
     """
 
     @staticmethod
@@ -872,7 +872,7 @@ class TestSetupContract:
         )
         read = set(
             re.findall(
-                r'cfg\["([a-z_]+)"\]', (local_dev_dir / "lehrer-core.star").read_text()
+                r'take\("([a-z_]+)"\)', (local_dev_dir / "lehrer-core.star").read_text()
             )
         )
         return passed, read
@@ -884,7 +884,7 @@ class TestSetupContract:
 
     def test_tiltfile_passes_every_key_lehrer_core_reads(self) -> None:
         passed, read = self._key_sets()
-        assert read, "no cfg[...] reads parsed out of lehrer-core.star"
+        assert read, "no take(...) reads parsed out of lehrer-core.star"
         assert read - passed == set(), (
             f"setup() keys read but never passed: {sorted(read - passed)}"
         )
