@@ -1309,6 +1309,40 @@ class TestPlatformLiveUpdate:
         ]
         assert star.count('"trap \'rm -f \\"$tmp\\"\' EXIT && "') == len(tarballs)
 
+    def test_every_build_prunes_its_older_images(self) -> None:
+        # skips_local_docker hides these tags from Tilt's docker_prune, so a
+        # build that pushes without pruning accumulates one image per rebuild.
+        star = self.STAR.read_text()
+        assert star.count("custom_build(") == star.count("push_and_prune\n")
+        assert star.count("docker push $PUSH_REF") == 1
+
+    def test_teardown_removes_only_pushed_build_images(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: list[tuple[str, ...]] = []
+        removed: list[tuple[str, ...]] = []
+
+        def fake_capture(*argv: str, **_: Any) -> str:
+            captured.append(argv)
+            return "localhost:5100/openedx-platform:tilt-build-2\n"
+
+        monkeypatch.setattr(local_dev, "capture", fake_capture)
+        monkeypatch.setattr(local_dev, "run", lambda *a, **k: removed.append(a))
+        local_dev._remove_pushed_images()
+        assert "reference=localhost:5100/openedx-*:tilt-build-*" in captured[0]
+        assert removed == [
+            ("docker", "rmi", "localhost:5100/openedx-platform:tilt-build-2")
+        ]
+
+    def test_teardown_skips_rmi_with_no_pushed_images(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        removed: list[tuple[str, ...]] = []
+        monkeypatch.setattr(local_dev, "capture", lambda *a, **k: "")
+        monkeypatch.setattr(local_dev, "run", lambda *a, **k: removed.append(a))
+        local_dev._remove_pushed_images()
+        assert removed == []
+
     def test_teardown_looks_where_the_build_writes(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:

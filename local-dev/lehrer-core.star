@@ -233,6 +233,21 @@ def setup(cfg):
         "| sed 's|" + registry_k8s + "|" + registry + "|g') && "
     )
 
+    # Push, then drop this repo's older tilt-build-* tags from host Docker.
+    # Every build leaves its image there under a fresh tag, and
+    # skips_local_docker keeps Tilt's own docker_prune from considering them;
+    # at ~6GB per platform build, one session's worth filled the disk until
+    # k3s evicted the pods. The pods pull from lehrer-registry, not the host,
+    # so only the newest tag is kept (for inspecting what was just deployed).
+    # A failed prune warns rather than failing a build whose push succeeded.
+    push_and_prune = (
+        "docker push $PUSH_REF && { " +
+        "docker images --format '{{.Repository}}:{{.Tag}}'" +
+        " --filter \"reference=${PUSH_REF%:*}:tilt-build-*\"" +
+        " | grep -vxF \"$PUSH_REF\" | xargs -r docker rmi" +
+        " || echo \"WARNING: could not prune older ${PUSH_REF%:*} images\" >&2; }"
+    )
+
     def helm_values(filename):
         if helm_override_dir:
             override = helm_override_dir + "/" + filename
@@ -431,7 +446,7 @@ def setup(cfg):
             " export --path $tmp && " +
             "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
             "docker tag $loaded $PUSH_REF && " +
-            "docker push $PUSH_REF"
+            push_and_prune
         ),
         deps=[
             dep_cfg + "/build_manifest.yaml",
@@ -461,7 +476,7 @@ def setup(cfg):
             " export --path $tmp && " +
             "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
             "docker tag $loaded $PUSH_REF && " +
-            "docker push $PUSH_REF"
+            push_and_prune
         ),
         deps=[dep_cfg + "/codejail_config"],
         skips_local_docker=True,
@@ -487,7 +502,7 @@ def setup(cfg):
             " export --path $tmp && " +
             "loaded=$(docker load -i $tmp | awk '{print $NF}') && " +
             "docker tag $loaded $PUSH_REF && " +
-            "docker push $PUSH_REF"
+            push_and_prune
         ),
         deps=[dep_cfg + "/notes_config"],
         skips_local_docker=True,
@@ -545,7 +560,7 @@ def setup(cfg):
                 "docker build -t $PUSH_REF" +
                 " -f " + local_dev + "/Dockerfile.mfe" +
                 " " + tmp_dir + " && " +
-                "docker push $PUSH_REF"
+                push_and_prune
             ),
             deps=[site_dir] + mfe_deps_base,
             skips_local_docker=True,

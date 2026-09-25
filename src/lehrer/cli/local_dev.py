@@ -865,6 +865,9 @@ def teardown() -> None:
     print("==> Cleaning up temp build artifacts...")
     _clean_temp_artifacts()
 
+    print("==> Removing pushed build images from host Docker...")
+    _remove_pushed_images()
+
     print("==> Done. Run `lehrer dev setup` to create a fresh environment.")
 
 
@@ -882,6 +885,29 @@ def _clean_temp_artifacts() -> None:
     ):
         for path in glob.glob(pattern):
             Path(path).unlink(missing_ok=True)
+
+
+def _remove_pushed_images() -> None:
+    """Remove the ``tilt-build-*`` images the builds left in host Docker.
+
+    Each build keeps its newest image on the host (lehrer-core.star prunes the
+    older ones as it pushes). With the cluster and its registry gone, those
+    are orphans of several GB each.
+    """
+    registry_port = yaml.safe_load(_paths.k3d_config().read_text())["registries"][
+        "create"
+    ]["hostPort"]
+    refs = capture(
+        "docker",
+        "images",
+        "--format",
+        "{{.Repository}}:{{.Tag}}",
+        "--filter",
+        f"reference=localhost:{registry_port}/openedx-*:tilt-build-*",
+        check=False,
+    ).split()
+    if refs:
+        run("docker", "rmi", *refs, check=False)
 
 
 @app.command
