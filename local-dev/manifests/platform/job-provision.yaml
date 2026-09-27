@@ -1,7 +1,9 @@
 ---
 # Provisions a freshly-migrated edxapp database with the objects the stack
-# needs in order to be usable: a superuser to log in as, the notes OAuth
-# client, and the waffle flags for the enabled features.
+# needs in order to be usable: a superuser to log in as, the notes and Studio
+# SSO OAuth clients, and the waffle flags for the enabled features. What it
+# creates is declared in local-dev/provision/bootstrap.yaml; the runner is
+# lehrer_bootstrap, baked into the platform image from src/lehrer/bootstrap.
 #
 # Runs after edxapp-migrate (see lehrer-core.star) and before the LMS/CMS
 # deployments are considered ready. Everything it does is idempotent, so Tilt
@@ -15,6 +17,12 @@ spec:
   backoffLimit: 3
   template:
     metadata:
+      annotations:
+        # Stamped by lehrer-core.star with a hash of bootstrap.yaml. A Job's
+        # pod template is immutable, so a spec edit changes the Job and Tilt
+        # replaces it, which is what re-runs it. Without this, editing the spec
+        # only updates the ConfigMap of a Job that has already finished.
+        lehrer.mit.edu/bootstrap-spec-checksum: "__BOOTSTRAP_SPEC_CHECKSUM__"
       labels:
         app: edxapp-provision
     spec:
@@ -25,30 +33,15 @@ spec:
         # platform deployments).
         image: openedx-platform
         command:
-        - sh
-        - -c
-        - |
-          set -e
-
-          echo "==> Superuser and OAuth clients"
-          python /openedx/provision/provision.py
-
-          # set_waffle_flags.py is baked into the image by
-          # lehrer.core.platform; it takes the path to a YAML file with a
-          # top-level `waffles:` list. Same script and same file format as the
-          # lms-waffleflag job ol-infrastructure runs in AWS.
-          echo "==> Waffle flags"
-          python set_waffle_flags.py /openedx/provision/waffle-flags.yaml
+        - python
+        - -m
+        - lehrer_bootstrap
+        - /openedx/provision/bootstrap.yaml
         env:
-        # provision.py and set_waffle_flags.py call django.setup() directly
-        # rather than going through manage.py, so the settings module has to
-        # come from the environment.
+        # The runner calls django.setup() directly rather than going through
+        # manage.py, so the settings module has to come from the environment.
         - name: DJANGO_SETTINGS_MODULE
           value: "lms.envs.aqueduct"
-        - name: PROVISION_SUPERUSER_USERNAME
-          value: "edx"
-        - name: PROVISION_SUPERUSER_EMAIL
-          value: "edx@example.com"
         envFrom:
         - configMapRef:
             name: lms-config

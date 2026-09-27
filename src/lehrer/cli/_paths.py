@@ -74,6 +74,11 @@ def namespace_manifest() -> Path:
     return local_dev_dir() / "manifests" / "namespace.yaml"
 
 
+def bootstrap_spec() -> Path:
+    """Return the path to the bootstrap spec the edxapp-provision Job applies."""
+    return local_dev_dir() / "provision" / "bootstrap.yaml"
+
+
 def traefik_config() -> Path:
     """Return the path to the k3s Traefik HelmChartConfig."""
     return local_dev_dir() / "manifests" / "traefik-config.yaml"

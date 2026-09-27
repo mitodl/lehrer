@@ -110,6 +110,13 @@ repos:
       \ import json_schema; print(json.dumps(json_schema(), indent=2))\" > build_manifest.schema.json'"
     files: ^(src/lehrer/core/build_manifest\.py|build_manifest\.schema\.json)$
     pass_filenames: false
+  - id: bootstrap-schema
+    name: regenerate bootstrap JSON schema from the Pydantic models
+    language: system
+    entry: "bash -c 'uv run python -c \"import json; from lehrer.bootstrap.spec import\
+      \ json_schema; print(json.dumps(json_schema(), indent=2))\" > bootstrap.schema.json'"
+    files: ^(src/lehrer/bootstrap/spec\.py|bootstrap\.schema\.json)$
+    pass_filenames: false
 - repo: https://github.com/hadolint/hadolint
   rev: v2.15.1
   hooks:

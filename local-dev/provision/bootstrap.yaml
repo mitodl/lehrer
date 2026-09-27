@@ -1,0 +1,56 @@
+---
+# yaml-language-server: $schema=../../bootstrap.schema.json
+#
+# What a fresh local-dev database needs before the stack is usable. Applied by
+# the edxapp-provision Job with the lehrer_bootstrap runner baked into the
+# platform image (src/lehrer/bootstrap); every step is idempotent, so trigger
+# the Job again after editing this file.
+#
+# Values ending in _env name a key of the openedx-secrets Secret
+# (local-dev/secret-defaults.yaml), never the value itself.
+
+users:
+- username: edx
+  email: edx@example.com
+  password_env: PROVISION_SUPERUSER_PASSWORD    # pragma: allowlist secret
+  superuser: true
+
+oauth_applications:
+# The LMS signs the notes annotator token with this application's
+# client_secret and sets aud to its client_id, finding it by *name*
+# (lms/djangoapps/edxnotes/helpers.py -> get_edxnotes_id_token). edx-notes-api
+# validates with its own CLIENT_ID/CLIENT_SECRET, which the notes Deployment
+# reads from the same two keys. All three have to line up or every notes
+# request 403s.
+- name: "{EDXNOTES_CLIENT_NAME}"
+  user: edx
+  grant_type: client-credentials
+  client_id_env: NOTES_OAUTH_CLIENT_ID
+  client_secret_env: NOTES_OAUTH_CLIENT_SECRET    # pragma: allowlist secret
+
+# Studio has no login of its own: its /login/ starts auth_backends' EdXOAuth2
+# flow against the LMS, which rejects the callback unless it is registered
+# here. CMS_ROOT_URL is the Studio address the LMS config carries, so a caller
+# that overrides CMS_BASE_URL registers its own host. auth_backends asks for
+# user_id alongside profile and email, and the LMS answers invalid_scope
+# unless the access record allows it.
+- name: cms-sso
+  user: edx
+  grant_type: authorization-code
+  client_id_env: SOCIAL_AUTH_EDX_OAUTH2_KEY
+  client_secret_env: SOCIAL_AUTH_EDX_OAUTH2_SECRET    # pragma: allowlist secret
+  redirect_uris:
+  - "{CMS_ROOT_URL}/complete/edx-oauth2/"
+  scopes:
+  - user_id
+  skip_authorization: true
+
+# Deliberately small. The generic stack runs only the shell, header and footer
+# MFE apps and has no discussions/forum service, so the larger flag sets
+# ol-infrastructure applies to the residential and mitxonline deployments do
+# not carry over.
+waffle_flags:
+- name: course_experience.relative_dates
+  everyone: true
+- name: notifications.enable_notifications
+  everyone: true

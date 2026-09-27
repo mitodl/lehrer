@@ -25,6 +25,8 @@ from urllib.parse import urlsplit
 import cyclopts
 import yaml
 
+from lehrer.bootstrap.spec import User
+from lehrer.bootstrap.spec import load as load_bootstrap_spec
 from lehrer.cli import _paths
 from lehrer.cli._proc import capture, capture_result, have, pipe, run
 
@@ -83,9 +85,13 @@ def _load_secret_defaults() -> tuple[
     return defaults, mirrors
 
 
-# Matches PROVISION_SUPERUSER_USERNAME in
-# local-dev/manifests/platform/job-provision.yaml.
-_SUPERUSER_USERNAME = "edx"
+def _bootstrap_superuser() -> User:
+    """The superuser the edxapp-provision Job creates, from its bootstrap spec."""
+    return next(
+        user
+        for user in load_bootstrap_spec(_paths.bootstrap_spec()).users
+        if user.superuser
+    )
 
 
 ClusterState = Literal["absent", "stopped", "partial", "running"]
@@ -738,9 +744,10 @@ def setup() -> None:
     # would otherwise land in terminal scrollback and captured setup logs.
     # Only ever one of the two literals below; naming it for the secret it
     # deliberately does not hold also trips CodeQL's name heuristic.
+    superuser = _bootstrap_superuser()
     credential_origin = (
-        "$PROVISION_SUPERUSER_PASSWORD"
-        if "PROVISION_SUPERUSER_PASSWORD" in os.environ
+        f"${superuser.password_env}"
+        if superuser.password_env in os.environ
         else "the local-dev default"
     )
     print(
@@ -750,7 +757,7 @@ def setup() -> None:
         "Use a custom deployment config:\n"
         f"    lehrer dev start --deployment-config {local_dev}/../deployments/mit-ol\n\n"
         "The edxapp-provision Job creates a superuser once the stack is up:\n"
-        f"    username {_SUPERUSER_USERNAME}, password from {credential_origin}\n"
+        f"    username {superuser.username}, password from {credential_origin}\n"
         "Import the demo course by triggering edxapp-demo-course in the Tilt UI\n"
         "(or `tilt trigger edxapp-demo-course`).\n\n"
         "Tear down with:\n"
