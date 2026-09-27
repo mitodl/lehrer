@@ -37,8 +37,8 @@ class TestWaffleFlag:
                 ["f", "--superusers", "--staff", "--authenticated", "--create"],
             ),
             (
-                WaffleFlag(name="f", percent=12.5, rollout=True, testing=True),
-                ["f", "--rollout", "--testing", "--percent", "12.5", "--create"],
+                WaffleFlag(name="f", percent=12, rollout=True, testing=True),
+                ["f", "--rollout", "--testing", "--percent", "12", "--create"],
             ),
         ],
     )
@@ -64,7 +64,7 @@ class TestWaffleFlag:
     def test_from_argv_round_trips(self, argv: list[str]) -> None:
         flag = WaffleFlag.from_argv(argv)
         assert sorted(WaffleFlag.from_argv(flag.argv()).argv()) == sorted(flag.argv())
-        assert set(flag.argv()) - {"50.0"} == set(argv) - {"50"}
+        assert set(flag.argv()) == set(argv)
 
     def test_from_argv_refuses_what_it_cannot_express(self) -> None:
         with pytest.raises(ValueError, match="--group"):

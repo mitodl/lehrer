@@ -87,11 +87,15 @@ def _load_secret_defaults() -> tuple[
 
 def _bootstrap_superuser() -> User:
     """The superuser the edxapp-provision Job creates, from its bootstrap spec."""
-    return next(
-        user
-        for user in load_bootstrap_spec(_paths.bootstrap_spec()).users
-        if user.superuser
-    )
+    spec_path = _paths.bootstrap_spec()
+    for user in load_bootstrap_spec(spec_path).users:
+        if user.superuser:
+            if user.password_env is None:
+                msg = f"{spec_path}: superuser {user.username} needs a password_env"
+                raise ValueError(msg)
+            return user
+    msg = f"{spec_path} declares no superuser to log in as"
+    raise ValueError(msg)
 
 
 ClusterState = Literal["absent", "stopped", "partial", "running"]

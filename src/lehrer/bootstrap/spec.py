@@ -113,7 +113,12 @@ class WaffleFlag(BaseModel):
     superusers: bool = False
     staff: bool = False
     authenticated: bool = False
-    percent: float | None = Field(default=None, ge=0, le=100)
+    percent: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Whole percent; waffle_flag's --percent only takes an int.",
+    )
     rollout: bool = False
     testing: bool = False
     create: bool = True
@@ -153,7 +158,7 @@ class WaffleFlag(BaseModel):
                 case "--deactivate":
                     fields["everyone"] = False
                 case "--percent" | "-p":
-                    fields["percent"] = float(next(remaining))
+                    fields["percent"] = int(next(remaining))
                 case (
                     "--superusers"
                     | "--staff"

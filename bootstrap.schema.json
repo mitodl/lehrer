@@ -152,13 +152,14 @@
             {
               "maximum": 100,
               "minimum": 0,
-              "type": "number"
+              "type": "integer"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
+          "description": "Whole percent; waffle_flag's --percent only takes an int.",
           "title": "Percent"
         },
         "rollout": {

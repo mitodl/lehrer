@@ -284,6 +284,29 @@ class TestProvisioningManifests:
         assert superuser.superuser
         assert superuser.password_env
 
+    @pytest.mark.parametrize(
+        ("spec", "error"),
+        [
+            ("users: []\n", "declares no superuser"),
+            (
+                "users:\n- {username: a, email: a@example.com, superuser: true}\n",
+                "needs a password_env",
+            ),
+        ],
+    )
+    def test_setup_refuses_a_spec_it_cannot_report(
+        self,
+        spec: str,
+        error: str,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        spec_path = tmp_path / "bootstrap.yaml"
+        spec_path.write_text(spec)
+        monkeypatch.setattr(_paths, "bootstrap_spec", lambda: spec_path)
+        with pytest.raises(ValueError, match=error):
+            local_dev._bootstrap_superuser()
+
     def test_the_job_runs_the_spec_the_configmap_carries(self) -> None:
         container = _manifest("job-provision.yaml")["spec"]["template"]["spec"][
             "containers"

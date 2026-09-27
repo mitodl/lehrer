@@ -87,6 +87,21 @@ def apply_oauth_applications(spec: BootstrapSpec, settings: Any) -> None:
             ),
             "skip_authorization": declared.skip_authorization,
         }
+        # Consumers such as edxnotes fetch their application by name, so a
+        # second row under the same name (e.g. after a client_id rotation)
+        # would break them with MultipleObjectsReturned.
+        clash = (
+            application_model.objects.filter(name=fields["name"])
+            .exclude(client_id=client_id)
+            .exists()
+        )
+        if clash:
+            msg = (
+                f"OAuth application {fields['name']!r} already exists under a "
+                f"different client_id than {declared.client_id_env} holds; delete "
+                "or rename it before applying this spec"
+            )
+            raise ValueError(msg)
         application, created = application_model.objects.update_or_create(
             client_id=client_id, defaults=fields
         )
