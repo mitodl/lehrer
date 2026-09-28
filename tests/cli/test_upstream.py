@@ -158,19 +158,15 @@ def test_shipped_mit_ol_watch_list_is_well_formed() -> None:
 
 # Mirrors version_matrix.py's `release="master"`/`branch_override` rows for
 # mitx, mitx-staging, and mitxonline (ol-infrastructure
-# `src/bridge/settings/openedx/version_matrix.py` @ 92ad0bdbd). A repo missing
+# `src/bridge/settings/openedx/version_matrix.py` @ 2e9f9e609). A repo missing
 # here or listing the wrong deployments means the shipped watch list has
 # drifted from the source of truth it claims to track.
 _EXPECTED_MIT_OL_EXPOSURE = {
-    "openedx/frontend-app-admin-console": ["mitxonline", "mitx", "mitx-staging"],
     "openedx/frontend-app-authoring": ["mitxonline", "mitx", "mitx-staging"],
     "openedx/frontend-app-communications": ["mitxonline", "mitx", "mitx-staging"],
     "openedx/frontend-app-discussions": ["mitxonline", "mitx", "mitx-staging"],
-    "openedx/frontend-app-gradebook": ["mitxonline", "mitx", "mitx-staging"],
     "openedx/frontend-app-learning": ["mitxonline", "mitx", "mitx-staging"],
     "openedx/frontend-app-ora-grading": ["mitxonline", "mitx", "mitx-staging"],
-    "openedx/frontend-app-instructor-dashboard": ["mitxonline", "mitx", "mitx-staging"],
-    "openedx/frontend-app-learner-dashboard": ["mitx", "mitx-staging"],
 }
 
 
