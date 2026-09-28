@@ -35,16 +35,6 @@ const siteConfig: SiteConfig = {
 	lmsBaseUrl: "https://courses.learn.mit.edu",
 	loginUrl: "https://courses.learn.mit.edu/login",
 	logoutUrl: "https://courses.learn.mit.edu/logout",
-	// admin-console's error page links back to whatever serves this role. The
-	// legacy build used COURSE_AUTHORING_MICROFRONTEND_URL; FRONTEND_SITE_CONFIG
-	// sets the same URL per environment. The runtime list is merged into this one
-	// by index, so keep both in the same order.
-	externalRoutes: [
-		{
-			role: "org.openedx.frontend.role.courseAuthoring",
-			url: "https://studio.courses.learn.mit.edu/authoring",
-		},
-	],
 	environment: EnvironmentTypes.PRODUCTION,
 	runtimeConfigJsonUrl: "/api/frontend_site_config/v1/",
 	// Override the proctoring info panel link to the MITx Online ZD article.
