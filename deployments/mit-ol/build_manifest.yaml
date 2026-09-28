@@ -198,7 +198,7 @@ cells:
   # OpenTelemetryBackend.create_span() fix in
   # https://github.com/openedx/edx-django-utils/pull/549 (released in 8.0.2).
   - edx-django-utils==8.0.2
-  - openedx-forum==0.4.1
+  - openedx-forum==0.4.7
   - lxml==6.1.3
   - xmlsec==1.3.17
 - release: verawood
