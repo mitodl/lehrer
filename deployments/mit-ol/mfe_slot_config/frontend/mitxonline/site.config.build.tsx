@@ -9,6 +9,9 @@ import {
 import { createMITOLFooterApp } from "@shared/footer";
 import { createMITxOnlineHeaderApp } from "@shared/header";
 
+import { adminConsoleApp } from "@openedx/frontend-app-admin-console";
+import { gradebookApp } from "@openedx/frontend-app-gradebook";
+
 import { createMITxOnlineInstructorDashboardApp } from "./src/instructor-dashboard";
 
 import "@openedx/frontend-base/shell/style";
@@ -32,6 +35,16 @@ const siteConfig: SiteConfig = {
 	lmsBaseUrl: "https://courses.learn.mit.edu",
 	loginUrl: "https://courses.learn.mit.edu/login",
 	logoutUrl: "https://courses.learn.mit.edu/logout",
+	// admin-console's error page links back to whatever serves this role. The
+	// legacy build used COURSE_AUTHORING_MICROFRONTEND_URL; FRONTEND_SITE_CONFIG
+	// sets the same URL per environment. The runtime list is merged into this one
+	// by index, so keep both in the same order.
+	externalRoutes: [
+		{
+			role: "org.openedx.frontend.role.courseAuthoring",
+			url: "https://studio.courses.learn.mit.edu/authoring",
+		},
+	],
 	environment: EnvironmentTypes.PRODUCTION,
 	runtimeConfigJsonUrl: "/api/frontend_site_config/v1/",
 	// Override the proctoring info panel link to the MITx Online ZD article.
@@ -47,7 +60,13 @@ const siteConfig: SiteConfig = {
 		createMITOLFooterApp(),
 		createMITxOnlineHeaderApp(),
 		createMITxOnlineInstructorDashboardApp(),
-		// TODO: add further module libraries as they are migrated to frontend-base
+		// Not nested under /apps like the instructor dashboard: both register
+		// absolute route paths (/admin-console/authz/*, /gradebook/:courseId) and
+		// admin-console builds its links from that absolute base. Fastly serves this
+		// Site Project at those paths, which are also the URLs the LMS already links
+		// to (ADMIN_CONSOLE_MICROFRONTEND_URL, WRITABLE_GRADEBOOK_URL).
+		adminConsoleApp,
+		gradebookApp,
 	],
 };
 

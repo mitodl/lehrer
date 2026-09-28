@@ -99,8 +99,18 @@ Currently contains:
 | Deployment | Module library | npm version |
 |---|---|---|
 | mitxonline | `@openedx/frontend-app-instructor-dashboard` | `^2.0.0-alpha` |
+| mitxonline | `@openedx/frontend-app-admin-console` | `^1.0.0-alpha.6` |
+| mitxonline | `@openedx/frontend-app-gradebook` | `^2.0.0-alpha.4` |
 | mitx | `@openedx/frontend-app-instructor-dashboard` | `1.x` |
 | xpro | `@openedx/frontend-app-instructor-dashboard` | `mitodl/…#verawood` (see below) |
+
+admin-console and gradebook are wired in unwrapped, unlike the instructor
+dashboard. They register absolute route paths (`/admin-console/authz/*`,
+`/gradebook/:courseId`) that `wrapWithAppsPath` cannot nest, so Fastly serves the
+Site Project at those paths. These are the same URLs the legacy MFEs used, so the
+LMS settings that link to them (`ADMIN_CONSOLE_MICROFRONTEND_URL`,
+`WRITABLE_GRADEBOOK_URL`) do not change. Both require frontend-base 2.x, so they
+stay legacy builds on the Verawood-line Site Projects (mitx, xpro).
 
 ### Version lines
 

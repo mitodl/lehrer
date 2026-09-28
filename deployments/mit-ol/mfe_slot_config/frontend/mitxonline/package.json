@@ -11,6 +11,8 @@
     "serve": "openedx serve"
   },
   "dependencies": {
+    "@openedx/frontend-app-admin-console": "^1.0.0-alpha.6",
+    "@openedx/frontend-app-gradebook": "^2.0.0-alpha.4",
     "@openedx/frontend-app-instructor-dashboard": "^2.0.0-alpha",
     "@openedx/frontend-base": "^2.0.0-alpha",
     "@openedx/paragon": "^23",
