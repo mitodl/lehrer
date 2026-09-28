@@ -32,5 +32,11 @@ mfes:
       by_release:
         ulmo: SidebarAIDrawerCoordinator.ulmo.jsx
         default: SidebarAIDrawerCoordinator.jsx
+    # master made SidebarContext module-private; the coordinator reads it
+    # through this per-release hook.
+    - dest: useSidebarContext.js
+      by_release:
+        verawood: useSidebarContext.verawood.js
+        default: useSidebarContext.js
     extra_npm_bundles:
     - "@mitodl/smoot-design@^6.37.0|public/static/smoot-design"

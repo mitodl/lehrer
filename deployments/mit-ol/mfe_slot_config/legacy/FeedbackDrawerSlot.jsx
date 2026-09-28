@@ -1,13 +1,13 @@
-import { useContext, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
-import SidebarContext from './src/courseware/course/sidebar/SidebarContext';
 import {
   loadBundle, getMessageOrigin, SUBMIT_URL, CSRF_COOKIE_NAME, CSRF_HEADER_NAME, CSRF_PRIME_URL,
 } from './feedbackBundle';
 import useFeedbackEnrichment from './useFeedbackEnrichment';
+import useSidebarContext from './useSidebarContext';
 
 const FeedbackDrawerSlot = ({ onClose }) => {
-  const { courseId = null, unitId = null } = useContext(SidebarContext) ?? {};
+  const { courseId = null, unitId = null } = useSidebarContext() ?? {};
   const getEnrichment = useFeedbackEnrichment(courseId, unitId);
   const containerRef = useRef(null);
   const instanceRef = useRef(null);

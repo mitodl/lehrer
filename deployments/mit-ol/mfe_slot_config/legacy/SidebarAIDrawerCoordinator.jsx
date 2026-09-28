@@ -1,10 +1,10 @@
-import React, { useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { getConfig } from '@edx/frontend-platform';
 
 import Sidebar from './src/courseware/course/sidebar/Sidebar';
-import SidebarContext from './src/courseware/course/sidebar/SidebarContext';
 import AIDrawerManagerSidebar from './AIDrawerManagerSidebar';
 import FeedbackDrawerSlot from './FeedbackDrawerSlot';
+import useSidebarContext from './useSidebarContext';
 
 const AI_DRAWER_MESSAGE_TYPES = [
     'smoot-design::ai-drawer-open',
@@ -97,7 +97,7 @@ const useStickyDrawerHeight = (wrapperRef, active) => {
 };
 
 const SidebarAIDrawerCoordinator = () => {
-    const contextValue = useContext(SidebarContext);
+    const contextValue = useSidebarContext();
     const currentSidebar = contextValue?.currentSidebar ?? null;
     const toggleSidebar = contextValue?.toggleSidebar ?? (() => { });
     const shouldDisplayFullScreen = contextValue?.shouldDisplayFullScreen ?? false;
