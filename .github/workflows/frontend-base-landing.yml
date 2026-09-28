@@ -5,7 +5,7 @@ name: Upstream frontend-base Landing Watch
 # its repository's default branch (openedx/frontend-base#243, OEP-65 ADR 0004).
 # That merge turns the default branch into an npm module library, so every OL
 # legacy MFE build tracking it stops producing a servable bundle — with no
-# change in this repo and no failing PR to notice it. mitxonline builds seven
+# change in this repo and no failing PR to notice it. mitxonline builds five
 # MFEs from `master`, so this is a build break that arrives on upstream's
 # schedule rather than ours.
 #
