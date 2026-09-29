@@ -1,8 +1,7 @@
 import React, { useState, useRef, useLayoutEffect, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
 import { Dropdown } from '@openedx/paragon';
 import { useIntl, FormattedMessage } from '@edx/frontend-platform/i18n';
-import { useModel } from './src/generic/model-store';
+import useCourseTabs from './useCourseTabs';
 
 const moreMessage = {
     id: 'learn.course.tabs.navigation.overflow.menu',
@@ -10,17 +9,23 @@ const moreMessage = {
     defaultMessage: 'More...',
 };
 
+// master tabs carry the API's tabId (openedx/frontend-app-learning#2099); verawood and ulmo
+// re-spell it as slug, already swapped to the active page for the Course tab.
+const getTabId = (tab) => tab.tabId ?? tab.slug;
+
+// The Course tab (`courseware`) covers both the outline page (`outline`) and the content
+// pages, mirroring isActiveTab in frontend-app-learning's course-tabs/utils.
+const isActiveTab = (tabId, activeTabSlug) => (
+  tabId === activeTabSlug || (activeTabSlug === 'outline' && tabId === 'courseware')
+);
+
 // Course tabs with explicit overflow-to-dropdown behavior.
 const ResponsiveCourseTabs = ({ activeTabSlug }) => {
   const intl = useIntl();
   const moreLabel = intl.formatMessage(moreMessage);
 
-  // Course-home tabs (outline, dates, progress, ...) no longer populate
-  // state.courseHome.courseId now that they're on React Query (frontend-app-learning
-  // #1997 and siblings) — read the route param directly instead, like those tabs do.
-  const { courseId } = useParams();
-  const courseHomeMeta = useModel('courseHomeMeta', courseId);
-  const tabs = courseHomeMeta?.tabs;
+  // Where the tabs live differs by release; build_config.yaml selects the hook.
+  const tabs = useCourseTabs();
 
   const containerRef = useRef(null);
   const tabWidthsRef = useRef([]);
@@ -109,13 +114,13 @@ const ResponsiveCourseTabs = ({ activeTabSlug }) => {
   return (
     <div ref={containerRef} style={{ display: 'contents' }}>
       {/* Visible tab links */}
-      {visibleTabs.map(({ url, title, slug }) => (
+      {visibleTabs.map((tab) => (
         <a
-          key={slug}
-          href={url}
-          className={`nav-item flex-shrink-0 nav-link${slug === activeTabSlug ? ' active' : ''}`}
+          key={getTabId(tab)}
+          href={tab.url}
+          className={`nav-item flex-shrink-0 nav-link${isActiveTab(getTabId(tab), activeTabSlug) ? ' active' : ''}`}
         >
-          {title}
+          {tab.title}
         </a>
       ))}
 
@@ -131,13 +136,13 @@ const ResponsiveCourseTabs = ({ activeTabSlug }) => {
               <FormattedMessage {...moreMessage} />
             </Dropdown.Toggle>
             <Dropdown.Menu className="responsive-tabs-dropdown-menu">
-              {overflowTabs.map(({ url, title, slug }) => (
+              {overflowTabs.map((tab) => (
                 <Dropdown.Item
-                  key={slug}
-                  href={url}
-                  className={slug === activeTabSlug ? 'active' : ''}
+                  key={getTabId(tab)}
+                  href={tab.url}
+                  className={isActiveTab(getTabId(tab), activeTabSlug) ? 'active' : ''}
                 >
-                  {title}
+                  {tab.title}
                 </Dropdown.Item>
               ))}
             </Dropdown.Menu>
@@ -160,14 +165,14 @@ const ResponsiveCourseTabs = ({ activeTabSlug }) => {
           zIndex: -1,
         }}
       >
-        {tabs.map(({ title, slug }) => (
+        {tabs.map((tab) => (
           <span
-            key={`measure-${slug}`}
+            key={`measure-${getTabId(tab)}`}
             data-measure-tab
             className="nav-item flex-shrink-0 nav-link"
             style={{ whiteSpace: 'nowrap' }}
           >
-            {title}
+            {tab.title}
           </span>
         ))}
         <span

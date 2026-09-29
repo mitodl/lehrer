@@ -113,7 +113,10 @@ if (process.env.DEPLOYMENT_NAME?.includes("mitxonline")) {
                       </div>
                   </div>
                   <p className="sr-only">{formatMessage(messages.headerPlaceholder)}</p>
+                  {/* master's BookmarkButton patches the cached sequence, so it needs the
+                      sequence id (openedx/frontend-app-learning#2128); older releases ignore it. */}
                   <BookmarkButton
+                      sequenceId={unit.sequenceId}
                       unitId={unit.id}
                       isBookmarked={unit.bookmarked}
                       isProcessing={isProcessing}

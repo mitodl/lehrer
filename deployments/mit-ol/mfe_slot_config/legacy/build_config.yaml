@@ -26,7 +26,6 @@ mfes:
     - ResponsiveCourseTabs.jsx
     - FeedbackDrawerSlot.jsx
     - feedbackBundle.js
-    - useFeedbackEnrichment.js
     # The AI-drawer coordinator ships in two variants; pick by release.
     - dest: SidebarAIDrawerCoordinator.jsx
       by_release:
@@ -38,5 +37,17 @@ mfes:
       by_release:
         verawood: useSidebarContext.verawood.js
         default: useSidebarContext.js
+    # master stopped mirroring courseHomeMeta and units into the model store; these
+    # read them from React Query there and from the model store on older releases.
+    # ResponsiveCourseTabs is imported for every deployment, so ulmo needs a variant too.
+    - dest: useCourseTabs.js
+      by_release:
+        ulmo: useCourseTabs.verawood.js
+        verawood: useCourseTabs.verawood.js
+        default: useCourseTabs.js
+    - dest: useFeedbackEnrichment.js
+      by_release:
+        verawood: useFeedbackEnrichment.verawood.js
+        default: useFeedbackEnrichment.js
     extra_npm_bundles:
     - "@mitodl/smoot-design@^6.37.0|public/static/smoot-design"
