@@ -128,3 +128,89 @@ def test_the_image_package_imports_only_what_the_image_has() -> None:
             else:
                 continue
             assert roots <= allowed, f"{module.name} imports {roots - allowed}"
+
+
+class _FakeUser:
+    """Just enough of a Django user for apply_users: a salted password field."""
+
+    def __init__(self, username: str, email: str) -> None:
+        self.username = username
+        self.email = email
+        self.password = ""
+        self._salt = 0
+
+    def set_password(self, raw: str) -> None:
+        self._salt += 1
+        self.password = f"{raw}${self._salt}"
+
+    def check_password(self, raw: str) -> bool:
+        return self.password.rpartition("$")[0] == raw
+
+    def set_unusable_password(self) -> None:
+        self.password = "!"
+
+    def save(self) -> None:
+        pass
+
+
+class _FakeUserManager:
+    def __init__(self) -> None:
+        self.rows: dict[str, _FakeUser] = {}
+
+    def get_or_create(
+        self, *, username: str, defaults: dict[str, str]
+    ) -> tuple[_FakeUser, bool]:
+        created = username not in self.rows
+        if created:
+            self.rows[username] = _FakeUser(username, defaults["email"])
+        return self.rows[username], created
+
+
+@pytest.fixture
+def fake_users(monkeypatch: pytest.MonkeyPatch) -> _FakeUserManager:
+    # apply_users imports Django and edx-platform inside the function; neither
+    # is in lehrer's venv, so stand in for the two names it reaches for.
+    manager = _FakeUserManager()
+    user_model = SimpleNamespace(objects=manager)
+    profile_model = SimpleNamespace(
+        objects=SimpleNamespace(get_or_create=lambda **_: (None, False))
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "django.contrib.auth",
+        SimpleNamespace(get_user_model=lambda: user_model),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "common.djangoapps.student.models",
+        SimpleNamespace(UserProfile=profile_model),
+    )
+    return manager
+
+
+def test_reapplying_leaves_an_unchanged_password_alone(
+    fake_users: _FakeUserManager, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # set_password salts afresh, and Django invalidates every session whose
+    # hash no longer matches the stored password, so re-setting an unchanged
+    # password would log the user out on every run.
+    monkeypatch.setenv("LEHRER_TEST_PASSWORD", "first")
+    spec = BootstrapSpec.model_validate(
+        {
+            "users": [
+                {
+                    "username": "u",
+                    "email": "u@example.com",
+                    "password_env": "LEHRER_TEST_PASSWORD",  # pragma: allowlist secret
+                }
+            ]
+        }
+    )
+    runner.apply_users(spec, None)
+    stored = fake_users.rows["u"].password
+    runner.apply_users(spec, None)
+    assert fake_users.rows["u"].password == stored
+
+    monkeypatch.setenv("LEHRER_TEST_PASSWORD", "second")
+    runner.apply_users(spec, None)
+    assert fake_users.rows["u"].check_password("second")

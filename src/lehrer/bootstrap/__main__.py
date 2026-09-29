@@ -48,7 +48,12 @@ def apply_users(spec: BootstrapSpec, settings: Any) -> None:  # noqa: ARG001
         user.is_superuser = declared.superuser
         user.is_staff = declared.staff or declared.superuser
         if declared.password_env:
-            user.set_password(from_env(declared.password_env))
+            password = from_env(declared.password_env)
+            # set_password salts afresh, and Django checks every session
+            # against a hash of the stored password, so re-setting an unchanged
+            # one would log the user out everywhere on every run.
+            if not user.check_password(password):
+                user.set_password(password)
         elif created:
             user.set_unusable_password()
         user.save()

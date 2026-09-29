@@ -750,7 +750,7 @@ def setup() -> None:
     # deliberately does not hold also trips CodeQL's name heuristic.
     superuser = _bootstrap_superuser()
     credential_origin = (
-        f"${superuser.password_env}"
+        "the variable its password_env names in local-dev/provision/bootstrap.yaml"
         if superuser.password_env in os.environ
         else "the local-dev default"
     )
