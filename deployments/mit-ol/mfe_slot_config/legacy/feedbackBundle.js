@@ -18,6 +18,12 @@ export const CSRF_HEADER_NAME = 'X-CSRFToken';
 // drawer primes to obtain the CSRF cookie before submitting.
 export const CSRF_PRIME_URL = process.env.FEEDBACK_CSRF_PRIME_URL;
 
+// mit-learn APISIX login route (e.g. `<mit-learn>/login`). A courseware-only
+// learner has no mit-learn session, so their POST would be anonymous (403). When
+// set, the bundle routes such a learner through a login popup before submitting
+// and auto-sends once the session exists. Leave unset to disable the popup flow.
+export const LOGIN_URL = process.env.FEEDBACK_LOGIN_URL || undefined;
+
 let loadPromise = null;
 export const loadBundle = () => {
   if (loadPromise) {
