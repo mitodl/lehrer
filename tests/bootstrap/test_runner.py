@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from lehrer.bootstrap import __main__ as runner
-from lehrer.bootstrap.spec import Migration
+from lehrer.bootstrap.spec import BootstrapSpec, Migration
 
 
 def test_manage_runs_each_service_under_its_own_settings(
@@ -123,27 +123,113 @@ def test_demo_course_dir_refuses_a_checkout_without_one(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("steps", "set_up"),
+    ("steps", "expected"),
     [
-        ("migrate", False),
-        ("demo_course", False),
-        ("migrate,users", True),
-        ("waffle_flags", True),
+        ("migrate", ["migrate"]),
+        ("demo_course", ["demo_course"]),
+        ("waffle_flags", ["setup", "waffle_flags"]),
+        # The default, and what a deployed pre-deploy Job runs: the registry
+        # comes up only after migrate's children have finished.
+        (
+            "migrate,users,waffle_flags,demo_course",
+            ["migrate", "setup", "users", "waffle_flags", "demo_course"],
+        ),
     ],
 )
-def test_only_orm_steps_set_up_django(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, steps: str, set_up: bool
+def test_django_is_set_up_just_before_the_first_orm_step(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, steps: str, expected: list[str]
 ) -> None:
     # migrate and demo_course run in manage.py children with their own app
-    # registry. Setting one up here as well doubles peak memory for the run.
-    calls = []
+    # registry. One set up in the runner while they run doubles peak memory.
+    events: list[str] = []
     monkeypatch.setitem(
-        sys.modules, "django", SimpleNamespace(setup=lambda: calls.append(1))
+        sys.modules, "django", SimpleNamespace(setup=lambda: events.append("setup"))
     )
     monkeypatch.setitem(sys.modules, "django.conf", SimpleNamespace(settings=None))
     for step in runner.STEPS:
-        monkeypatch.setitem(runner.APPLY, step, lambda *_: None)
+        monkeypatch.setitem(
+            runner.APPLY, step, lambda *_, step=step: events.append(step)
+        )
     spec = tmp_path / "spec.yaml"
     spec.write_text("{}\n")
     runner.main([str(spec), "--steps", steps])
-    assert bool(calls) is set_up
+    assert events == expected
+
+
+class _DemoCourseCommands:
+    """Stands in for git and manage.py, laying out a checkout on clone."""
+
+    def __init__(self, layout: str, *, import_fails: bool = False) -> None:
+        self.layout = layout
+        self.import_fails = import_fails
+        self.commands: list[list[str]] = []
+
+    def run(self, command: list[str], **_: Any) -> SimpleNamespace:
+        self.commands.append(command)
+        if command[:2] == ["git", "clone"]:
+            course = Path(command[-1]) / self.layout
+            course.mkdir(parents=True, exist_ok=True)
+            (course / "course.xml").write_text("<course/>")
+        elif "import" in command and self.import_fails:
+            raise subprocess.CalledProcessError(1, command)
+        return SimpleNamespace(returncode=0)
+
+
+@pytest.fixture
+def demo_course(monkeypatch: pytest.MonkeyPatch) -> Any:
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "cms.envs.aqueduct")
+    monkeypatch.setitem(
+        sys.modules, "openedx.core.release", SimpleNamespace(RELEASE_LINE="teak")
+    )
+
+    def install(layout: str, **kwargs: bool) -> _DemoCourseCommands:
+        commands = _DemoCourseCommands(layout, **kwargs)
+        monkeypatch.setattr(runner.subprocess, "run", commands.run)
+        return commands
+
+    return install
+
+
+@pytest.mark.parametrize(
+    ("layout", "data_dir", "course_dir"),
+    [
+        ("demo-course/course", "openedx-demo-course/demo-course", "course"),
+        (".", "", "openedx-demo-course"),
+    ],
+)
+def test_demo_course_imports_the_directory_holding_course_xml(
+    demo_course: Any,
+    capsys: pytest.CaptureFixture[str],
+    layout: str,
+    data_dir: str,
+    course_dir: str,
+) -> None:
+    commands = demo_course(layout)
+    spec = BootstrapSpec.model_validate({"demo_course": {"branch": "release/teak"}})
+    runner.apply_demo_course(spec, None)
+
+    clone, manage = commands.commands
+    assert clone[:2] == ["git", "clone"]
+    assert clone[clone.index("--branch") + 1] == "release/teak"
+    assert manage[1:4] == ["manage.py", "cms", "import"]
+    tmp = Path(clone[-1]).parent
+    assert Path(manage[4]) == tmp / data_dir
+    assert manage[5] == course_dir
+    assert "--settings=aqueduct" in manage
+    assert _lines(capsys) == [
+        {
+            "step": "demo_course",
+            "target": "https://github.com/openedx/openedx-demo-course@release/teak",
+            "result": "imported",
+        }
+    ]
+
+
+def test_demo_course_reports_nothing_when_the_import_fails(
+    demo_course: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    demo_course("demo-course/course", import_fails=True)
+    spec = BootstrapSpec.model_validate({"demo_course": {"branch": "release/teak"}})
+    with pytest.raises(subprocess.CalledProcessError):
+        runner.apply_demo_course(spec, None)
+    assert capsys.readouterr().out == ""

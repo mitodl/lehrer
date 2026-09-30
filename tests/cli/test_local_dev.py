@@ -308,6 +308,18 @@ class TestProvisioningManifests:
         with pytest.raises(ValueError, match=error):
             local_dev._bootstrap_superuser()
 
+    def test_the_local_dev_spec_migrates_the_channel_apps_first(self) -> None:
+        # edx-enterprise's blackboard.0025 and canvas.0041 ALTER these apps'
+        # tables without depending on them, so on a fresh schema an unrestricted
+        # migrate that reaches them first fails with "table doesn't exist".
+        spec = load_bootstrap_spec(_paths.bootstrap_spec())
+        assert [(m.service, m.app_label) for m in spec.migrate[:4]] == [
+            ("lms", "blackboard_channel"),
+            ("lms", "canvas_channel"),
+            ("lms", None),
+            ("cms", None),
+        ]
+
     def test_the_local_dev_spec_migrates_csmh(self) -> None:
         # migrate only touches the alias it is given, and nothing else creates
         # the csmh tables.

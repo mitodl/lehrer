@@ -317,15 +317,20 @@ def main(argv: list[str] | None = None) -> int:
     import django  # type: ignore[import-not-found]  # noqa: PLC0415
     from django.conf import settings  # type: ignore[import-not-found]  # noqa: PLC0415
 
-    # Only the steps that use the ORM need the app registry. migrate and
-    # demo_course do their work in manage.py children, which load their own, so
-    # setting it up here as well would hold a second full platform in memory
-    # for the length of the run. Lazy settings read without it.
-    if IN_PROCESS & set(args.steps):
-        django.setup()
+    # Only the steps that use the ORM need the app registry, so it is set up
+    # just before the first of them. migrate and demo_course do their work in
+    # manage.py children, which load their own; setting one up any earlier
+    # would hold a second platform in memory while they run, and would do it
+    # against a schema that migrate has not created yet. Lazy settings read
+    # without it.
+    set_up = False
     for step in STEPS:
-        if step in args.steps:
-            APPLY[step](spec, settings)
+        if step not in args.steps:
+            continue
+        if step in IN_PROCESS and not set_up:
+            django.setup()
+            set_up = True
+        APPLY[step](spec, settings)
     return 0
 
 
