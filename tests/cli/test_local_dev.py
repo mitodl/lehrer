@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 import pytest
 import yaml
 
+from lehrer.bootstrap.spec import load as load_bootstrap_spec
 from lehrer.cli import _paths, local_dev
 
 
@@ -258,41 +259,63 @@ def _manifest(name: str) -> dict[str, Any]:
 
 
 class TestProvisioningManifests:
-    """Guard the CLI<->manifest coupling the provisioning Job depends on.
+    """Guard the CLI<->spec<->manifest coupling the provisioning Job depends on.
 
-    The superuser username lives in job-provision.yaml while its password comes
-    from the Secret the CLI bootstraps.  Nothing at runtime would notice those
-    drifting apart, so pin them here.
+    The bootstrap spec names the Secret keys it reads, while the CLI (and
+    lehrer-core.star's manage_secrets) creates that Secret from
+    secret-defaults.yaml. Nothing at runtime would notice those drifting apart
+    until the Job failed, so pin them here.
     """
 
-    def test_superuser_username_matches_the_manifest(self) -> None:
+    def test_the_local_dev_spec_is_valid(self) -> None:
+        spec = load_bootstrap_spec(_paths.bootstrap_spec())
+        assert spec.users and spec.oauth_applications and spec.waffle_flags
+
+    def test_secret_supplies_every_env_var_the_spec_reads(self) -> None:
+        spec = load_bootstrap_spec(_paths.bootstrap_spec())
+        read = {user.password_env for user in spec.users if user.password_env}
+        for application in spec.oauth_applications:
+            read |= {application.client_id_env, application.client_secret_env}
+        provisioned = {key for key, _ in local_dev._load_secret_defaults()[0]}
+        assert read <= provisioned
+
+    def test_setup_reports_the_spec_superuser(self) -> None:
+        superuser = local_dev._bootstrap_superuser()
+        assert superuser.superuser
+        assert superuser.password_env
+
+    @pytest.mark.parametrize(
+        ("spec", "error"),
+        [
+            ("users: []\n", "declares no superuser"),
+            (
+                "users:\n- {username: a, email: a@example.com, superuser: true}\n",
+                "needs a password_env",
+            ),
+        ],
+    )
+    def test_setup_refuses_a_spec_it_cannot_report(
+        self,
+        spec: str,
+        error: str,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        spec_path = tmp_path / "bootstrap.yaml"
+        spec_path.write_text(spec)
+        monkeypatch.setattr(_paths, "bootstrap_spec", lambda: spec_path)
+        with pytest.raises(ValueError, match=error):
+            local_dev._bootstrap_superuser()
+
+    def test_the_job_runs_the_spec_the_configmap_carries(self) -> None:
         container = _manifest("job-provision.yaml")["spec"]["template"]["spec"][
             "containers"
         ][0]
-        env = {item["name"]: item["value"] for item in container["env"]}
-        assert env["PROVISION_SUPERUSER_USERNAME"] == local_dev._SUPERUSER_USERNAME
-
-    def test_secret_supplies_every_env_var_the_job_requires(self) -> None:
-        provisioned = {key for key, _ in local_dev._load_secret_defaults()[0]}
-        # provision.py indexes these directly rather than defaulting them.
-        assert {
-            "PROVISION_SUPERUSER_PASSWORD",
-            "NOTES_OAUTH_CLIENT_ID",
-            "NOTES_OAUTH_CLIENT_SECRET",
-            "SOCIAL_AUTH_EDX_OAUTH2_KEY",
-            "SOCIAL_AUTH_EDX_OAUTH2_SECRET",
-        } <= provisioned
-
-    def test_provision_script_is_valid_python(self) -> None:
-        script = _paths.local_dev_dir() / "provision" / "provision.py"
-        ast.parse(script.read_text())
-
-    def test_waffle_flags_match_the_set_waffle_flags_schema(self) -> None:
-        path = _paths.local_dev_dir() / "provision" / "waffle-flags.yaml"
-        waffles = yaml.safe_load(path.read_text())["waffles"]
-        assert waffles
-        for argument_set in waffles:
-            assert all(isinstance(argument, str) for argument in argument_set)
+        assert container["command"][:3] == ["python", "-m", "lehrer_bootstrap"]
+        mount = container["volumeMounts"][0]["mountPath"]
+        assert container["command"][3] == f"{mount}/{_paths.bootstrap_spec().name}"
+        star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
+        assert f'"/{_paths.bootstrap_spec().name}"' in star
 
 
 class TestOperatorSecretRefs:
@@ -1312,16 +1335,22 @@ class TestPlatformLiveUpdate:
         assert injected, "no custom_settings settings modules parsed out of platform.py"
         assert self._synced() == injected
 
-    def test_job_consumed_scripts_are_not_synced(self) -> None:
-        # edxapp-provision runs set_waffle_flags.py from the image. Synced, an
+    def test_job_consumed_code_is_not_synced(self) -> None:
+        # edxapp-provision runs lehrer_bootstrap from the image. Synced, an
         # edit would update copies in the long-running pods and skip the
         # rebuild the Job needs to see it.
-        job = (
-            _paths.local_dev_dir() / "manifests" / "platform" / "job-provision.yaml"
-        ).read_text()
-        assert "python set_waffle_flags.py" in job
-        synced_names = {Path(settings_path).name for settings_path, _ in self._synced()}
-        assert "set_waffle_flags.py" not in synced_names
+        synced_targets = {container_path for _, container_path in self._synced()}
+        assert not any("lehrer_bootstrap" in path for path in synced_targets)
+        star = self.STAR.read_text()
+        build_deps = star.split("live_update=platform_live_update", 1)[0].rsplit(
+            "deps=[", 1
+        )[1]
+        assert "lehrer_bootstrap" in build_deps
+
+    def test_the_image_carries_the_bootstrap_runner(self) -> None:
+        body = _inject_aqueduct_settings_body()
+        assert '.directory("src/lehrer/bootstrap")' in body
+        assert '"/openedx/edx-platform/lehrer_bootstrap"' in body
 
     def test_every_image_tarball_is_removed_on_exit(self) -> None:
         # Without the trap a build that fails after the export leaves a

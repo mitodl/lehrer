@@ -1267,6 +1267,12 @@ class OpenedxPlatform:
         # Using .file() gives a cache key based on that single file's content,
         # not the entire lehrer source tree.
         lehrer_base = dag.current_module().source().file("src/lehrer/settings/base.py")
+        # lehrer.bootstrap goes in as a top-level package, runnable from the
+        # edx-platform checkout as `python -m lehrer_bootstrap <spec>`. It uses
+        # only relative imports, so it works under either name.
+        lehrer_bootstrap = (
+            dag.current_module().source().directory("src/lehrer/bootstrap")
+        )
         return (
             container
             # django-aqueduct settings:
@@ -1308,6 +1314,14 @@ class OpenedxPlatform:
                 custom_settings.file("cms/aqueduct.py"),
             )
             # Runtime helper scripts (not needed for asset compilation)
+            # Owned by app like the rest of /openedx: the image's compileall
+            # step runs as app and must write __pycache__ here.
+            .with_directory(
+                "/openedx/edx-platform/lehrer_bootstrap",
+                lehrer_bootstrap,
+                include=["*.py"],
+                owner="app:app",
+            )
             .with_file(
                 "/openedx/edx-platform/set_waffle_flags.py",
                 custom_settings.file("set_waffle_flags.py"),

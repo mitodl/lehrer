@@ -221,6 +221,7 @@ def setup(cfg):
     # build reads nothing else from the package, so anything wider is a change
     # no sync matches, which costs a full rebuild for nothing.
     lehrer_base = local_dev + "/../src/lehrer/settings/base.py"
+    lehrer_bootstrap = local_dev + "/../src/lehrer/bootstrap"
 
     # Absolute path to the deployment config directory.
     # Relative paths are treated as relative to local_dev (where tilt up is run from).
@@ -409,9 +410,10 @@ def setup(cfg):
     # on a file no sync covers and does the full build:
     # - assets.py, i18n.py, the *.env.yml files and build_manifest.yaml feed
     #   collectstatic or dependency resolution.
-    # - set_waffle_flags.py is run by the edxapp-provision Job, whose pod
-    #   starts from the image, so an edit has to reach the image. Nothing
-    #   long-running imports it, process_scheduled_emails.py or saml_pull.py,
+    # - lehrer_bootstrap (src/lehrer/bootstrap) is run by the edxapp-provision
+    #   Job, whose pod starts from the image, so an edit has to reach the
+    #   image. Nothing long-running imports it, set_waffle_flags.py,
+    #   process_scheduled_emails.py or saml_pull.py,
     #   so syncing them would only update copies nothing executes.
     # (path under the deployment's settings/, path in the container)
     platform_settings_syncs = [
@@ -470,6 +472,7 @@ def setup(cfg):
             dep_cfg + "/build_manifest.yaml",
             dep_cfg + "/settings",
             lehrer_base,
+            lehrer_bootstrap,
         ],
         skips_local_docker=True,
         live_update=platform_live_update,
@@ -650,20 +653,25 @@ def setup(cfg):
 
     k8s_yaml(local_dev + "/manifests/platform/job-migrate.yaml")
 
-    # The edxapp-provision Job's payload — a Django script and a waffle flag
-    # list — is kept as real files rather than inlined into a ConfigMap
-    # manifest, so provision.py stays lintable and readable. kubectl renders
-    # them into the ConfigMap; --dry-run=client never contacts the cluster.
+    # The edxapp-provision Job's bootstrap spec is kept as a real file rather
+    # than inlined into a ConfigMap manifest, so it stays schema-checked and
+    # readable. kubectl renders it into the ConfigMap; --dry-run=client never
+    # contacts the cluster.
     provision_dir = local_dev + "/provision"
     watch_file(provision_dir)
     k8s_yaml(local(
         "kubectl create configmap edxapp-provision --namespace " + namespace +
-        " --from-file=" + provision_dir + "/provision.py" +
-        " --from-file=" + provision_dir + "/waffle-flags.yaml" +
+        " --from-file=" + provision_dir + "/bootstrap.yaml" +
         " --dry-run=client -o yaml",
         quiet=True,
     ))
-    k8s_yaml(local_dev + "/manifests/platform/job-provision.yaml")
+    bootstrap_spec_checksum = str(local(
+        "sha256sum " + provision_dir + "/bootstrap.yaml | cut -c1-16",
+        quiet=True,
+    )).strip()
+    k8s_yaml(blob(str(read_file(
+        local_dev + "/manifests/platform/job-provision.yaml"
+    )).replace("__BOOTSTRAP_SPEC_CHECKSUM__", bootstrap_spec_checksum)))
 
     # The demo course repo branches per Open edX release, so the Job is told
     # which release this stack was built from and resolves the branch itself.

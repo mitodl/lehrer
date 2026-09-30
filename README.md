@@ -185,14 +185,24 @@ starts; after that they wait for a trigger (see
 Trigger `edxapp-migrate` after a change that brings new migrations, such as a
 `build_manifest.yaml` bump.
 
-`edxapp-provision` creates the `edx` / `edx` superuser (override the password
-with `PROVISION_SUPERUSER_PASSWORD` before `lehrer dev setup`), the DOT OAuth
-Application that LMS↔notes SSO signs its tokens with, the `cms-sso` Application
-Studio logs in through, and the waffle flags in
-`local-dev/provision/waffle-flags.yaml`. It is idempotent, so trigger it again
-whenever you edit either file. Add OAuth clients in
-`local-dev/provision/provision.py`; both files are mounted into the Job as a
-ConfigMap.
+`edxapp-provision` applies `local-dev/provision/bootstrap.yaml`: the `edx` /
+`edx` superuser (override the password with `PROVISION_SUPERUSER_PASSWORD`
+before `lehrer dev setup`), the DOT OAuth Application that LMS↔notes SSO signs
+its tokens with, the `cms-sso` Application Studio logs in through, and the
+waffle flags. Add users, OAuth clients or flags there; `bootstrap.schema.json`
+describes the format, and secrets are named by the `openedx-secrets` key that
+holds them, never inlined. The Job re-runs whenever that file changes. Every
+step is idempotent, so re-running is always safe.
+
+The runner is `src/lehrer/bootstrap`, which the platform image carries as
+`lehrer_bootstrap`, so a deployed environment can apply its own spec the same
+way:
+
+```bash
+DJANGO_SETTINGS_MODULE=lms.envs.aqueduct python -m lehrer_bootstrap bootstrap.yaml
+```
+
+It prints one JSON line per object applied (`{"step", "target", "result"}`).
 
 `notes-migrate` creates the tables in the `notes` database (the MariaDB CR
 creates the database and the grant, but nothing creates the schema) and the

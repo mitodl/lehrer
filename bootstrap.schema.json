@@ -1,0 +1,215 @@
+{
+  "$defs": {
+    "OAuthApplication": {
+      "additionalProperties": false,
+      "description": "A django-oauth-toolkit Application and its oauth_dispatch access record.\n\nMatched on ``client_id``, so an application created by hand in a deployed\nenvironment is adopted (and brought in line with the spec) rather than\nduplicated.\n\n``name`` and each redirect URI may reference Django settings as\n``{SETTING}``, e.g. ``{CMS_ROOT_URL}/complete/edx-oauth2/``, so one spec\nserves every environment whose settings differ.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "user": {
+          "description": "Username of the owning user; must exist.",
+          "title": "User",
+          "type": "string"
+        },
+        "grant_type": {
+          "enum": [
+            "authorization-code",
+            "implicit",
+            "password",
+            "client-credentials"
+          ],
+          "title": "Grant Type",
+          "type": "string"
+        },
+        "client_id_env": {
+          "title": "Client Id Env",
+          "type": "string"
+        },
+        "client_secret_env": {
+          "title": "Client Secret Env",
+          "type": "string"
+        },
+        "redirect_uris": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Redirect Uris",
+          "type": "array"
+        },
+        "scopes": {
+          "description": "Scopes beyond the defaults the application may request, e.g. user_id for Studio SSO. Empty leaves the access record alone.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "skip_authorization": {
+          "default": false,
+          "title": "Skip Authorization",
+          "type": "boolean"
+        },
+        "public": {
+          "default": false,
+          "description": "Public client type; confidential otherwise.",
+          "title": "Public",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "user",
+        "grant_type",
+        "client_id_env",
+        "client_secret_env"
+      ],
+      "title": "OAuthApplication",
+      "type": "object"
+    },
+    "User": {
+      "additionalProperties": false,
+      "description": "A user the install needs, e.g. a local-dev superuser or a service user.\n\nApplied as declared, including on an existing account: one the spec does\nnot mark ``superuser`` or ``staff`` loses those flags, and every declared\nuser is made active.",
+      "properties": {
+        "username": {
+          "title": "Username",
+          "type": "string"
+        },
+        "email": {
+          "title": "Email",
+          "type": "string"
+        },
+        "password_env": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Environment variable holding the password. Omitted, the password is left alone (a new user gets an unusable one), which suits a service user that only ever authenticates with OAuth2.",
+          "title": "Password Env"
+        },
+        "superuser": {
+          "default": false,
+          "title": "Superuser",
+          "type": "boolean"
+        },
+        "staff": {
+          "default": false,
+          "description": "Django is_staff. A superuser is always made staff as well.",
+          "title": "Staff",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "username",
+        "email"
+      ],
+      "title": "User",
+      "type": "object"
+    },
+    "WaffleFlag": {
+      "additionalProperties": false,
+      "description": "A waffle flag, applied through django-waffle's ``waffle_flag`` command.\n\nThe command can only switch the per-group settings on, so ``superusers``,\n``staff`` and ``authenticated`` being false means \"leave as is\", not\n\"turn off\". ``everyone`` is the one tri-state: true activates the flag for\nall users, false deactivates it, unset leaves it alone.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "everyone": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Everyone"
+        },
+        "superusers": {
+          "default": false,
+          "title": "Superusers",
+          "type": "boolean"
+        },
+        "staff": {
+          "default": false,
+          "title": "Staff",
+          "type": "boolean"
+        },
+        "authenticated": {
+          "default": false,
+          "title": "Authenticated",
+          "type": "boolean"
+        },
+        "percent": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whole percent; waffle_flag's --percent only takes an int.",
+          "title": "Percent"
+        },
+        "rollout": {
+          "default": false,
+          "title": "Rollout",
+          "type": "boolean"
+        },
+        "testing": {
+          "default": false,
+          "title": "Testing",
+          "type": "boolean"
+        },
+        "create": {
+          "default": true,
+          "title": "Create",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "WaffleFlag",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Everything a fresh install needs in its database, by step.",
+  "properties": {
+    "users": {
+      "items": {
+        "$ref": "#/$defs/User"
+      },
+      "title": "Users",
+      "type": "array"
+    },
+    "oauth_applications": {
+      "items": {
+        "$ref": "#/$defs/OAuthApplication"
+      },
+      "title": "Oauth Applications",
+      "type": "array"
+    },
+    "waffle_flags": {
+      "items": {
+        "$ref": "#/$defs/WaffleFlag"
+      },
+      "title": "Waffle Flags",
+      "type": "array"
+    }
+  },
+  "title": "BootstrapSpec",
+  "type": "object"
+}
