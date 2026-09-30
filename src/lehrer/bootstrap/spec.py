@@ -12,9 +12,10 @@ When a step runs is the caller's decision, not the spec's: a caller passes
 ``--steps`` (e.g. migrate on every deploy, the demo course only when a
 developer asks for it), so one spec serves all of them.
 
-The same file drives local dev (the edxapp-provision Job), a deployed
-environment's pre-deploy Job, and later an operator reconciling the same
-fields from a CRD, so that none of them carries bootstrap logic of its own.
+The same file drives local dev (the edxapp-migrate, edxapp-provision and
+edxapp-demo-course Jobs), a deployed environment's pre-deploy Job, and later
+an operator reconciling the same fields from a CRD, so that none of them
+carries bootstrap logic of its own.
 
 Secrets never appear in a spec. A field ending in ``_env`` names the
 environment variable the value is read from at apply time, so a spec can live

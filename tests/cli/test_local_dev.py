@@ -363,7 +363,7 @@ class TestProvisioningManifests:
         assert f'"/{_paths.bootstrap_spec().name}"' in star
         # Attached to a Job resource it would wait for that Job's trigger, and
         # edxapp-migrate, the first to need it, could never start.
-        assert 'objects=["edxapp-bootstrap:ConfigMap:openedx"]' in star
+        assert 'objects=["edxapp-bootstrap:ConfigMap:" + namespace]' in star
         for job in ("edxapp-migrate", "edxapp-provision"):
             block = star.split(f'k8s_resource(\n        "{job}",', 1)[1].split(
                 "\n    )", 1

@@ -197,8 +197,8 @@ picked with `--steps`:
   `edx` / `edx` superuser (override the password with
   `PROVISION_SUPERUSER_PASSWORD` before `lehrer dev setup`), the DOT OAuth
   Application that LMS↔notes SSO signs its tokens with, the `cms-sso`
-  Application Studio logs in through, and the waffle flags. It re-runs whenever
-  the spec changes.
+  Application Studio logs in through, and the waffle flags. Trigger it after
+  editing the spec.
 - `edxapp-demo-course` runs `demo_course`.
 
 Add users, OAuth clients, flags or migrations to the spec;
@@ -257,9 +257,9 @@ restarted, so the synced files stay.
 Everything else the platform build reads still runs the full Dagger build.
 `assets.py`, `i18n.py`, the `*.env.yml` files and `build_manifest.yaml` feed
 collectstatic, compilemessages or dependency resolution, which a file copy
-cannot redo. `set_waffle_flags.py` is run by the `edxapp-provision` Job from
-the image, so an edit to it has to reach the image before you re-trigger the
-Job.
+cannot redo. The edxapp Jobs run `lehrer_bootstrap` (`src/lehrer/bootstrap`)
+from the image, so an edit to it has to reach the image before you re-trigger
+them.
 
 | Edit | Full rebuild (before) | Live update (after) |
 |---|---|---|

@@ -412,8 +412,8 @@ def setup(cfg):
     #   collectstatic or dependency resolution.
     # - lehrer_bootstrap (src/lehrer/bootstrap) is run by the edxapp-migrate,
     #   edxapp-provision and edxapp-demo-course Jobs, whose pods start from the
-    #   image, so an edit has to reach the image. Nothing long-running imports it, set_waffle_flags.py,
-    #   process_scheduled_emails.py or saml_pull.py,
+    #   image, so an edit has to reach the image. Nothing long-running imports
+    #   it, set_waffle_flags.py, process_scheduled_emails.py or saml_pull.py,
     #   so syncing them would only update copies nothing executes.
     # (path under the deployment's settings/, path in the container)
     platform_settings_syncs = [
@@ -723,14 +723,15 @@ def setup(cfg):
     # would also never be applied ahead of edxapp-migrate, which needs it first.
     k8s_resource(
         new_name="edxapp-bootstrap-spec",
-        objects=["edxapp-bootstrap:ConfigMap:openedx"],
+        objects=["edxapp-bootstrap:ConfigMap:" + namespace],
         labels=["platform"],
     )
 
     # Run DB migrations once the database is up, before the services start.
     #
-    # Both Jobs below run on the platform image. They run when `tilt up` starts;
-    # after that they wait for a trigger. A finished Job's pod cannot be
+    # The Jobs below run on the platform image. edxapp-migrate and
+    # edxapp-provision run when `tilt up` starts; after that they wait for a
+    # trigger, and edxapp-demo-course only ever runs when triggered. A finished Job's pod cannot be
     # live-updated, and Tilt answers that by rebuilding the whole image for the
     # resource, so leaving them automatic would turn every settings edit back
     # into the full rebuild the live_update above exists to avoid. Trigger

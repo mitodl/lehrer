@@ -5,8 +5,8 @@
 # with the lehrer_bootstrap runner baked into the platform image
 # (src/lehrer/bootstrap). Three Jobs each run a slice of it: edxapp-migrate
 # (migrate), edxapp-provision (users, oauth_applications, waffle_flags) and
-# edxapp-demo-course (demo_course). Every step is idempotent; editing this file
-# re-runs edxapp-provision, and the other two run when triggered.
+# edxapp-demo-course (demo_course). Every step is idempotent, so trigger the
+# matching Job again after editing this file.
 #
 # Values ending in _env name a key of the openedx-secrets Secret
 # (local-dev/secret-defaults.yaml), never the value itself.
@@ -17,7 +17,8 @@ migrate:
 # the enterprise-integrated-channels apps of those names, without depending on
 # them. An existing database has those tables already; on a fresh one the full
 # migrate reaches the conversions first and fails with "table doesn't exist".
-# Migrating the two apps first creates the tables.
+# Migrating the two apps first creates the tables. Drop these two entries once
+# every release carries https://github.com/openedx/edx-enterprise/pull/2703.
 - service: lms
   app_label: blackboard_channel
 - service: lms

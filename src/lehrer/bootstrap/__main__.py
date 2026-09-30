@@ -281,6 +281,9 @@ def apply_demo_course(spec: BootstrapSpec, settings: Any) -> None:  # noqa: ARG0
     _report("demo_course", f"{declared.repo}@{branch}", "imported")
 
 
+IN_PROCESS = {"users", "oauth_applications", "waffle_flags"}
+"""Steps that call the ORM in this process, and so need ``django.setup()``."""
+
 APPLY = {
     "migrate": apply_migrate,
     "users": apply_users,
@@ -312,10 +315,14 @@ def main(argv: list[str] | None = None) -> int:
     spec = load(args.spec)
 
     import django  # type: ignore[import-not-found]  # noqa: PLC0415
-
-    django.setup()
     from django.conf import settings  # type: ignore[import-not-found]  # noqa: PLC0415
 
+    # Only the steps that use the ORM need the app registry. migrate and
+    # demo_course do their work in manage.py children, which load their own, so
+    # setting it up here as well would hold a second full platform in memory
+    # for the length of the run. Lazy settings read without it.
+    if IN_PROCESS & set(args.steps):
+        django.setup()
     for step in STEPS:
         if step in args.steps:
             APPLY[step](spec, settings)

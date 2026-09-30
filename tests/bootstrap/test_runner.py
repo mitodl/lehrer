@@ -120,3 +120,30 @@ def test_demo_course_dir_finds_course_xml(tmp_path: Path, layout: str) -> None:
 def test_demo_course_dir_refuses_a_checkout_without_one(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="course.xml"):
         runner._demo_course_dir(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("steps", "set_up"),
+    [
+        ("migrate", False),
+        ("demo_course", False),
+        ("migrate,users", True),
+        ("waffle_flags", True),
+    ],
+)
+def test_only_orm_steps_set_up_django(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, steps: str, set_up: bool
+) -> None:
+    # migrate and demo_course run in manage.py children with their own app
+    # registry. Setting one up here as well doubles peak memory for the run.
+    calls = []
+    monkeypatch.setitem(
+        sys.modules, "django", SimpleNamespace(setup=lambda: calls.append(1))
+    )
+    monkeypatch.setitem(sys.modules, "django.conf", SimpleNamespace(settings=None))
+    for step in runner.STEPS:
+        monkeypatch.setitem(runner.APPLY, step, lambda *_: None)
+    spec = tmp_path / "spec.yaml"
+    spec.write_text("{}\n")
+    runner.main([str(spec), "--steps", steps])
+    assert bool(calls) is set_up
