@@ -2135,7 +2135,10 @@ class OpenedxPlatform:
 
         ``--settings=aqueduct`` names the entry module ``inject_aqueduct_settings``
         writes (``<svc>/envs/aqueduct.py``), which is fixed regardless of the
-        deployment's ``settings_namespace``.
+        deployment's ``settings_namespace``. That module imports
+        ``django_aqueduct``, so cells that do not install it (e.g. ulmo, whose
+        Python 3.11 cannot resolve it) fall back to the upstream ``production``
+        settings module.
 
         Args:
             container: The finished image from :meth:`docker_image`.
@@ -2151,8 +2154,10 @@ class OpenedxPlatform:
                     "sh",
                     "-c",
                     f"echo 'boot check: {svc}' && cd /openedx/edx-platform && "
+                    "if python -c 'import django_aqueduct' 2>/dev/null; "
+                    "then s=aqueduct; else s=production; fi && "
                     f"SERVICE_VARIANT={svc} python manage.py {svc} check "
-                    "--settings=aqueduct",
+                    '--settings="$s"',
                 ]
             )
         return container
