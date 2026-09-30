@@ -81,6 +81,21 @@ class Cell(BaseModel):
     theme_branch: str | None = None
     packages_to_remove: list[str] = Field(default_factory=list)
 
+    def uses_aqueduct(self) -> bool:
+        """Whether the cell installs django-aqueduct, i.e. uses aqueduct settings.
+
+        A group can have cells still on an older settings mechanism that never
+        install the framework (e.g. ulmo, whose Python 3.11 cannot resolve it).
+        Importing ``<svc>.envs.aqueduct`` in those images fails with a
+        ModuleNotFoundError that says nothing about the deployment's health.
+        Deriving the predicate from the cell's own requirement lines keeps it
+        self-maintaining: a cell starts using it the moment it adopts the
+        framework, with no second list to update.
+        """
+        return any(
+            "django-aqueduct" in line for line in (*self.packages, *self.overrides)
+        )
+
     def resolved(self, field: str, manifest: BuildManifest) -> object:
         """Resolve ``field`` via cell -> defaults -> release fallback.
 

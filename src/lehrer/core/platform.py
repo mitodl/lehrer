@@ -2113,11 +2113,16 @@ class OpenedxPlatform:
         # Opt-out (`--verify-boot=false`) exists for iterating on the earlier
         # stages, not for shipping.
         if verify_boot:
-            container = self._verify_boot(container)
+            container = self._verify_boot(
+                container,
+                uses_aqueduct=cell is None or cell.uses_aqueduct(),
+            )
 
         return container
 
-    def _verify_boot(self, container: dagger.Container) -> dagger.Container:
+    def _verify_boot(
+        self, container: dagger.Container, *, uses_aqueduct: bool
+    ) -> dagger.Container:
         """Run Django's system checks for both services against a built image.
 
         ``manage.py <svc> check --settings=aqueduct`` performs a full
@@ -2136,28 +2141,30 @@ class OpenedxPlatform:
         ``--settings=aqueduct`` names the entry module ``inject_aqueduct_settings``
         writes (``<svc>/envs/aqueduct.py``), which is fixed regardless of the
         deployment's ``settings_namespace``. That module imports
-        ``django_aqueduct``, so cells that do not install it (e.g. ulmo, whose
-        Python 3.11 cannot resolve it) fall back to the upstream ``production``
-        settings module.
+        ``django_aqueduct``, so cells that do not declare it (e.g. ulmo, whose
+        Python 3.11 cannot resolve it) are checked against the upstream
+        ``production`` settings instead. The choice comes from the cell's
+        declared packages, not an import probe, so a cell that declares
+        django-aqueduct but ships a broken install still fails the build.
 
         Args:
             container: The finished image from :meth:`docker_image`.
+            uses_aqueduct: Whether the cell declares django-aqueduct.
 
         Returns:
             The same container with the check executions appended.  The image's
             own workdir/entrypoint are left untouched — the ``cd`` happens
             inside the check shell, not as container metadata.
         """
+        settings_module = "aqueduct" if uses_aqueduct else "production"
         for svc in ("lms", "cms"):
             container = container.with_exec(
                 [
                     "sh",
                     "-c",
                     f"echo 'boot check: {svc}' && cd /openedx/edx-platform && "
-                    "if python -c 'import django_aqueduct' 2>/dev/null; "
-                    "then s=aqueduct; else s=production; fi && "
                     f"SERVICE_VARIANT={svc} python manage.py {svc} check "
-                    '--settings="$s"',
+                    f"--settings={settings_module}",
                 ]
             )
         return container

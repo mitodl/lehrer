@@ -261,3 +261,23 @@ def test_settings_model_release_matching_a_cell_is_accepted() -> None:
         ],
     }
     assert BuildManifest.model_validate(manifest).settings_model_release == "master"
+
+
+@pytest.mark.parametrize(
+    ("packages", "overrides", "expected"),
+    [
+        (["django-aqueduct==0.13.0"], [], True),
+        (["a==1"], ["django-aqueduct==0.13.0"], True),
+        (["a==1"], [], False),
+    ],
+)
+def test_cell_uses_aqueduct(
+    packages: list[str], overrides: list[str], expected: bool
+) -> None:
+    cell = Cell(release="r", deployment="d", packages=packages, overrides=overrides)
+    assert cell.uses_aqueduct() is expected
+
+
+def test_mit_ol_ulmo_xpro_does_not_use_aqueduct() -> None:
+    manifest = load_manifest(REPO_ROOT / "deployments/mit-ol/build_manifest.yaml")
+    assert not manifest.resolve_cell("ulmo", "xpro").uses_aqueduct()
