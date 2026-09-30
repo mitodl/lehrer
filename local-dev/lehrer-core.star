@@ -410,9 +410,9 @@ def setup(cfg):
     # on a file no sync covers and does the full build:
     # - assets.py, i18n.py, the *.env.yml files and build_manifest.yaml feed
     #   collectstatic or dependency resolution.
-    # - lehrer_bootstrap (src/lehrer/bootstrap) is run by the edxapp-provision
-    #   Job, whose pod starts from the image, so an edit has to reach the
-    #   image. Nothing long-running imports it, set_waffle_flags.py,
+    # - lehrer_bootstrap (src/lehrer/bootstrap) is run by the edxapp-migrate,
+    #   edxapp-provision and edxapp-demo-course Jobs, whose pods start from the
+    #   image, so an edit has to reach the image. Nothing long-running imports it, set_waffle_flags.py,
     #   process_scheduled_emails.py or saml_pull.py,
     #   so syncing them would only update copies nothing executes.
     # (path under the deployment's settings/, path in the container)
@@ -653,14 +653,14 @@ def setup(cfg):
 
     k8s_yaml(local_dev + "/manifests/platform/job-migrate.yaml")
 
-    # The edxapp-provision Job's bootstrap spec is kept as a real file rather
-    # than inlined into a ConfigMap manifest, so it stays schema-checked and
-    # readable. kubectl renders it into the ConfigMap; --dry-run=client never
-    # contacts the cluster.
+    # The bootstrap spec the edxapp-migrate, -provision and -demo-course Jobs
+    # apply is kept as a real file rather than inlined into a ConfigMap
+    # manifest, so it stays schema-checked and readable. kubectl renders it
+    # into the ConfigMap; --dry-run=client never contacts the cluster.
     provision_dir = local_dev + "/provision"
     watch_file(provision_dir)
     k8s_yaml(local(
-        "kubectl create configmap edxapp-provision --namespace " + namespace +
+        "kubectl create configmap edxapp-bootstrap --namespace " + namespace +
         " --from-file=" + provision_dir + "/bootstrap.yaml" +
         " --dry-run=client -o yaml",
         quiet=True,
@@ -673,11 +673,7 @@ def setup(cfg):
         local_dev + "/manifests/platform/job-provision.yaml"
     )).replace("__BOOTSTRAP_SPEC_CHECKSUM__", bootstrap_spec_checksum)))
 
-    # The demo course repo branches per Open edX release, so the Job is told
-    # which release this stack was built from and resolves the branch itself.
-    k8s_yaml(blob(str(read_file(
-        local_dev + "/manifests/platform/job-demo-course.yaml"
-    )).replace("__RELEASE_NAME__", release_name)))
+    k8s_yaml(local_dev + "/manifests/platform/job-demo-course.yaml")
     k8s_yaml(local_dev + "/manifests/platform/service-lms.yaml")
     k8s_yaml(local_dev + "/manifests/platform/service-cms.yaml")
 
@@ -721,6 +717,16 @@ def setup(cfg):
             local_dev + "/manifests/platform/" + name
         )).replace("__PLATFORM_CONFIG_CHECKSUM__", platform_config_checksum)))
 
+    # The spec all three Jobs mount. Its own resource, applied automatically,
+    # because each Job resource waits for a trigger after the first run and
+    # would hold back a spec edit until then. Attached to edxapp-provision, it
+    # would also never be applied ahead of edxapp-migrate, which needs it first.
+    k8s_resource(
+        new_name="edxapp-bootstrap-spec",
+        objects=["edxapp-bootstrap:ConfigMap:openedx"],
+        labels=["platform"],
+    )
+
     # Run DB migrations once the database is up, before the services start.
     #
     # Both Jobs below run on the platform image. They run when `tilt up` starts;
@@ -732,7 +738,7 @@ def setup(cfg):
     # build_manifest.yaml bump), and edxapp-provision after editing provision/.
     k8s_resource(
         "edxapp-migrate",
-        resource_deps=infra_deps,
+        resource_deps=infra_deps + ["edxapp-bootstrap-spec"],
         trigger_mode=TRIGGER_MODE_MANUAL,
         labels=["platform"],
     )
@@ -742,8 +748,7 @@ def setup(cfg):
     # stack is not usable until it has run, so it gates them too.
     k8s_resource(
         "edxapp-provision",
-        objects=["edxapp-provision:ConfigMap:openedx"],
-        resource_deps=["edxapp-migrate"],
+        resource_deps=["edxapp-migrate", "edxapp-bootstrap-spec"],
         trigger_mode=TRIGGER_MODE_MANUAL,
         labels=["platform"],
     )
