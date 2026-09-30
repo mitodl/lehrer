@@ -233,6 +233,10 @@ def _resolve_field(
     return default
 
 
+# Stub YAML config for the boot check of cells on upstream ``production``
+# settings; JSON is valid YAML. The host is a placeholder, never served.
+_BOOT_CHECK_STUB_CFG = json.dumps({"LMS_ROOT_URL": "https://boot-check.invalid"})
+
 # Throwaway Django settings module used by the aqueduct management commands and
 # the boot self-test.  It does NOT drive generation (codegen v2 discovers
 # settings by static AST analysis of lms/cms.envs.common's *source*); it exists
@@ -2157,12 +2161,26 @@ class OpenedxPlatform:
             inside the check shell, not as container metadata.
         """
         settings_module = "aqueduct" if uses_aqueduct else "production"
+        # ``production`` loads the YAML named by ``<SVC>_CFG`` at import and
+        # iterates its top-level mapping. The shipped env.yml is empty at build
+        # time (real config is mounted at runtime), which parses to ``None``, so
+        # point the check at a stub mapping (the ``common_initialization``
+        # system check requires ``LMS_ROOT_URL``). Set inline, not via
+        # ``with_env_variable``, so it does not leak into the image.
+        cfg = "" if uses_aqueduct else "{svc}_CFG=/tmp/boot-check.yml "
+        prep = (
+            ""
+            if uses_aqueduct
+            else f"echo {shlex.quote(_BOOT_CHECK_STUB_CFG)} > /tmp/boot-check.yml && "
+        )
         for svc in ("lms", "cms"):
             container = container.with_exec(
                 [
                     "sh",
                     "-c",
                     f"echo 'boot check: {svc}' && cd /openedx/edx-platform && "
+                    f"{prep}"
+                    f"{cfg.format(svc=svc.upper())}"
                     f"SERVICE_VARIANT={svc} python manage.py {svc} check "
                     f"--settings={settings_module}",
                 ]
