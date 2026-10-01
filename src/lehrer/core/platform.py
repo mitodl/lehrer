@@ -17,9 +17,9 @@ import dagger
 import yaml
 from dagger import dag, function, object_type
 
-from lehrer.core.build_manifest import BuildManifest, Cell
+from lehrer.core.build_manifest import AQUEDUCT_DISTRIBUTION, BuildManifest, Cell
 from lehrer.core.pip_compile_bridge import python_deps_install_script
-from lehrer.core.plugin_imports import plugin_distributions
+from lehrer.core.plugin_imports import declares_distribution, plugin_distributions
 from lehrer.core.plugin_tests import (
     REPORT_TOOL_DIR,
     REPORTS_DIR,
@@ -2117,9 +2117,23 @@ class OpenedxPlatform:
         # Opt-out (`--verify-boot=false`) exists for iterating on the earlier
         # stages, not for shipping.
         if verify_boot:
+            # Decide from the effective requirement files (the ones install_deps
+            # read, which explicit --pip-package-* directories override the
+            # manifest cell with), not the cell, so the settings module checked
+            # matches what was actually installed.
+            list_txt = await pip_package_lists.file(
+                f"{release_name}/{deployment_name}.txt"
+            ).contents()
+            override_txt = await pip_package_overrides.file(
+                f"{release_name}/{deployment_name}.txt"
+            ).contents()
             container = self._verify_boot(
                 container,
-                uses_aqueduct=cell is None or cell.uses_aqueduct(),
+                uses_aqueduct=declares_distribution(
+                    [*list_txt.splitlines(), *override_txt.splitlines()],
+                    AQUEDUCT_DISTRIBUTION,
+                    packages_to_remove,
+                ),
             )
 
         return container

@@ -22,6 +22,10 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from lehrer.core.plugin_imports import declares_distribution
+
+AQUEDUCT_DISTRIBUTION = "django-aqueduct"
+
 # ``node_version`` feeds ``install_deps``, which resolves it to a full release
 # before ``nodeenv --node=<v> --prebuilt`` (nodeenv only fetches a prebuilt
 # tarball for a full ``MAJOR.MINOR.PATCH``). A bare major (``"24"``) or
@@ -92,8 +96,10 @@ class Cell(BaseModel):
         self-maintaining: a cell starts using it the moment it adopts the
         framework, with no second list to update.
         """
-        return any(
-            "django-aqueduct" in line for line in (*self.packages, *self.overrides)
+        return declares_distribution(
+            [*self.packages, *self.overrides],
+            AQUEDUCT_DISTRIBUTION,
+            self.packages_to_remove,
         )
 
     def resolved(self, field: str, manifest: BuildManifest) -> object:

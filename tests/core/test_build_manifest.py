@@ -269,6 +269,7 @@ def test_settings_model_release_matching_a_cell_is_accepted() -> None:
         (["django-aqueduct==0.13.0"], [], True),
         (["a==1"], ["django-aqueduct==0.13.0"], True),
         (["a==1"], [], False),
+        (["a==1  # replaces django-aqueduct"], [], False),
     ],
 )
 def test_cell_uses_aqueduct(
@@ -281,3 +282,13 @@ def test_cell_uses_aqueduct(
 def test_mit_ol_ulmo_xpro_does_not_use_aqueduct() -> None:
     manifest = load_manifest(REPO_ROOT / "deployments/mit-ol/build_manifest.yaml")
     assert not manifest.resolve_cell("ulmo", "xpro").uses_aqueduct()
+
+
+def test_cell_uses_aqueduct_ignores_removed_package() -> None:
+    cell = Cell(
+        release="r",
+        deployment="d",
+        packages=["django-aqueduct==0.13.0"],
+        packages_to_remove=["django-aqueduct"],
+    )
+    assert not cell.uses_aqueduct()
