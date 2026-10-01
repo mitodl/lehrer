@@ -40,6 +40,11 @@ _NON_PYPI_PREFIXES = ("-", "#", "git+", "http://", "https://")
 _NAME_TERMINATORS = re.compile(r"[\s\[<>=!~;@#]")
 
 
+def normalize_distribution(name: str) -> str:
+    """PEP 503 normalization: lower-case, runs of ``-``, ``_``, ``.`` become ``-``."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
 def _distribution_name(line: str) -> str | None:
     """Extract the normalized distribution name from a requirement line.
 
@@ -57,7 +62,24 @@ def _distribution_name(line: str) -> str | None:
     name = _NAME_TERMINATORS.split(stripped, maxsplit=1)[0]
     if not name:
         return None
-    return re.sub(r"[-_.]+", "-", name).lower()
+    return normalize_distribution(name)
+
+
+def declares_distribution(
+    lines: Iterable[str], dist: str, removed: Iterable[str] = ()
+) -> bool:
+    """Whether requirement ``lines`` install ``dist`` and ``removed`` does not drop it.
+
+    Names are PEP 503-normalized on both sides, and trailing comments are
+    ignored, so ``Django_Aqueduct==1  # x`` matches ``django-aqueduct`` while
+    ``other==1  # replaces django-aqueduct`` does not. VCS/URL lines are skipped
+    (see :func:`_distribution_name`). ``removed`` is a cell's
+    ``packages_to_remove``, uninstalled after the base install.
+    """
+    target = normalize_distribution(dist)
+    if target in {normalize_distribution(r) for r in removed}:
+        return False
+    return any(_distribution_name(line) == target for line in lines)
 
 
 def _is_plugin(dist: str) -> bool:

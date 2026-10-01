@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from lehrer.core.plugin_imports import plugin_distributions
+from lehrer.core.plugin_imports import declares_distribution, plugin_distributions
 
 
 def test_selects_plugin_prefixes_and_suffixes() -> None:
@@ -78,3 +78,22 @@ def test_normalizes_and_dedupes() -> None:
 )
 def test_individual_lines(line: str, expected: list[str]) -> None:
     assert plugin_distributions([line]) == expected
+
+
+@pytest.mark.parametrize(
+    ("lines", "removed", "expected"),
+    [
+        (["django-aqueduct==0.13.0"], [], True),
+        (["Django_Aqueduct==0.13.0"], [], True),
+        (["django.aqueduct[extra]==0.13.0  # pinned"], [], True),
+        (["some-package==1  # replaces django-aqueduct"], [], False),
+        (["django-aqueduct==0.13.0"], ["Django_Aqueduct"], False),
+        (["# django-aqueduct==0.13.0"], [], False),
+        (["django-aqueduct-extras==1"], [], False),
+        ([], [], False),
+    ],
+)
+def test_declares_distribution(
+    lines: list[str], removed: list[str], expected: bool
+) -> None:
+    assert declares_distribution(lines, "django-aqueduct", removed) is expected

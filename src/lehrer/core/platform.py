@@ -17,9 +17,9 @@ import dagger
 import yaml
 from dagger import dag, function, object_type
 
-from lehrer.core.build_manifest import BuildManifest, Cell
+from lehrer.core.build_manifest import AQUEDUCT_DISTRIBUTION, BuildManifest, Cell
 from lehrer.core.pip_compile_bridge import python_deps_install_script
-from lehrer.core.plugin_imports import plugin_distributions
+from lehrer.core.plugin_imports import declares_distribution, plugin_distributions
 from lehrer.core.plugin_tests import (
     REPORT_TOOL_DIR,
     REPORTS_DIR,
@@ -232,6 +232,10 @@ def _resolve_field(
             return cast("_T", value)
     return default
 
+
+# Stub YAML config for the boot check of cells on upstream ``production``
+# settings; JSON is valid YAML. The host is a placeholder, never served.
+_BOOT_CHECK_STUB_CFG = json.dumps({"LMS_ROOT_URL": "https://boot-check.invalid"})
 
 # Throwaway Django settings module used by the aqueduct management commands and
 # the boot self-test.  It does NOT drive generation (codegen v2 discovers
@@ -2113,11 +2117,30 @@ class OpenedxPlatform:
         # Opt-out (`--verify-boot=false`) exists for iterating on the earlier
         # stages, not for shipping.
         if verify_boot:
-            container = self._verify_boot(container)
+            # Decide from the effective requirement files (the ones install_deps
+            # read, which explicit --pip-package-* directories override the
+            # manifest cell with), not the cell, so the settings module checked
+            # matches what was actually installed.
+            list_txt = await pip_package_lists.file(
+                f"{release_name}/{deployment_name}.txt"
+            ).contents()
+            override_txt = await pip_package_overrides.file(
+                f"{release_name}/{deployment_name}.txt"
+            ).contents()
+            container = self._verify_boot(
+                container,
+                uses_aqueduct=declares_distribution(
+                    [*list_txt.splitlines(), *override_txt.splitlines()],
+                    AQUEDUCT_DISTRIBUTION,
+                    packages_to_remove,
+                ),
+            )
 
         return container
 
-    def _verify_boot(self, container: dagger.Container) -> dagger.Container:
+    def _verify_boot(
+        self, container: dagger.Container, *, uses_aqueduct: bool
+    ) -> dagger.Container:
         """Run Django's system checks for both services against a built image.
 
         ``manage.py <svc> check --settings=aqueduct`` performs a full
@@ -2135,24 +2158,46 @@ class OpenedxPlatform:
 
         ``--settings=aqueduct`` names the entry module ``inject_aqueduct_settings``
         writes (``<svc>/envs/aqueduct.py``), which is fixed regardless of the
-        deployment's ``settings_namespace``.
+        deployment's ``settings_namespace``. That module imports
+        ``django_aqueduct``, so cells that do not declare it (e.g. ulmo, whose
+        Python 3.11 cannot resolve it) are checked against the upstream
+        ``production`` settings instead. The choice comes from the cell's
+        declared packages, not an import probe, so a cell that declares
+        django-aqueduct but ships a broken install still fails the build.
 
         Args:
             container: The finished image from :meth:`docker_image`.
+            uses_aqueduct: Whether the cell declares django-aqueduct.
 
         Returns:
             The same container with the check executions appended.  The image's
             own workdir/entrypoint are left untouched — the ``cd`` happens
             inside the check shell, not as container metadata.
         """
+        settings_module = "aqueduct" if uses_aqueduct else "production"
+        # ``production`` loads the YAML named by ``<SVC>_CFG`` at import and
+        # iterates its top-level mapping. The shipped env.yml is empty at build
+        # time (real config is mounted at runtime), which parses to ``None``, so
+        # point the check at a stub mapping (the ``common_initialization``
+        # system check requires ``LMS_ROOT_URL``). Set inline, not via
+        # ``with_env_variable``, and the file is removed afterwards, so neither
+        # ships in the image.
+        stub = "/tmp/boot-check.yml"  # noqa: S108
         for svc in ("lms", "cms"):
+            check = (
+                f"SERVICE_VARIANT={svc} python manage.py {svc} check "
+                f"--settings={settings_module}"
+            )
+            if not uses_aqueduct:
+                check = (
+                    f"echo {shlex.quote(_BOOT_CHECK_STUB_CFG)} > {stub} && "
+                    f"{svc.upper()}_CFG={stub} {check} && rm -f {stub}"
+                )
             container = container.with_exec(
                 [
                     "sh",
                     "-c",
-                    f"echo 'boot check: {svc}' && cd /openedx/edx-platform && "
-                    f"SERVICE_VARIANT={svc} python manage.py {svc} check "
-                    "--settings=aqueduct",
+                    f"echo 'boot check: {svc}' && cd /openedx/edx-platform && {check}",
                 ]
             )
         return container

@@ -130,7 +130,7 @@ def test_yml_extension_manifest_is_honored(tmp_path: Path) -> None:
 # ── settings-verify matrix ────────────────────────────────────────────────────
 
 # Every cell declares django-aqueduct: the settings-verify matrix only covers
-# cells that actually use the aqueduct settings mechanism (see _uses_aqueduct).
+# cells that actually use the aqueduct settings mechanism (see Cell.uses_aqueduct).
 SETTINGS_MANIFEST = MANIFEST.replace(
     "cells:\n", "settings_model_release: master\ncells:\n", 1
 ).replace(

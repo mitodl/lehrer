@@ -22,6 +22,10 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from lehrer.core.plugin_imports import declares_distribution
+
+AQUEDUCT_DISTRIBUTION = "django-aqueduct"
+
 # ``node_version`` feeds ``install_deps``, which resolves it to a full release
 # before ``nodeenv --node=<v> --prebuilt`` (nodeenv only fetches a prebuilt
 # tarball for a full ``MAJOR.MINOR.PATCH``). A bare major (``"24"``) or
@@ -80,6 +84,23 @@ class Cell(BaseModel):
     theme_repo: str | None = None
     theme_branch: str | None = None
     packages_to_remove: list[str] = Field(default_factory=list)
+
+    def uses_aqueduct(self) -> bool:
+        """Whether the cell installs django-aqueduct, i.e. uses aqueduct settings.
+
+        A group can have cells still on an older settings mechanism that never
+        install the framework (e.g. ulmo, whose Python 3.11 cannot resolve it).
+        Importing ``<svc>.envs.aqueduct`` in those images fails with a
+        ModuleNotFoundError that says nothing about the deployment's health.
+        Deriving the predicate from the cell's own requirement lines keeps it
+        self-maintaining: a cell starts using it the moment it adopts the
+        framework, with no second list to update.
+        """
+        return declares_distribution(
+            [*self.packages, *self.overrides],
+            AQUEDUCT_DISTRIBUTION,
+            self.packages_to_remove,
+        )
 
     def resolved(self, field: str, manifest: BuildManifest) -> object:
         """Resolve ``field`` via cell -> defaults -> release fallback.
