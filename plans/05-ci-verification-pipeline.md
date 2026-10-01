@@ -44,7 +44,7 @@ Layer 3.
 
 - `uv` available locally and in CI (`astral-sh/setup-uv` GitHub Action)
 - Existing `.pre-commit-config.yaml` hooks (`build-config-schema`, `lehrer-core-boundary`)
-  continue to work standalone via `pre-commit run <hook-id> --all-files`
+  continue to work standalone via `uv run prek run <hook-id> --all-files`
 - Dagger CLI available in CI runners for Layers 2–4 (`dagger/dagger-for-github` Action, or
   direct `curl | sh` install pinned to the same version the repo's `dagger.json` expects)
 - A GitHub Actions secret for whatever channel the canary failure notification uses
@@ -94,7 +94,8 @@ shows every line ending in `==<version>` (comments-only or blank lines aside).
 
 ```toml
 [dependency-groups]
-dev = ["pre-commit>=4.5.1", "pytest>=8"]
+prek = ["prek==0.5.3"]
+dev = [{ include-group = "prek" }, "pytest>=8"]
 ```
 
 Create `tests/` mirroring `src/lehrer/` package layout:
@@ -157,8 +158,8 @@ check, not buried in a pre-commit.ci comment) and guarantees it also runs on for
 runs where pre-commit.ci doesn't apply. In the new workflow (below), run:
 
 ```yaml
-- run: uv run pre-commit run build-config-schema --all-files
-- run: uv run pre-commit run lehrer-core-boundary --all-files
+- run: uv run prek run build-config-schema --all-files
+- run: uv run prek run lehrer-core-boundary --all-files
 ```
 
 after `uv sync`, so both hooks execute with the real project environment. Once this job
@@ -192,8 +193,8 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy --config-file=pyproject.toml src/lehrer
       - run: uv run pytest tests/ -v
-      - run: uv run pre-commit run build-config-schema --all-files
-      - run: uv run pre-commit run lehrer-core-boundary --all-files
+      - run: uv run prek run build-config-schema --all-files
+      - run: uv run prek run lehrer-core-boundary --all-files
 ```
 
 Verify: open a throwaway PR that breaks each check individually (a failing test, a mypy

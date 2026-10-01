@@ -50,9 +50,11 @@ and is gitignored. Never edit or reference it as application code.
 
 ```bash
 uv sync                                # install the CLI + deps into .venv
-uv run lehrer --help                   # command tree
-uv run lehrer build functions          # list every Dagger function
-uv run pytest                          # run the test suite
+uv run prek install -f                  # replace an existing pre-commit git hook
+uv run prek run --all-files             # run every hook
+uv run lehrer --help                    # command tree
+uv run lehrer build functions           # list every Dagger function
+uv run pytest                           # run the test suite
 ```
 
 ## Running builds
@@ -116,7 +118,7 @@ OL's directories. `slot_config`, `codejail_config`, and `notes_config` are all
 required and raise a `ValueError` naming the flag when omitted. Anything
 operator-specific belongs under `deployments/<group>/`, not in `lehrer.core`.
 
-This is enforced, not just conventional: the `lehrer-core-boundary` pre-commit
+This is enforced, not just conventional: the `lehrer-core-boundary` prek
 hook fails on `deployments`, `mitol`, `mitxonline`, `mitodl`, `github.mit.edu`,
 `verificient` or `proctortrack` appearing under `src/lehrer/core/` or
 `src/lehrer/infra/` — docstrings, comments and Markdown included. Write
@@ -168,10 +170,15 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy --config-file=pyproject.toml src/lehrer tests
 uv run pytest tests/ -v
-uv run pre-commit run build-config-schema --all-files
-uv run pre-commit run build-manifest-schema --all-files
-uv run pre-commit run lehrer-core-boundary --all-files
+uv run prek run build-config-schema --all-files
+uv run prek run build-manifest-schema --all-files
+uv run prek run lehrer-core-boundary --all-files
 ```
+
+The `prek` check in `autofix.yml` runs every hook on pull requests and pushes
+to `main`; autofix.ci commits fixable changes on pull requests after the hooks
+converge. The three named hooks in `fast-checks` remain until `prek` becomes
+a required check.
 
 The remaining workflows need a Dagger engine or a schedule:
 `settings-verify.yml` boots each cell's committed aqueduct settings,

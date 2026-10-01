@@ -14,7 +14,7 @@ That split already holds for the build side.  `src/lehrer/main.py` is the
 Dagger entry point and carries only a thin root type; the generic build
 pipelines live in `lehrer.core`, and operator-specific configuration lives in
 each operator's own config directory, outside this package.  The
-`lehrer-core-boundary` pre-commit hook keeps it that way by rejecting
+`lehrer-core-boundary` prek hook keeps it that way by rejecting
 operator-specific strings under `lehrer.core` and `lehrer.infra`, this file
 included.  Each package's `__init__.py` is excluded from the hook, so the
 policy holds there by convention rather than by enforcement.

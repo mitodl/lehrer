@@ -382,7 +382,7 @@ check.
 
 - `uv run pytest tests/core/test_build_manifest.py -v` — faithfulness (render↔`.txt`) + matrix +
   schema round-trip all green.
-- `uv run pre-commit run build-manifest-schema --all-files` — no schema drift.
+- `uv run prek run build-manifest-schema --all-files` — no schema drift.
 - `uv run python -c "from lehrer.core.build_manifest import BuildManifest; import yaml; BuildManifest.model_validate(yaml.safe_load(open('deployments/mit-ol/build_manifest.yaml')))"` — both manifests validate.
 - Local dagger smoke (needs engine + network): `lehrer build platform --cell mit-ol/master/mitxonline export --path /tmp/img.tar` resolves the cell and builds — diff the materialized requirements against the old `.txt` to confirm identical install sets.
 - Renovate dry-run (or inspect the next dependency-dashboard) confirms the custom manager detects

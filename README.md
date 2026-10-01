@@ -783,7 +783,7 @@ dagger call mfe build-config-schema > build_config.schema.json
 ```
 
 A copy generated from the models is committed at the repo root as
-`build_config.schema.json` (kept in sync by a pre-commit hook). Reference it
+`build_config.schema.json` (kept in sync by a prek hook). Reference it
 from the top of a `build_config.yaml` so editors validate as you type:
 
 ```yaml
@@ -879,18 +879,27 @@ uv run pytest tests/ -v
 ```
 
 `ci.yml` runs exactly those four on every push and pull request, then three
-named pre-commit hooks rather than the whole suite:
+named prek hooks while the existing `fast-checks` gate remains in place:
 
 ```bash
-uv run pre-commit run build-config-schema --all-files
-uv run pre-commit run build-manifest-schema --all-files
-uv run pre-commit run lehrer-core-boundary --all-files
+uv run prek run build-config-schema --all-files
+uv run prek run build-manifest-schema --all-files
+uv run prek run lehrer-core-boundary --all-files
 ```
 
-The rest of the hooks run on commit, so `uv run pre-commit run --all-files`
-locally is a superset of the PR gate, not the same thing. The other
-workflows cover what needs a Dagger engine or a schedule: `settings-verify.yml`
-boots each cell's committed aqueduct settings, `plugin-compat.yml` installs and
+The `prek` check in `autofix.yml` runs every hook from `.pre-commit-config.yaml`
+on pull requests and pushes to `main`. On pull requests, autofix.ci commits
+fixable changes after the hooks converge. Run the same checks locally:
+
+```bash
+uv sync
+uv run prek install -f      # replace an existing pre-commit git hook
+uv run prek run --all-files
+```
+
+The three named hooks in `fast-checks` will be removed after `prek` becomes
+a required check. The other workflows cover what needs a Dagger engine or a
+schedule: `settings-verify.yml` boots each cell's committed aqueduct settings, `plugin-compat.yml` installs and
 imports each cell's pinned requirements, `canary.yml` runs full platform builds
 on a schedule, and `actions-static-analysis.yml` lints the workflows themselves
 with zizmor.
