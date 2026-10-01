@@ -94,7 +94,7 @@ shows every line ending in `==<version>` (comments-only or blank lines aside).
 
 ```toml
 [dependency-groups]
-prek = ["prek==0.5.4"]
+prek = ["prek==0.5.3"]
 dev = [{ include-group = "prek" }, "pytest>=8"]
 ```
 
