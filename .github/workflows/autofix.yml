@@ -12,7 +12,7 @@
 #   prek = ["prek==X.Y.Z"]
 #   dev = [{include-group = "prek"}, ...]
 #
-# so `uv sync` installs it locally and CI installs only it, hash-checked against uv.lock.
+# so `uv sync` installs it locally; CI syncs the full project environment, hash-checked against uv.lock.
 name: autofix.ci # autofix.ci refuses to run under any other name
 on:
   pull_request:
