@@ -2166,23 +2166,24 @@ class OpenedxPlatform:
         # time (real config is mounted at runtime), which parses to ``None``, so
         # point the check at a stub mapping (the ``common_initialization``
         # system check requires ``LMS_ROOT_URL``). Set inline, not via
-        # ``with_env_variable``, so it does not leak into the image.
-        cfg = "" if uses_aqueduct else "{svc}_CFG=/tmp/boot-check.yml "
-        prep = (
-            ""
-            if uses_aqueduct
-            else f"echo {shlex.quote(_BOOT_CHECK_STUB_CFG)} > /tmp/boot-check.yml && "
-        )
+        # ``with_env_variable``, and the file is removed afterwards, so neither
+        # ships in the image.
+        stub = "/tmp/boot-check.yml"  # noqa: S108
         for svc in ("lms", "cms"):
+            check = (
+                f"SERVICE_VARIANT={svc} python manage.py {svc} check "
+                f"--settings={settings_module}"
+            )
+            if not uses_aqueduct:
+                check = (
+                    f"echo {shlex.quote(_BOOT_CHECK_STUB_CFG)} > {stub} && "
+                    f"{svc.upper()}_CFG={stub} {check} && rm -f {stub}"
+                )
             container = container.with_exec(
                 [
                     "sh",
                     "-c",
-                    f"echo 'boot check: {svc}' && cd /openedx/edx-platform && "
-                    f"{prep}"
-                    f"{cfg.format(svc=svc.upper())}"
-                    f"SERVICE_VARIANT={svc} python manage.py {svc} check "
-                    f"--settings={settings_module}",
+                    f"echo 'boot check: {svc}' && cd /openedx/edx-platform && {check}",
                 ]
             )
         return container
