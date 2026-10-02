@@ -1,4 +1,48 @@
+# Python bytecode. Several of these were committed by accident before this file
+# covered them -- the compiled name embeds the interpreter version and the
+# pytest plugin version, so they churn on every toolchain bump and conflict on
+# every merge. Unanchored: they appear next to whatever module was imported.
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtualenv. uv writes `.venv/.gitignore` containing `*`, so this is a
+# backstop for a hand-made env or a uv version that stops doing that.
+.venv/
+venv/
+
+# Tool caches. Each of these tools also self-ignores the same way uv does;
+# listed here for the same reason.
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Build output. `dist/` stays unanchored, as it already was: a build dir can
+# turn up at any depth. The mitx/mitxonline/xpro MFE folders each repeat the
+# rule locally, but frontend/shared does not, so the root rule is what covers
+# it.
 dist/
+build/
+*.egg-info/
 
 # Scratch export dir for `regenerate-aqueduct-settings` / other Dagger exports.
 /generated/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Local secrets and overrides. Nothing in this repo is meant to carry a real
+# credential, which is what detect-secrets enforces in pre-commit; this keeps
+# an untracked local file from becoming a tracked one by mistake.
+.env
+.env.*
+
+# Editor and OS cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
