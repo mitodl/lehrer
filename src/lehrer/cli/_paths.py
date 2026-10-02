@@ -75,7 +75,7 @@ def namespace_manifest() -> Path:
 
 
 def bootstrap_spec() -> Path:
-    """Return the path to the bootstrap spec the edxapp-provision Job applies."""
+    """Return the path to the bootstrap spec the local-dev edxapp Jobs apply."""
     return local_dev_dir() / "provision" / "bootstrap.yaml"
 
 

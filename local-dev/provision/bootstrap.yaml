@@ -1,13 +1,35 @@
 ---
 # yaml-language-server: $schema=../../bootstrap.schema.json
 #
-# What a fresh local-dev database needs before the stack is usable. Applied by
-# the edxapp-provision Job with the lehrer_bootstrap runner baked into the
-# platform image (src/lehrer/bootstrap); every step is idempotent, so trigger
-# the Job again after editing this file.
+# What a fresh local-dev database needs before the stack is usable, applied
+# with the lehrer_bootstrap runner baked into the platform image
+# (src/lehrer/bootstrap). Three Jobs each run a slice of it: edxapp-migrate
+# (migrate), edxapp-provision (users, oauth_applications, waffle_flags) and
+# edxapp-demo-course (demo_course). Every step is idempotent, so trigger the
+# matching Job again after editing this file.
 #
 # Values ending in _env name a key of the openedx-secrets Secret
 # (local-dev/secret-defaults.yaml), never the value itself.
+
+migrate:
+# edx-enterprise's blackboard.0025 and canvas.0041 (*_mariadb_uuid_conversion)
+# ALTER the blackboard_channel_* and canvas_channel_* tables, which belong to
+# the enterprise-integrated-channels apps of those names, without depending on
+# them. An existing database has those tables already; on a fresh one the full
+# migrate reaches the conversions first and fails with "table doesn't exist".
+# Migrating the two apps first creates the tables. Drop these two entries once
+# every release carries https://github.com/openedx/edx-enterprise/pull/2703.
+- service: lms
+  app_label: blackboard_channel
+- service: lms
+  app_label: canvas_channel
+- service: lms
+- service: cms
+# Routed to its own database (edxapp_csmh), which migrate never touches unless
+# asked by alias.
+- service: lms
+  app_label: coursewarehistoryextended
+  database: student_module_history
 
 users:
 - username: edx
@@ -54,3 +76,6 @@ waffle_flags:
   everyone: true
 - name: notifications.enable_notifications
   everyone: true
+
+# Branch probed from the platform's RELEASE_LINE; set branch: to pin one.
+demo_course: {}

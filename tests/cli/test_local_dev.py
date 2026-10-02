@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 import pytest
 import yaml
 
+from lehrer.bootstrap.spec import STEPS as BOOTSTRAP_STEPS
 from lehrer.bootstrap.spec import load as load_bootstrap_spec
 from lehrer.cli import _paths, local_dev
 
@@ -307,15 +308,79 @@ class TestProvisioningManifests:
         with pytest.raises(ValueError, match=error):
             local_dev._bootstrap_superuser()
 
-    def test_the_job_runs_the_spec_the_configmap_carries(self) -> None:
-        container = _manifest("job-provision.yaml")["spec"]["template"]["spec"][
-            "containers"
-        ][0]
-        assert container["command"][:3] == ["python", "-m", "lehrer_bootstrap"]
-        mount = container["volumeMounts"][0]["mountPath"]
-        assert container["command"][3] == f"{mount}/{_paths.bootstrap_spec().name}"
+    def test_the_local_dev_spec_migrates_the_channel_apps_first(self) -> None:
+        # edx-enterprise's blackboard.0025 and canvas.0041 ALTER these apps'
+        # tables without depending on them, so on a fresh schema an unrestricted
+        # migrate that reaches them first fails with "table doesn't exist".
+        spec = load_bootstrap_spec(_paths.bootstrap_spec())
+        assert [(m.service, m.app_label) for m in spec.migrate[:4]] == [
+            ("lms", "blackboard_channel"),
+            ("lms", "canvas_channel"),
+            ("lms", None),
+            ("cms", None),
+        ]
+
+    def test_the_local_dev_spec_migrates_csmh(self) -> None:
+        # migrate only touches the alias it is given, and nothing else creates
+        # the csmh tables.
+        spec = load_bootstrap_spec(_paths.bootstrap_spec())
+        assert any(
+            m.app_label == "coursewarehistoryextended"
+            and m.database == "student_module_history"
+            for m in spec.migrate
+        )
+
+    @pytest.mark.parametrize(
+        ("manifest", "steps"),
+        [
+            ("job-migrate.yaml", {"migrate"}),
+            ("job-provision.yaml", {"users", "oauth_applications", "waffle_flags"}),
+            ("job-demo-course.yaml", {"demo_course"}),
+        ],
+    )
+    def test_each_job_runs_its_slice_of_the_spec(
+        self, manifest: str, steps: set[str]
+    ) -> None:
+        pod = _manifest(manifest)["spec"]["template"]["spec"]
+        container = pod["containers"][0]
+        command = container["command"]
+        assert command[:3] == ["python", "-m", "lehrer_bootstrap"]
+        mount = container["volumeMounts"][0]
+        assert command[3] == f"{mount['mountPath']}/{_paths.bootstrap_spec().name}"
+        volume = next(v for v in pod["volumes"] if v["name"] == mount["name"])
+        assert volume["configMap"]["name"] == "edxapp-bootstrap"
+        # Every step defaults to on, so a Job that omits --steps would also
+        # migrate and import the demo course.
+        assert command[4] == "--steps"
+        assert set(command[5].split(",")) == steps
+        env = {e["name"]: e["value"] for e in container["env"]}
+        assert env["DJANGO_SETTINGS_MODULE"].endswith(".envs.aqueduct")
+
+    def test_the_jobs_split_the_spec_between_them(self) -> None:
+        covered = set()
+        for manifest in (
+            "job-migrate.yaml",
+            "job-provision.yaml",
+            "job-demo-course.yaml",
+        ):
+            command = _manifest(manifest)["spec"]["template"]["spec"]["containers"][0][
+                "command"
+            ]
+            covered |= set(command[5].split(","))
+        assert covered == set(BOOTSTRAP_STEPS)
+
+    def test_the_configmap_carries_the_spec(self) -> None:
         star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
+        assert "kubectl create configmap edxapp-bootstrap " in star
         assert f'"/{_paths.bootstrap_spec().name}"' in star
+        # Attached to a Job resource it would wait for that Job's trigger, and
+        # edxapp-migrate, the first to need it, could never start.
+        assert 'objects=["edxapp-bootstrap:ConfigMap:" + namespace]' in star
+        for job in ("edxapp-migrate", "edxapp-provision"):
+            block = star.split(f'k8s_resource(\n        "{job}",', 1)[1].split(
+                "\n    )", 1
+            )[0]
+            assert '"edxapp-bootstrap-spec"' in block
 
 
 class TestOperatorSecretRefs:
@@ -1336,7 +1401,7 @@ class TestPlatformLiveUpdate:
         assert self._synced() == injected
 
     def test_job_consumed_code_is_not_synced(self) -> None:
-        # edxapp-provision runs lehrer_bootstrap from the image. Synced, an
+        # The edxapp-* Jobs run lehrer_bootstrap from the image. Synced, an
         # edit would update copies in the long-running pods and skip the
         # rebuild the Job needs to see it.
         synced_targets = {container_path for _, container_path in self._synced()}
