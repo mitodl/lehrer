@@ -226,9 +226,9 @@ not appear and the data endpoints 404. (Canvas/Rapid Responses are installed onl
 on `mitx*` and `mitxonline`, not `xpro`.)
 
 Course Sync Actions needs `ol-openedx-course-sync==1.2.0` or later, which is the first
-release carrying its filter step and endpoint; the pin is currently `1.0.1`. It is
-registered only in the `mitxonline` Site Project, since that is the only deployment
-running the plugin.
+release carrying its filter step and endpoint. It is unpinned in the build manifest,
+so builds pick up the latest release. It is registered only in the `mitxonline` Site
+Project, since that is the only deployment running the plugin.
 
 ### 2. Runtime site config must be enabled and populated
 
