@@ -550,8 +550,6 @@ class AqueductSettings(BaseSettings):
             "common.djangoapps.entitlements",
             # Asset management for mako templates
             "common.djangoapps.pipeline_mako",
-            # API Documentation
-            "drf_yasg",
             # Tagging
             "openedx_tagging",
             "openedx.core.djangoapps.content_tagging",
@@ -586,6 +584,7 @@ class AqueductSettings(BaseSettings):
             "edx_ace",
             # alternative swagger generator for CMS API
             "drf_spectacular",
+            "drf_spectacular_sidecar",
             # Authz
             "openedx.core.djangoapps.authz",
             "openedx_events",
@@ -785,6 +784,18 @@ class AqueductSettings(BaseSettings):
         default="auth_backends.strategies.EdxDjangoStrategy",
         description="Use LMS SSO for login, once enabled by setting LOGIN_URL (see docs/guides/studio_oauth.rst)",  # noqa: E501
     )
+    SPECTACULAR_SETTINGS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "TITLE": "Authoring API",
+            "DESCRIPTION": "Experimental API to edit xblocks and course content.",
+            "VERSION": "0.1.0",
+            "SERVE_INCLUDE_SCHEMA": False,
+            "PREPROCESSING_HOOKS": ["cms.lib.spectacular.cms_api_filter"],
+            "SCHEMA_PATH_PREFIX": "/api/contentstore",
+            "SCHEMA_PATH_PREFIX_TRIM": "/api/contentstore",
+        },
+        description="The Authoring API schema, for any settings module that does not define its\nown SPECTACULAR_SETTINGS -- notably cms.envs.development, which generates the\ncommitted docs/cms-openapi.yaml in CI. Without these the document has no\ntitle, version 0.0.0, and every endpoint in the service rather than the\nAuthoring API's own surface.\ndevstack.py and production.py replace this wholesale, adding SERVERS and a\nlonger DESCRIPTION. Those are the only parts that depend on CMS_BASE and\nAUTHORING_API_URL, which are empty here; the filtering and the path prefix do\nnot, so they belong at this level.",  # noqa: E501
+    )
     SQUELCH_PII_IN_LOGS: bool = Field(
         default=False,
         description="Hide any Personally Identifiable Information from application logs",  # noqa: E501
@@ -905,6 +916,7 @@ class AqueductSettings(BaseSettings):
         "GRADES_DOWNLOAD",
         "PARSE_KEYS",
         "PROCTORING_SETTINGS",
+        "SPECTACULAR_SETTINGS",
         "VIDEO_IMAGE_SUPPORTED_FILE_FORMATS",
         mode="before",
     )
