@@ -24,14 +24,39 @@ spec:
         # Bare name: Tilt matches it to the custom_build in lehrer-core.star
         # and substitutes the built ref, registry included.
         image: openedx-platform
+        # Granian, not gunicorn, because gunicorn serves no static files and
+        # aqueduct runs with DEBUG=False, so Django will not either: every
+        # /static/... URL the LMS emits 404s and the pages render unstyled and
+        # scriptless. The assets are in the image at /openedx/staticfiles (the
+        # build runs collectstatic); nothing was serving them.
+        #
+        # --static-path-mount is Granian's own static handler, so this needs no
+        # nginx sidecar and no extra package -- granian is already installed by
+        # build_manifest.yaml. Its default static route is /static, which is
+        # exactly the LMS's STATIC_URL, so no --static-path-route is needed.
+        # Matches production, where edxapp passes the same mount
+        # (ol-infrastructure applications/edxapp/k8s_resources.py).
+        #
+        # gunicorn's --max-requests and --timeout are dropped rather than
+        # translated: Granian has no per-request timeout and no recycle-by-
+        # request-count. --respawn-failed-workers and --backlog mirror what
+        # production sets alongside the mount.
         command:
         - opentelemetry-instrument
-        - gunicorn
-        - "--workers=2"
-        - "--name=lms"
-        - "--bind=0.0.0.0:8000"
-        - "--max-requests=1000"
-        - "--timeout=300"
+        - granian
+        - --interface
+        - wsgi
+        - --host
+        - 0.0.0.0
+        - --port
+        - "8000"
+        - --workers
+        - "2"
+        - --respawn-failed-workers
+        - --backlog
+        - "128"
+        - --static-path-mount
+        - /openedx/staticfiles
         - "lms.wsgi:application"
         ports:
         - containerPort: 8000
