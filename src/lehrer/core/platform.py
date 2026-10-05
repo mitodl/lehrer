@@ -1239,6 +1239,7 @@ class OpenedxPlatform:
         container: dagger.Container,
         custom_settings: dagger.Directory,
         settings_namespace: str = "production",
+        bootstrap_owner: str | None = "app:app",
     ) -> dagger.Container:
         """Inject django-aqueduct runtime settings into the container.
 
@@ -1262,6 +1263,9 @@ class OpenedxPlatform:
                 ``collected()``).
             settings_namespace: Django settings sub-package name — must match
                 the value passed to ``collected()``.  Default: ``"production"``.
+            bootstrap_owner: Owner of the injected ``lehrer_bootstrap`` package.
+                Pass ``None`` for a container ``collected()`` did not build,
+                which has no ``app`` user to resolve the name against.
 
         Returns:
             Container with aqueduct runtime settings and helper scripts wired in.
@@ -1324,7 +1328,7 @@ class OpenedxPlatform:
                 "/openedx/edx-platform/lehrer_bootstrap",
                 lehrer_bootstrap,
                 include=["*.py"],
-                owner="app:app",
+                owner=bootstrap_owner,
             )
             .with_file(
                 "/openedx/edx-platform/set_waffle_flags.py",
@@ -3170,7 +3174,9 @@ class OpenedxPlatform:
         # The operator's committed settings, placed exactly where a production
         # build places them — so a path or import assumption that only holds in
         # the build is caught here rather than at deploy time.
-        container = self.inject_aqueduct_settings(container, custom_settings)
+        container = self.inject_aqueduct_settings(
+            container, custom_settings, bootstrap_owner=None
+        )
 
         # ── 1. Boot self-test ─────────────────────────────────────────────────
         # No OL_SETTINGS_DIR: the entry modules must resolve from field defaults
