@@ -789,3 +789,36 @@ class StudioSettingsMixin(ProductionSettingsMixin):
                 self, "LMS_ROOT_URL", None
             )
         return self
+
+    @model_validator(mode="after")
+    def _derive_spectacular_servers(self) -> StudioSettingsMixin:
+        """Give the Authoring API schema servers its published paths resolve on.
+
+        ``SPECTACULAR_SETTINGS`` trims ``/api/contentstore`` from the published
+        paths. Upstream's cms.envs.production puts it back through ``SERVERS``;
+        lehrer overlays cms.envs.common directly, so without this Swagger's
+        "Try it out" requests ``/v0/xblock/...`` and gets a 404. The root
+        server is for the documented paths outside that prefix, which are
+        published untrimmed.
+
+        Assigned rather than mutated in place: django-aqueduct keeps a field
+        the base also carries only when it is in ``model_fields_set``, which an
+        in-place edit of the default does not touch. Runs after
+        ``_derive_service_root_urls``, which populates ``CMS_ROOT_URL``.
+        """
+        spectacular = getattr(self, "SPECTACULAR_SETTINGS", None)
+        if not isinstance(spectacular, dict) or "SERVERS" in spectacular:
+            return self
+        cms_root_url = getattr(self, "CMS_ROOT_URL", "").rstrip("/")
+        servers = [
+            {
+                "url": cms_root_url + spectacular.get("SCHEMA_PATH_PREFIX_TRIM", ""),
+                "description": "CMS-contentstore",
+            },
+            {"url": cms_root_url, "description": "Local"},
+        ]
+        authoring_api_url = getattr(self, "AUTHORING_API_URL", "")
+        if authoring_api_url:
+            servers.append({"url": authoring_api_url, "description": "Public"})
+        self.SPECTACULAR_SETTINGS = {**spectacular, "SERVERS": servers}  # type: ignore[attr-defined]
+        return self
