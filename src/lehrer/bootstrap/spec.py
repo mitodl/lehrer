@@ -30,7 +30,13 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-STEPS = ("users", "oauth_applications", "waffle_flags")
+STEPS = (
+    "users",
+    "oauth_applications",
+    "third_party_auth_providers",
+    "service_access_tokens",
+    "waffle_flags",
+)
 """Step names in the order they run. OAuth applications are owned by a user,
 so users come first."""
 
@@ -94,6 +100,110 @@ class OAuthApplication(BaseModel):
     skip_authorization: bool = False
     public: bool = Field(
         default=False, description="Public client type; confidential otherwise."
+    )
+
+
+class ThirdPartyAuthProvider(BaseModel):
+    """An ``OAuth2ProviderConfig``: an external IdP the LMS federates login to.
+
+    ``THIRD_PARTY_AUTH_BACKENDS`` makes a backend *importable*; this row is what
+    makes it *usable*. Without one, ``/auth/login/<backend>/`` 404s even though
+    the backend class is installed and in ``AUTHENTICATION_BACKENDS``.
+
+    The provider's endpoint URLs cannot come from Django settings:
+    ``OAuth2ProviderConfig.get_setting`` serves ``KEY`` and ``SECRET`` from this
+    row and every other name out of its ``other_settings`` JSON, so that JSON is
+    the only channel for ``AUTHORIZATION_URL`` / ``ACCESS_TOKEN_URL`` /
+    ``API_ROOT`` / ``DISCOVERY_URL``.
+
+    Which IdP to federate to is a property of the surrounding deployment, not of
+    this stack, so the JSON arrives by environment variable like the credentials
+    do. **An entry whose referenced variables are unset or empty is skipped**,
+    which is how a standalone install -- one with no upstream IdP in front of it
+    -- declines the whole step without needing a different spec file.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    backend_name: str = Field(
+        description=(
+            "social-core backend name, e.g. ol-oauth2. Must appear in "
+            "THIRD_PARTY_AUTH_BACKENDS or the provider is never registered."
+        )
+    )
+    slug: str
+    name: str = Field(description="Label shown on the LMS login page.")
+    client_id_env: str
+    client_secret_env: str
+    other_settings_env: str = Field(
+        description=(
+            "Environment variable holding the other_settings JSON object. The "
+            "endpoint URLs live here because Django settings cannot reach them."
+        )
+    )
+    enabled: bool = True
+    visible: bool = True
+    skip_hinted_login_dialog: bool = True
+    skip_registration_form: bool = Field(
+        default=True,
+        description=(
+            "Provision the account straight from the IdP's user data instead of "
+            "prompting. Required when the IdP, not the LMS, owns registration."
+        ),
+    )
+    skip_email_verification: bool = True
+    sync_learner_profile_data: bool = False
+
+
+class ServiceAccessToken(BaseModel):
+    """A long-lived OAuth2 bearer token for an upstream service integration.
+
+    Some integrations do not perform an OAuth2 exchange at all: they are handed
+    one opaque token and send it as ``Authorization: Bearer`` forever. MITx
+    Online's ``OPENEDX_SERVICE_WORKER_API_TOKEN`` is the example -- it is read
+    straight out of settings and used to enrol learners through the LMS API, so
+    without a matching ``AccessToken`` row here every enrolment silently fails
+    and the upstream records ``edx_enrolled=False``.
+
+    Self-contained on purpose: the entry owns its service account and its
+    application as well as the token, because all three exist only to serve one
+    integration and should appear and disappear together. **Skipped entirely
+    when ``token_env`` is unset or empty**, so an install with no such
+    integration does not grow an unused staff account.
+
+    The account gets an unusable password: it authenticates only by this token.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(description="Service account to create and own the token.")
+    email: str
+    token_env: str = Field(
+        description=(
+            "Environment variable holding the bearer token. The upstream must "
+            "be configured with the identical value."
+        )
+    )
+    application_name: str = Field(
+        description="Name for the owning OAuth2 application.",
+    )
+    staff: bool = Field(
+        default=True,
+        description=(
+            "Django is_staff. Enrolling a *different* user through the LMS "
+            "enrollment API requires it, so a service worker that provisions "
+            "enrolments needs it set."
+        ),
+    )
+    scopes: list[str] = Field(
+        default_factory=lambda: ["read", "write", "email", "profile", "user_id"]
+    )
+    expires_in_days: int = Field(
+        default=3650,
+        description=(
+            "Lifetime from apply time. Long by default: this stands in for a "
+            "credential a deployed environment would hold in a secret store."
+        ),
     )
 
 
@@ -181,6 +291,10 @@ class BootstrapSpec(BaseModel):
 
     users: list[User] = Field(default_factory=list)
     oauth_applications: list[OAuthApplication] = Field(default_factory=list)
+    third_party_auth_providers: list[ThirdPartyAuthProvider] = Field(
+        default_factory=list
+    )
+    service_access_tokens: list[ServiceAccessToken] = Field(default_factory=list)
     waffle_flags: list[WaffleFlag] = Field(default_factory=list)
 
 
@@ -196,6 +310,18 @@ def from_env(name: str) -> str:
     except KeyError:
         msg = f"the bootstrap spec reads {name} from the environment, which is unset"
         raise ValueError(msg) from None
+
+
+def from_env_optional(name: str) -> str | None:
+    """Read an optional value, treating unset and empty as equally absent.
+
+    Empty counts as absent because the local-dev Secret is built by resolving
+    every declared key, so a key meant to be supplied only by a composing
+    caller still arrives -- as "". Distinguishing the two here would make an
+    entry that is meant to opt out fail instead.
+    """
+    value = os.environ.get(name)
+    return value or None
 
 
 class _SettingsLookup(Mapping[str, Any]):
