@@ -745,6 +745,42 @@ class ProductionSettingsMixin(BaseSettings):
         return self
 
 
+def spectacular_with_servers(
+    spectacular: dict[str, Any], root_url: str, prefix_description: str
+) -> dict[str, Any]:
+    """Return *spectacular* with the ``SERVERS`` its published paths resolve on.
+
+    edx-platform's ``SPECTACULAR_SETTINGS`` trim a shared prefix
+    (``SCHEMA_PATH_PREFIX_TRIM``) from the published paths and rely on
+    ``SERVERS`` to put it back. Upstream sets ``SERVERS`` in
+    ``<svc>.envs.production``; lehrer overlays ``<svc>.envs.common`` directly,
+    so without this Swagger's "Try it out" requests the trimmed path and gets
+    a 404. The root server is for documented paths outside the prefix, which
+    are published untrimmed.
+
+    Callers must assign the result rather than edit the setting in place:
+    django-aqueduct keeps a field the base also carries only when it is in
+    ``model_fields_set``, which an in-place edit of the default does not touch.
+
+    :param spectacular: The service's ``SPECTACULAR_SETTINGS``.
+    :param root_url: The service's public root URL.
+    :param prefix_description: Label for the server under the trimmed prefix.
+    :returns: A copy of *spectacular* with ``SERVERS`` set.
+    :rtype: dict[str, Any]
+    """
+    root_url = root_url.rstrip("/")
+    return {
+        **spectacular,
+        "SERVERS": [
+            {
+                "url": root_url + spectacular.get("SCHEMA_PATH_PREFIX_TRIM", ""),
+                "description": prefix_description,
+            },
+            {"url": root_url, "description": "Local"},
+        ],
+    }
+
+
 class StudioSettingsMixin(ProductionSettingsMixin):
     """CMS-only additions to ``ProductionSettingsMixin``.
 
@@ -794,31 +830,19 @@ class StudioSettingsMixin(ProductionSettingsMixin):
     def _derive_spectacular_servers(self) -> StudioSettingsMixin:
         """Give the Authoring API schema servers its published paths resolve on.
 
-        ``SPECTACULAR_SETTINGS`` trims ``/api/contentstore`` from the published
-        paths. Upstream's cms.envs.production puts it back through ``SERVERS``;
-        lehrer overlays cms.envs.common directly, so without this Swagger's
-        "Try it out" requests ``/v0/xblock/...`` and gets a 404. The root
-        server is for the documented paths outside that prefix, which are
-        published untrimmed.
-
-        Assigned rather than mutated in place: django-aqueduct keeps a field
-        the base also carries only when it is in ``model_fields_set``, which an
-        in-place edit of the default does not touch. Runs after
+        See ``spectacular_with_servers``. Runs after
         ``_derive_service_root_urls``, which populates ``CMS_ROOT_URL``.
         """
         spectacular = getattr(self, "SPECTACULAR_SETTINGS", None)
         if not isinstance(spectacular, dict) or "SERVERS" in spectacular:
             return self
-        cms_root_url = getattr(self, "CMS_ROOT_URL", "").rstrip("/")
-        servers = [
-            {
-                "url": cms_root_url + spectacular.get("SCHEMA_PATH_PREFIX_TRIM", ""),
-                "description": "CMS-contentstore",
-            },
-            {"url": cms_root_url, "description": "Local"},
-        ]
+        derived = spectacular_with_servers(
+            spectacular, getattr(self, "CMS_ROOT_URL", ""), "CMS-contentstore"
+        )
         authoring_api_url = getattr(self, "AUTHORING_API_URL", "")
         if authoring_api_url:
-            servers.append({"url": authoring_api_url, "description": "Public"})
-        self.SPECTACULAR_SETTINGS = {**spectacular, "SERVERS": servers}  # type: ignore[attr-defined]
+            derived["SERVERS"].append(
+                {"url": authoring_api_url, "description": "Public"}
+            )
+        self.SPECTACULAR_SETTINGS = derived  # type: ignore[attr-defined]
         return self

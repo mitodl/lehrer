@@ -10,6 +10,7 @@ from lehrer.settings.base import (
     ProductionSettingsMixin,
     StudioSettingsMixin,
     merge_jwt_signing_keys,
+    spectacular_with_servers,
 )
 
 
@@ -158,6 +159,24 @@ class _StudioWithAuthoringSchema(StudioSettingsMixin):
             "SCHEMA_PATH_PREFIX_TRIM": "/api/contentstore",
         }
     )
+
+
+def test_spectacular_servers_put_the_trimmed_prefix_back() -> None:
+    # The shape of the LMS Enrollment API schema: every path is under the prefix.
+    enrollment = {"TITLE": "LMS", "SCHEMA_PATH_PREFIX_TRIM": "/api/enrollment"}
+    derived = spectacular_with_servers(
+        enrollment, "https://lms.example.com/", "LMS-enrollment"
+    )
+    assert derived["SERVERS"] == [
+        {
+            "url": "https://lms.example.com/api/enrollment",
+            "description": "LMS-enrollment",
+        },
+        {"url": "https://lms.example.com", "description": "Local"},
+    ]
+    assert derived["TITLE"] == "LMS"
+    # A copy, so the caller has to assign it for the overlay to keep it.
+    assert "SERVERS" not in enrollment
 
 
 class TestSpectacularServers:

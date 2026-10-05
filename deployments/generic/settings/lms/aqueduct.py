@@ -42,6 +42,7 @@ from .models.base import (
     ProductionSettingsMixin,
     merge_jwt_signing_keys,
     resolve_derived_settings,
+    spectacular_with_servers,
 )
 
 
@@ -56,17 +57,16 @@ class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
 
     @model_validator(mode="after")
     def _derive_spectacular_servers(self) -> LMSProductionSettings:
-        """Populate SPECTACULAR_SETTINGS["SERVERS"] with the LMS root URL.
+        """Give the Enrollment API schema servers its published paths resolve on.
 
-        Upstream's lms.envs.production adds this after lms.envs.common runs;
-        lehrer overlays common directly (see module docstring), so the
-        mutation is reproduced here. Runs after ProductionSettingsMixin's
+        See ``spectacular_with_servers``. Runs after ProductionSettingsMixin's
         _derive_service_root_urls, which populates LMS_ROOT_URL.
         """
         spectacular = getattr(self, "SPECTACULAR_SETTINGS", None)
-        root_url = getattr(self, "LMS_ROOT_URL", None)
-        if isinstance(spectacular, dict) and root_url:
-            spectacular["SERVERS"] = [{"url": root_url, "description": "Local"}]
+        if isinstance(spectacular, dict) and "SERVERS" not in spectacular:
+            self.SPECTACULAR_SETTINGS = spectacular_with_servers(  # type: ignore[attr-defined]
+                spectacular, getattr(self, "LMS_ROOT_URL", ""), "LMS-enrollment"
+            )
         return self
 
 
