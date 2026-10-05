@@ -617,7 +617,9 @@ uv run lehrer build notes --release-name master --python-version 3.9
 dagger call notes build --release-name master
 ```
 
-**Note**: edx-notes-api master branch requires Python 3.9+. Older releases may work with Python 3.8.
+**Note**: edx-notes-api `master` is Python 3.12-only (its `tox.ini` pins
+`envlist = py{312}`). `--python-version` defaults to `3.12` for `master` and `3.11`
+for named releases; pass it explicitly to override.
 
 ### Publishing Service Images
 

@@ -425,7 +425,7 @@ and `--shared-src` on the `build_site` / `watch_site` call.
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `release_name` | `str` | `"master"` | Git branch/tag (e.g. `"open-release/sumac.master"`) |
-| `python_version` | `str` | `"3.11"` | Python version |
+| `python_version` | `str` | `None` | Python version. Auto-detected: `3.12` for `master`, `3.11` for others |
 | `notes_code` | `Directory` | `None` | Local edx-notes-api source |
 | `notes_repo` | `str` | `None` | Git URL (required if `notes_code` not provided) |
 | `notes_config` | `Directory` | **required** | Directory with `env_config.py`. There is no fallback — omitting it raises a `ValueError` naming the flag |
