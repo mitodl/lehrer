@@ -22,14 +22,25 @@ spec:
       containers:
       - name: cms
         image: openedx-platform
+        # Granian with a static mount, for the same reason as deployment-lms.yaml
+        # -- see the comment there. Studio is the worse of the two unstyled: its
+        # authoring UI is almost entirely JS.
         command:
         - opentelemetry-instrument
-        - gunicorn
-        - "--workers=2"
-        - "--name=cms"
-        - "--bind=0.0.0.0:8010"
-        - "--max-requests=1000"
-        - "--timeout=300"
+        - granian
+        - --interface
+        - wsgi
+        - --host
+        - 0.0.0.0
+        - --port
+        - "8010"
+        - --workers
+        - "2"
+        - --respawn-failed-workers
+        - --backlog
+        - "128"
+        - --static-path-mount
+        - /openedx/staticfiles
         - "cms.wsgi:application"
         ports:
         - containerPort: 8010

@@ -23,6 +23,55 @@ spec:
         app: notes-migrate
     spec:
       restartPolicy: Never
+      initContainers:
+      # The MariaDB operator creates the `edxapp` User and its Grants *after*
+      # the MariaDB CR reports Ready, and the User CR it generates is not in
+      # this repo's manifests, so there is nothing for Tilt's resource_deps to
+      # gate on -- waiting for the MariaDB resource is demonstrably not enough.
+      # A cold `tilt up` therefore races the credential into existence and this
+      # Job dies on `1045 Access denied for user 'edxapp'` (authentication, not
+      # the missing-grant 1044). backoffLimit is deliberately 0 above, so there
+      # is no retry to absorb it; wait for the credential to work first.
+      #
+      # Reuses the notes image so the check runs through the same MySQLdb driver
+      # and credentials as the migration that follows, without adding a mysql
+      # client image. Connects directly rather than via django.setup(): notes'
+      # env_config.py reads os.environ["OAUTH_CLIENT_ID"] at import, which is
+      # one of the two names the Job container has to remap from NOTES_* below,
+      # so a Django-based probe would KeyError on every iteration and this loop
+      # would never exit.
+      - name: wait-for-mysql-auth
+        image: openedx-notes
+        command:
+        - sh
+        - -c
+        - |
+          until python -c "
+          import os
+          import MySQLdb
+          MySQLdb.connect(
+              host=os.environ['DB_HOST'],
+              port=int(os.environ.get('DB_PORT', '3306')),
+              user=os.environ['DB_USER'],
+              passwd=os.environ['DB_PASSWORD'],
+              db=os.environ['DB_NAME'],
+          ).close()
+          " 2>/dev/null; do
+            echo "waiting for mysql to accept ${DB_USER}@${DB_HOST}/${DB_NAME}"
+            sleep 3
+          done
+          echo "==> mysql accepted ${DB_USER}; proceeding to migrations"
+        envFrom:
+        - configMapRef:
+            name: notes-config
+        - secretRef:
+            name: openedx-secrets
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
       containers:
       - name: migrate
         # Image tag is managed by Tilt via custom_build (same ref as the notes
