@@ -25,7 +25,7 @@ from django_aqueduct import configure_django_settings
 from .models.aqueduct import AqueductSettings
 from .models.base import (
     StudioSettingsMixin,
-    merge_jwt_signing_keys,
+    apply_base_post_configure,
     resolve_derived_settings,
 )
 
@@ -48,6 +48,6 @@ class CMSProductionSettings(StudioSettingsMixin, AqueductSettings):
 configure_django_settings(
     CMSProductionSettings,
     base="cms.envs.common",
-    post_configure=merge_jwt_signing_keys,
+    post_configure=apply_base_post_configure,
 )
 resolve_derived_settings(__name__)

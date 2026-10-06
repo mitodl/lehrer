@@ -211,6 +211,53 @@ def merge_jwt_signing_keys(merged: dict[str, Any], model: Any) -> None:
         merged["JWT_AUTH"] = {**merged["JWT_AUTH"], **keys}
 
 
+def ensure_celery_router_inputs(merged: dict[str, Any]) -> None:
+    """Default the two router *inputs* that only ``production.py`` defines.
+
+    Defaults them to empty, which falls back to celery's own routing -- it does
+    not restore upstream's task -> queue table. Last paragraph for why empty.
+
+    ``lms/envs/common.py`` (and the CMS twin) wires the custom router
+    unconditionally -- ``CELERY_ROUTES =
+    "openedx.core.lib.celery.routers.route_task"`` -- but ``route_task`` reads
+    ``EXPLICIT_QUEUES`` and ``ALTERNATE_ENV_TASKS``, and *both* are defined only
+    in ``production.py``: the module aqueduct replaces. Overlaying onto
+    ``common.py`` therefore leaves the router installed with its inputs missing,
+    so every ``apply_async`` dies with ``AttributeError: 'Settings' object has
+    no attribute 'EXPLICIT_QUEUES'``.
+
+    That is not a narrow break. Enrolling a learner through the enrollment API
+    hits it (``ENROLLMENT_TRACK_UPDATED`` -> grade recalculation ->
+    ``apply_async``) and returns a 500, which is how it was found; anything else
+    that queues a task fails the same way.
+
+    Empty rather than a copy of upstream's task -> queue table. Empty makes
+    ``route_task`` return ``None``, which is its documented "use celery's
+    default routing" answer, so every task lands on ``CELERY_TASK_DEFAULT_QUEUE``
+    -- the one queue a worker started without ``-Q`` actually consumes.
+    Transcribing production.py's table instead would pin ~25 task names that
+    drift with edx-platform, and would route work onto ``*.high`` /
+    ``*.high_mem`` queues that nothing consumes unless the deployment also runs
+    dedicated workers. A deployment that *does* run them can set EXPLICIT_QUEUES
+    through the YAML tier; ``setdefault`` leaves such a value alone.
+    """
+    merged.setdefault("EXPLICIT_QUEUES", {})
+    merged.setdefault("ALTERNATE_ENV_TASKS", {})
+
+
+def apply_base_post_configure(merged: dict[str, Any], model: Any) -> None:
+    """The ``post_configure`` every entry module needs, whatever else it adds.
+
+    Both members fix up settings the model cannot reach on its own:
+    ``merge_jwt_signing_keys`` merges the JWT signing scalars into a
+    ``common.py`` dict, and ``ensure_celery_router_inputs`` defaults the celery
+    router inputs that ``production.py`` used to provide. An entry module with
+    its own structural work calls this rather than listing them.
+    """
+    merge_jwt_signing_keys(merged, model)
+    ensure_celery_router_inputs(merged)
+
+
 # ---------------------------------------------------------------------------
 # Shared base settings model
 # ---------------------------------------------------------------------------

@@ -40,7 +40,7 @@ from django_aqueduct import configure_django_settings
 from .models.aqueduct import AqueductSettings
 from .models.base import (
     ProductionSettingsMixin,
-    merge_jwt_signing_keys,
+    apply_base_post_configure,
     resolve_derived_settings,
     spectacular_with_servers,
 )
@@ -78,6 +78,6 @@ class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
 configure_django_settings(
     LMSProductionSettings,
     base="lms.envs.common",
-    post_configure=merge_jwt_signing_keys,
+    post_configure=apply_base_post_configure,
 )
 resolve_derived_settings(__name__)

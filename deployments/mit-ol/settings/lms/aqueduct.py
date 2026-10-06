@@ -44,7 +44,7 @@ from django_aqueduct import configure_django_settings
 from .models.aqueduct import AqueductSettings
 from .models.base import (
     ProductionSettingsMixin,
-    merge_jwt_signing_keys,
+    apply_base_post_configure,
     resolve_derived_settings,
     spectacular_with_servers,
 )
@@ -196,8 +196,10 @@ class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
 def _apply_structural_overrides(merged: dict[str, Any], model: Any) -> None:
     """Post-overlay adjustments to plugin-complete INSTALLED_APPS / AUTH_BACKENDS.
 
-    Also merges the JWT signing key scalars into JWT_AUTH, which every entry
-    module's post_configure does (``merge_jwt_signing_keys``).
+    Also runs ``apply_base_post_configure``, which every entry module's
+    post_configure does: merging the JWT signing key scalars into JWT_AUTH and
+    defaulting the celery router inputs (EXPLICIT_QUEUES, ALTERNATE_ENV_TASKS)
+    that only upstream's production.py defines.
 
     Passed as ``configure_django_settings(post_configure=…)``; runs *after* the
     ``base="lms.envs.common"`` overlay, so ``INSTALLED_APPS`` and
@@ -235,7 +237,7 @@ def _apply_structural_overrides(merged: dict[str, Any], model: Any) -> None:
 
     merged["AUTHENTICATION_BACKENDS"] = backends
 
-    merge_jwt_signing_keys(merged, model)
+    apply_base_post_configure(merged, model)
 
 
 # base="lms.envs.common" overlays the model onto edx-platform's upstream
