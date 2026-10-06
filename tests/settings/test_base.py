@@ -163,7 +163,11 @@ class _StudioWithAuthoringSchema(StudioSettingsMixin):
 
 def test_spectacular_servers_put_the_trimmed_prefix_back() -> None:
     # The shape of the LMS Enrollment API schema: every path is under the prefix.
-    enrollment = {"TITLE": "LMS", "SCHEMA_PATH_PREFIX_TRIM": "/api/enrollment"}
+    enrollment = {
+        "TITLE": "LMS",
+        "SCHEMA_PATH_PREFIX": "/api/enrollment",
+        "SCHEMA_PATH_PREFIX_TRIM": "/api/enrollment",
+    }
     derived = spectacular_with_servers(
         enrollment, "https://lms.example.com/", "LMS-enrollment"
     )
@@ -177,6 +181,36 @@ def test_spectacular_servers_put_the_trimmed_prefix_back() -> None:
     assert derived["TITLE"] == "LMS"
     # A copy, so the caller has to assign it for the overlay to keep it.
     assert "SERVERS" not in enrollment
+
+
+def test_spectacular_servers_read_the_prefix_not_the_trim_flag() -> None:
+    # drf-spectacular documents SCHEMA_PATH_PREFIX_TRIM as a bool.
+    derived = spectacular_with_servers(
+        {"SCHEMA_PATH_PREFIX": "/api/contentstore", "SCHEMA_PATH_PREFIX_TRIM": True},
+        "https://studio.example.com",
+        "CMS-contentstore",
+    )
+    assert [server["url"] for server in derived["SERVERS"]] == [
+        "https://studio.example.com/api/contentstore",
+        "https://studio.example.com",
+    ]
+
+
+@pytest.mark.parametrize(
+    "spectacular",
+    [
+        {"SCHEMA_PATH_PREFIX": "/api/contentstore", "SCHEMA_PATH_PREFIX_TRIM": False},
+        {"SCHEMA_PATH_PREFIX": "/api/contentstore"},
+        {"SCHEMA_PATH_PREFIX": None, "SCHEMA_PATH_PREFIX_TRIM": True},
+    ],
+)
+def test_spectacular_servers_without_a_trimmed_prefix_offer_only_the_root(
+    spectacular: dict[str, Any],
+) -> None:
+    derived = spectacular_with_servers(spectacular, "https://studio.example.com", "x")
+    assert derived["SERVERS"] == [
+        {"url": "https://studio.example.com", "description": "Local"}
+    ]
 
 
 class TestSpectacularServers:

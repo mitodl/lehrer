@@ -751,12 +751,15 @@ def spectacular_with_servers(
     """Return *spectacular* with the ``SERVERS`` its published paths resolve on.
 
     edx-platform's ``SPECTACULAR_SETTINGS`` trim a shared prefix
-    (``SCHEMA_PATH_PREFIX_TRIM``) from the published paths and rely on
-    ``SERVERS`` to put it back. Upstream sets ``SERVERS`` in
+    (``SCHEMA_PATH_PREFIX``, removed when the ``SCHEMA_PATH_PREFIX_TRIM`` flag
+    is truthy) from the published paths and rely on ``SERVERS`` to put it
+    back. Upstream sets ``SERVERS`` in
     ``<svc>.envs.production``; lehrer overlays ``<svc>.envs.common`` directly,
     so without this Swagger's "Try it out" requests the trimmed path and gets
     a 404. The root server is for documented paths outside the prefix, which
-    are published untrimmed.
+    are published untrimmed, and is the only one listed when nothing is
+    trimmed. drf-spectacular treats ``SCHEMA_PATH_PREFIX`` as a regex; the
+    prefixed server assumes it is a literal path, as edx-platform's are.
 
     Callers must assign the result rather than edit the setting in place:
     django-aqueduct keeps a field the base also carries only when it is in
@@ -769,16 +772,15 @@ def spectacular_with_servers(
     :rtype: dict[str, Any]
     """
     root_url = root_url.rstrip("/")
-    return {
-        **spectacular,
-        "SERVERS": [
-            {
-                "url": root_url + spectacular.get("SCHEMA_PATH_PREFIX_TRIM", ""),
-                "description": prefix_description,
-            },
-            {"url": root_url, "description": "Local"},
-        ],
-    }
+    servers = [{"url": root_url, "description": "Local"}]
+    prefix = spectacular.get("SCHEMA_PATH_PREFIX")
+    if (
+        spectacular.get("SCHEMA_PATH_PREFIX_TRIM")
+        and isinstance(prefix, str)
+        and prefix
+    ):
+        servers.insert(0, {"url": root_url + prefix, "description": prefix_description})
+    return {**spectacular, "SERVERS": servers}
 
 
 class StudioSettingsMixin(ProductionSettingsMixin):
