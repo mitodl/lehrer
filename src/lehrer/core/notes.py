@@ -22,7 +22,7 @@ class OpenedxNotes:
     async def build(
         self,
         release_name: str = "master",
-        python_version: str = "3.11",
+        python_version: str | None = None,
         notes_code: dagger.Directory | None = None,
         notes_repo: str | None = None,
         notes_config: dagger.Directory | None = None,
@@ -34,7 +34,7 @@ class OpenedxNotes:
 
         Args:
             release_name: Git branch/tag to use (e.g., master, open-release/sumac.master)
-            python_version: Python version to use (default: 3.11)
+            python_version: Python version (defaults: master=3.12, others=3.11)
             notes_code: Local directory with edx-notes-api source (optional)
             notes_repo: Git repository URL (required if notes_code not provided)
             notes_config: Directory containing env_config.py (defaults to
@@ -54,7 +54,7 @@ class OpenedxNotes:
     async def _build(
         self,
         release_name: str = "master",
-        python_version: str = "3.11",
+        python_version: str | None = None,
         notes_code: dagger.Directory | None = None,
         notes_repo: str | None = None,
         notes_config: dagger.Directory | None = None,
@@ -72,6 +72,13 @@ class OpenedxNotes:
                 "for this build (see your operator config) "
                 "(e.g. --notes-config /path/to/notes_config)"
             )
+
+        # Auto-detect Python version if not specified. master tracks upstream
+        # edx-notes-api's 3.12 floor (tox envlist = py312); named releases are
+        # still on 3.11 until they cut over.
+        if python_version is None:
+            python_version = "3.12"
+
         # Start with Python slim image
         container = dag.container().from_(f"python:{python_version}-slim")
 
@@ -190,7 +197,7 @@ class OpenedxNotes:
     async def test(
         self,
         release_name: str = "master",
-        python_version: str = "3.11",
+        python_version: str | None = None,
         notes_code: dagger.Directory | None = None,
         notes_repo: str | None = None,
         notes_config: dagger.Directory | None = None,
@@ -207,7 +214,7 @@ class OpenedxNotes:
 
         Args:
             release_name: Git branch/tag (e.g., master, open-release/sumac.master).
-            python_version: Python version (default: 3.11).
+            python_version: Python version (defaults: 3.12).
             notes_code: Local edx-notes-api source (optional).
             notes_repo: Git repository URL (required if notes_code not provided).
             notes_config: Directory containing env_config.py.

@@ -136,8 +136,8 @@ requirement lines, platform/theme/translations repo+branch, and python/node
 version. Passed via `--build-manifest`; see `src/lehrer/core/build_manifest.py`.
 
 **Python version logic**: `3.12` for `release_name == "master"`, `3.11` for all
-other releases. Applies to `platform.build_platform` and `codejail.build`;
-`notes.build` takes a fixed `3.11` default.
+other releases. Applies to `platform.build_platform`, `codejail.build` and
+`notes.build`.
 
 **MFE config file resolution**:
 - Learning MFE: `learning-mfe-config.env.jsx` + `{deployment}/common-mfe-config.env.jsx`
