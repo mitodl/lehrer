@@ -211,8 +211,11 @@ def merge_jwt_signing_keys(merged: dict[str, Any], model: Any) -> None:
         merged["JWT_AUTH"] = {**merged["JWT_AUTH"], **keys}
 
 
-def restore_celery_task_routing(merged: dict[str, Any]) -> None:
-    """Supply the two celery router settings that only ``production.py`` defines.
+def ensure_celery_router_inputs(merged: dict[str, Any]) -> None:
+    """Default the two router *inputs* that only ``production.py`` defines.
+
+    Defaults them to empty, which falls back to celery's own routing -- it does
+    not restore upstream's task -> queue table. Last paragraph for why empty.
 
     ``lms/envs/common.py`` (and the CMS twin) wires the custom router
     unconditionally -- ``CELERY_ROUTES =
@@ -245,13 +248,14 @@ def restore_celery_task_routing(merged: dict[str, Any]) -> None:
 def apply_base_post_configure(merged: dict[str, Any], model: Any) -> None:
     """The ``post_configure`` every entry module needs, whatever else it adds.
 
-    Both members fix up settings the model cannot reach on its own: one merges
-    into a ``common.py`` dict, the other replaces something ``production.py``
-    used to provide. An entry module with its own structural work calls this
-    rather than listing them.
+    Both members fix up settings the model cannot reach on its own:
+    ``merge_jwt_signing_keys`` merges the JWT signing scalars into a
+    ``common.py`` dict, and ``ensure_celery_router_inputs`` defaults the celery
+    router inputs that ``production.py`` used to provide. An entry module with
+    its own structural work calls this rather than listing them.
     """
     merge_jwt_signing_keys(merged, model)
-    restore_celery_task_routing(merged)
+    ensure_celery_router_inputs(merged)
 
 
 # ---------------------------------------------------------------------------
