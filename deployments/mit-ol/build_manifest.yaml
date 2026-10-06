@@ -40,7 +40,7 @@ cells:
   - ol-openedx-course-outline-api==0.2.0
   - ol-openedx-course-structure-api==0.3.0
   - ol-openedx-logging==0.4.0
-  - ol-openedx-sentry==0.5.0
+  - ol-openedx-sentry==0.6.0
   - openedx-scorm-xblock==19.0.4
   - ol-social-auth==0.3.0
   - pydantic-settings[yaml]==2.15.0
@@ -92,7 +92,7 @@ cells:
   - ol-openedx-logging==0.4.0
   - ol-openedx-git-auto-export==0.9.0
   - ol-openedx-rapid-response-reports==0.6.0
-  - ol-openedx-sentry==0.5.0
+  - ol-openedx-sentry==0.6.0
   - openedx-scorm-xblock==19.0.4
   - pip==26.2
   - pydantic-settings[yaml]==2.15.0
@@ -130,7 +130,7 @@ cells:
   - ol-openedx-git-auto-export==0.9.0
   - ol-openedx-logging==0.4.0
   - ol-openedx-rapid-response-reports==0.6.0
-  - ol-openedx-sentry==0.5.0
+  - ol-openedx-sentry==0.6.0
   - openedx-scorm-xblock==19.0.4
   - pip==26.2
   - pydantic-settings[yaml]==2.15.0
@@ -168,7 +168,7 @@ cells:
   - ol-openedx-course-export==0.4.0
   - ol-openedx-course-structure-api==0.3.0
   - ol-openedx-logging==0.4.0
-  - ol-openedx-sentry==0.5.0
+  - ol-openedx-sentry==0.6.0
   - ol-social-auth==0.3.0
   - openedx-scorm-xblock==19.0.4
   - pydantic-settings[yaml]==2.15.0
@@ -206,7 +206,7 @@ cells:
   - ol-openedx-course-structure-api==0.3.0
   - ol-openedx-logging==0.4.0
   - ol-openedx-rapid-response-reports==0.6.0
-  - ol-openedx-sentry==0.5.0
+  - ol-openedx-sentry==0.6.0
   - openedx-scorm-xblock==19.0.4
   - pip==26.2
   - pydantic-settings[yaml]==2.15.0
@@ -253,7 +253,7 @@ cells:
   - ol-openedx-git-auto-export==0.9.0
   - ol-openedx-logging==0.4.0
   - ol-openedx-rapid-response-reports==0.6.0
-  - ol-openedx-sentry==0.5.0
+  - ol-openedx-sentry==0.6.0
   - openedx-scorm-xblock==19.0.4
   - pip==26.2
   - pydantic-settings[yaml]==2.15.0
@@ -300,7 +300,7 @@ cells:
   - ol-openedx-course-export==0.4.0
   - ol-openedx-course-structure-api==0.3.0
   - ol-openedx-logging==0.4.0
-  - ol-openedx-sentry==0.5.0
+  - ol-openedx-sentry==0.6.0
   - ol-social-auth==0.3.0
   - openedx-scorm-xblock==19.0.4
   - pydantic-settings[yaml]==2.15.0
