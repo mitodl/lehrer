@@ -745,6 +745,44 @@ class ProductionSettingsMixin(BaseSettings):
         return self
 
 
+def spectacular_with_servers(
+    spectacular: dict[str, Any], root_url: str, prefix_description: str
+) -> dict[str, Any]:
+    """Return *spectacular* with the ``SERVERS`` its published paths resolve on.
+
+    edx-platform's ``SPECTACULAR_SETTINGS`` trim a shared prefix
+    (``SCHEMA_PATH_PREFIX``, removed when the ``SCHEMA_PATH_PREFIX_TRIM`` flag
+    is truthy) from the published paths and rely on ``SERVERS`` to put it
+    back. Upstream sets ``SERVERS`` in
+    ``<svc>.envs.production``; lehrer overlays ``<svc>.envs.common`` directly,
+    so without this Swagger's "Try it out" requests the trimmed path and gets
+    a 404. The root server is for documented paths outside the prefix, which
+    are published untrimmed, and is the only one listed when nothing is
+    trimmed. drf-spectacular treats ``SCHEMA_PATH_PREFIX`` as a regex; the
+    prefixed server assumes it is a literal path, as edx-platform's are.
+
+    Callers must assign the result rather than edit the setting in place:
+    django-aqueduct keeps a field the base also carries only when it is in
+    ``model_fields_set``, which an in-place edit of the default does not touch.
+
+    :param spectacular: The service's ``SPECTACULAR_SETTINGS``.
+    :param root_url: The service's public root URL.
+    :param prefix_description: Label for the server under the trimmed prefix.
+    :returns: A copy of *spectacular* with ``SERVERS`` set.
+    :rtype: dict[str, Any]
+    """
+    root_url = root_url.rstrip("/")
+    servers = [{"url": root_url, "description": "Local"}]
+    prefix = spectacular.get("SCHEMA_PATH_PREFIX")
+    if (
+        spectacular.get("SCHEMA_PATH_PREFIX_TRIM")
+        and isinstance(prefix, str)
+        and prefix
+    ):
+        servers.insert(0, {"url": root_url + prefix, "description": prefix_description})
+    return {**spectacular, "SERVERS": servers}
+
+
 class StudioSettingsMixin(ProductionSettingsMixin):
     """CMS-only additions to ``ProductionSettingsMixin``.
 
@@ -788,4 +826,25 @@ class StudioSettingsMixin(ProductionSettingsMixin):
             self.SOCIAL_AUTH_EDX_OAUTH2_PUBLIC_URL_ROOT = getattr(
                 self, "LMS_ROOT_URL", None
             )
+        return self
+
+    @model_validator(mode="after")
+    def _derive_spectacular_servers(self) -> StudioSettingsMixin:
+        """Give the Authoring API schema servers its published paths resolve on.
+
+        See ``spectacular_with_servers``. Runs after
+        ``_derive_service_root_urls``, which populates ``CMS_ROOT_URL``.
+        """
+        spectacular = getattr(self, "SPECTACULAR_SETTINGS", None)
+        if not isinstance(spectacular, dict) or "SERVERS" in spectacular:
+            return self
+        derived = spectacular_with_servers(
+            spectacular, getattr(self, "CMS_ROOT_URL", ""), "CMS-contentstore"
+        )
+        authoring_api_url = getattr(self, "AUTHORING_API_URL", "")
+        if authoring_api_url:
+            derived["SERVERS"].append(
+                {"url": authoring_api_url, "description": "Public"}
+            )
+        self.SPECTACULAR_SETTINGS = derived  # type: ignore[attr-defined]
         return self

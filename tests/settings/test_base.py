@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import json
+from typing import Any
+
 import pytest
+from pydantic import Field
 
 from lehrer.settings.base import (
     ProductionSettingsMixin,
     StudioSettingsMixin,
     merge_jwt_signing_keys,
+    spectacular_with_servers,
 )
 
 
@@ -19,6 +24,9 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "CELERY_BROKER_USER",
         "CELERY_BROKER_VHOST",
         "CACHES",
+        "CMS_BASE_URL",
+        "AUTHORING_API_URL",
+        "SPECTACULAR_SETTINGS",
         "LMS_BASE_URL",
         "LMS_ROOT_URL",
         "JWT_PRIVATE_SIGNING_JWK",
@@ -139,6 +147,116 @@ class TestStudioSettings:
         # openedx-secrets feeds both services the same keys; only Studio reads them.
         monkeypatch.setenv("SOCIAL_AUTH_EDX_OAUTH2_KEY", "cms-sso")
         assert not hasattr(ProductionSettingsMixin(), "SOCIAL_AUTH_EDX_OAUTH2_KEY")
+
+
+class _StudioWithAuthoringSchema(StudioSettingsMixin):
+    """The mixin plus the two fields the generated CMS model contributes."""
+
+    AUTHORING_API_URL: str = Field(default="")
+    SPECTACULAR_SETTINGS: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "SCHEMA_PATH_PREFIX": "/api/contentstore",
+            "SCHEMA_PATH_PREFIX_TRIM": "/api/contentstore",
+        }
+    )
+
+
+def test_spectacular_servers_put_the_trimmed_prefix_back() -> None:
+    # The shape of the LMS Enrollment API schema: every path is under the prefix.
+    enrollment = {
+        "TITLE": "LMS",
+        "SCHEMA_PATH_PREFIX": "/api/enrollment",
+        "SCHEMA_PATH_PREFIX_TRIM": "/api/enrollment",
+    }
+    derived = spectacular_with_servers(
+        enrollment, "https://lms.example.com/", "LMS-enrollment"
+    )
+    assert derived["SERVERS"] == [
+        {
+            "url": "https://lms.example.com/api/enrollment",
+            "description": "LMS-enrollment",
+        },
+        {"url": "https://lms.example.com", "description": "Local"},
+    ]
+    assert derived["TITLE"] == "LMS"
+    # A copy, so the caller has to assign it for the overlay to keep it.
+    assert "SERVERS" not in enrollment
+
+
+def test_spectacular_servers_read_the_prefix_not_the_trim_flag() -> None:
+    # drf-spectacular documents SCHEMA_PATH_PREFIX_TRIM as a bool.
+    derived = spectacular_with_servers(
+        {"SCHEMA_PATH_PREFIX": "/api/contentstore", "SCHEMA_PATH_PREFIX_TRIM": True},
+        "https://studio.example.com",
+        "CMS-contentstore",
+    )
+    assert [server["url"] for server in derived["SERVERS"]] == [
+        "https://studio.example.com/api/contentstore",
+        "https://studio.example.com",
+    ]
+
+
+@pytest.mark.parametrize(
+    "spectacular",
+    [
+        {"SCHEMA_PATH_PREFIX": "/api/contentstore", "SCHEMA_PATH_PREFIX_TRIM": False},
+        {"SCHEMA_PATH_PREFIX": "/api/contentstore"},
+        {"SCHEMA_PATH_PREFIX": None, "SCHEMA_PATH_PREFIX_TRIM": True},
+    ],
+)
+def test_spectacular_servers_without_a_trimmed_prefix_offer_only_the_root(
+    spectacular: dict[str, Any],
+) -> None:
+    derived = spectacular_with_servers(spectacular, "https://studio.example.com", "x")
+    assert derived["SERVERS"] == [
+        {"url": "https://studio.example.com", "description": "Local"}
+    ]
+
+
+class TestSpectacularServers:
+    def test_a_trimmed_path_resolves_to_its_real_route(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("CMS_BASE_URL", "https://studio.example.com/")
+        settings = _StudioWithAuthoringSchema()
+        servers = settings.SPECTACULAR_SETTINGS["SERVERS"]
+        # Swagger requests servers[0] + the published (trimmed) path.
+        assert (
+            servers[0]["url"] + "/v0/xblock/abc"
+            == "https://studio.example.com/api/contentstore/v0/xblock/abc"
+        )
+        # Paths outside the trimmed prefix are published whole.
+        assert (
+            servers[1]["url"] + "/api/courses/x/bulk_enable_disable_discussions"
+            == "https://studio.example.com/api/courses/x/bulk_enable_disable_discussions"
+        )
+        assert len(servers) == 2
+
+    def test_the_derived_value_overrides_the_base(self) -> None:
+        # django-aqueduct lets a field the base also carries through only when
+        # it is in model_fields_set.
+        assert "SPECTACULAR_SETTINGS" in _StudioWithAuthoringSchema().model_fields_set
+
+    def test_a_public_authoring_api_url_is_offered_last(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AUTHORING_API_URL", "https://api.example.com/authoring")
+        servers = _StudioWithAuthoringSchema().SPECTACULAR_SETTINGS["SERVERS"]
+        assert [server["description"] for server in servers] == [
+            "CMS-contentstore",
+            "Local",
+            "Public",
+        ]
+
+    def test_operator_supplied_servers_are_left_alone(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        supplied = {"SERVERS": [{"url": "https://elsewhere.example.com"}]}
+        monkeypatch.setenv("SPECTACULAR_SETTINGS", json.dumps(supplied))
+        assert _StudioWithAuthoringSchema().SPECTACULAR_SETTINGS == supplied
+
+    def test_a_model_without_the_setting_is_untouched(self) -> None:
+        assert not hasattr(StudioSettingsMixin(), "SPECTACULAR_SETTINGS")
 
 
 class TestMergeJwtSigningKeys:

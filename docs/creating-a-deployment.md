@@ -142,6 +142,7 @@ the image. `models/base.py` comes from lehrer's own
 | `container` | `Container` | **required** | Container with static assets built |
 | `custom_settings` | `Directory` | **required** | Settings directory |
 | `settings_namespace` | `str` | `"production"` | Django settings sub-package name |
+| `bootstrap_owner` | `str \| None` | `"app:app"` | Owner of the injected `lehrer_bootstrap` package; `None` for a container with no `app` user |
 
 ### `collected`
 

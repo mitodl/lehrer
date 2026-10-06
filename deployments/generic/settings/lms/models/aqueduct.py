@@ -995,8 +995,8 @@ class AqueductSettings(BaseSettings):
             # DRF filters
             "django_filters",
             # API Documentation
-            "drf_yasg",
             "drf_spectacular",
+            "drf_spectacular_sidecar",
             # edx-drf-extensions
             "csrf.apps.CsrfAppConfig",  # Enables frontend apps to retrieve CSRF tokens.
             "xss_utils",
@@ -1628,6 +1628,9 @@ class AqueductSettings(BaseSettings):
             "PREPROCESSING_HOOKS": ["lms.lib.spectacular.lms_api_filter"],
             "SCHEMA_PATH_PREFIX": "/api/enrollment",
             "SCHEMA_PATH_PREFIX_TRIM": "/api/enrollment",
+            "SWAGGER_UI_DIST": "SIDECAR",
+            "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+            "REDOC_DIST": "SIDECAR",
         },
     )
     SQUELCH_PII_IN_LOGS: bool = Field(
@@ -1678,12 +1681,6 @@ class AqueductSettings(BaseSettings):
     SURVEY_REPORT_EXTRA_DATA: Annotated[dict[str, Any], NoDecode] = Field(
         default_factory=dict,
         description=".. setting_name: SURVEY_REPORT_EXTRA_DATA\n.. setting_default: empty dictionary\n.. setting_description: Dictionary with additional information that you want to share in the report.",  # noqa: E501
-    )
-    SWAGGER_SETTINGS: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {
-            "DEFAULT_INFO": "openedx.core.apidocs.api_info",
-            "DEEP_LINKING": True,
-        },
     )
     SYSTEM_TO_FEATURE_ROLE_MAPPING: Any = Field(
         default_factory=lambda: {
@@ -1880,7 +1877,6 @@ class AqueductSettings(BaseSettings):
         "SOCIAL_PLATFORMS",
         "SPECTACULAR_SETTINGS",
         "SURVEY_REPORT_EXTRA_DATA",
-        "SWAGGER_SETTINGS",
         "TRACKING_SEGMENTIO_SOURCE_MAP",
         "VERIFICATION_EXPIRY_EMAIL",
         mode="before",
