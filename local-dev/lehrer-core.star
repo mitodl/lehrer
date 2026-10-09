@@ -223,6 +223,15 @@ def setup(cfg):
     lehrer_base = local_dev + "/../src/lehrer/settings/base.py"
     lehrer_bootstrap = local_dev + "/../src/lehrer/bootstrap"
 
+    # Every image build shells out to `dagger call`, which resolves its module
+    # from the working directory. Tilt runs custom_build commands in the cwd of
+    # whichever Tiltfile started the run, so under composition that is the
+    # caller's repo -- which has no dagger.json, so dagger loads only the core
+    # API and every build dies with `unknown command "platform" for "dagger
+    # call"`. Pin it to the repo that owns dagger.json. A no-op for lehrer's own
+    # standalone path, where the two are already the same directory.
+    lehrer_root = local_dev + "/.."
+
     # Absolute path to the deployment config directory.
     # Relative paths are treated as relative to local_dev (where tilt up is run from).
     if deploy_config.startswith("/"):
@@ -476,6 +485,7 @@ def setup(cfg):
         ],
         skips_local_docker=True,
         live_update=platform_live_update,
+        dir=lehrer_root,
     )
 
     # ------------------------------------------------------------------ #
@@ -500,6 +510,7 @@ def setup(cfg):
         ),
         deps=[dep_cfg + "/codejail_config"],
         skips_local_docker=True,
+        dir=lehrer_root,
     )
 
     # ------------------------------------------------------------------ #
@@ -525,6 +536,7 @@ def setup(cfg):
         ),
         deps=[dep_cfg + "/notes_config"],
         skips_local_docker=True,
+        dir=lehrer_root,
     )
 
     # ------------------------------------------------------------------ #
@@ -578,6 +590,7 @@ def setup(cfg):
             ),
             deps=[site_dir] + mfe_deps_base,
             skips_local_docker=True,
+            dir=lehrer_root,
         )
 
     if mfe_hot_reload:
