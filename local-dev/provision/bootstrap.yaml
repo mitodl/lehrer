@@ -45,6 +45,48 @@ oauth_applications:
   - user_id
   skip_authorization: true
 
+third_party_auth_providers:
+# Federated login against an upstream MIT Open Learning application (mitxonline
+# in the composed local-dev cluster), via ol-social-auth's OLOAuth2 backend.
+#
+# Inert unless the caller supplies OL_OAUTH2_OTHER_SETTINGS: a standalone
+# install has no upstream to federate to, and the endpoint URLs are a property
+# of that upstream rather than of this stack, so they arrive from the
+# environment instead of being pinned here. The credentials come from
+# openedx-secrets like every other secret in this file.
+#
+# Needs ol_social_auth.backends.OLOAuth2 in THIRD_PARTY_AUTH_BACKENDS and a
+# true ENABLE_THIRD_PARTY_AUTH, or the row exists and nothing reads it.
+- backend_name: ol-oauth2
+  slug: ol-oauth2
+  name: MIT Open Learning
+  client_id_env: OL_OAUTH2_CLIENT_ID
+  client_secret_env: OL_OAUTH2_CLIENT_SECRET    # pragma: allowlist secret
+  other_settings_env: OL_OAUTH2_OTHER_SETTINGS
+  # The upstream owns registration and has already verified the address, so
+  # the LMS provisions straight from its user data instead of prompting for a
+  # form it cannot complete and an email it cannot confirm.
+  skip_registration_form: true
+  skip_email_verification: true
+  sync_learner_profile_data: true
+
+service_access_tokens:
+# The bearer token an upstream MIT Open Learning application uses to drive the
+# LMS enrollment API on learners' behalf (MITx Online's
+# OPENEDX_SERVICE_WORKER_API_TOKEN). It is not exchanged for anything: the
+# upstream sends this exact value, so it has to exist here as an AccessToken or
+# every enrollment push fails and the upstream records edx_enrolled=False
+# without surfacing an error to the learner.
+#
+# Inert unless the caller supplies OPENEDX_SERVICE_WORKER_API_TOKEN; a
+# standalone install has no upstream pushing enrollments to it.
+- username: mitxonline_service_worker
+  email: mitxonline-service-worker@example.com
+  application_name: mitxonline-service-worker
+  token_env: OPENEDX_SERVICE_WORKER_API_TOKEN    # pragma: allowlist secret
+  # Enrolling somebody *else* through the enrollment API is staff-only.
+  staff: true
+
 # Deliberately small. The generic stack runs only the shell, header and footer
 # MFE apps and has no discussions/forum service, so the larger flag sets
 # ol-infrastructure applies to the residential and mitxonline deployments do
