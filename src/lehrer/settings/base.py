@@ -389,6 +389,40 @@ class ProductionSettingsMixin(BaseSettings):
     LMS_BASE_URL: str = Field(default="")
     CMS_BASE_URL: str = Field(default="")
 
+    # Base URL of the learning MFE, read by course_experience/url_helpers.py to
+    # build courseware links. Same codegen gap as CELERY_BROKER_* above: it is
+    # defined only in openedx/envs/common.py, which lms/envs/common.py reaches
+    # by star-import, so no field is generated and the env source drops the var
+    # -- the setting stays at the base None and the LMS silently keeps linking
+    # at the legacy /courses/<id>/course/ pages. Undeclared it fails *quietly*
+    # (None, not the string), which is why it survived a whole MFE rollout.
+    LEARNING_MICROFRONTEND_URL: str | None = Field(default=None)
+
+    # Anonymous-user redirect from the openedx-companion-auth plugin, whose
+    # plugin_settings() hardcodes MITX_REDIRECT_ENABLED = True and an allow-list
+    # that does not include /heartbeat. Declared here because the plugin's own
+    # override path (its production.py) reads settings.ENV_TOKENS, which does not
+    # exist under aqueduct -- so without these fields there is no way to turn the
+    # redirect off, and an undeclared env var would arrive as the *string*
+    # "false", which is truthy. Every real deployment already overrides these
+    # (ol-infrastructure's edxapp config_builder: mitx/mitx-staging disable the
+    # redirect outright, xpro/mitxonline allow-list heartbeat), so the plugin
+    # default is never the intended value.
+    MITX_REDIRECT_ENABLED: bool = Field(default=True)
+    MITX_REDIRECT_LOGIN_URL: str | None = Field(default=None)
+    MITX_REDIRECT_ALLOW_RE_LIST: list[str] | None = Field(default=None)
+    MITX_REDIRECT_DENY_RE_LIST: list[str] | None = Field(default=None)
+
+    # LMS-only settings that the CMS also has to resolve, because
+    # ol-openedx-canvas-integration registers a cms.djangoapp entry point while
+    # its tasks.py imports lms.djangoapps.instructor_task -> bulk_email.tasks,
+    # which reads both of these at decorator-evaluation time. CMS legitimately
+    # lacks them: lms/envs/common.py defines them, cms/envs/common.py does not.
+    # Defaults match upstream lms/envs/common.py. Delete these once the plugin
+    # drops its cms.djangoapp entry point -- fixing the plugin is the real fix.
+    BULK_EMAIL_DEFAULT_RETRY_DELAY: int = Field(default=30)
+    BULK_EMAIL_MAX_RETRIES: int = Field(default=5)
+
     # ------------------------------------------------------------------
     # Source customisation
     # ------------------------------------------------------------------

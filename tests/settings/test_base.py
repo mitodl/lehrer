@@ -9,6 +9,8 @@ from pydantic import Field
 from lehrer.settings.base import (
     ProductionSettingsMixin,
     StudioSettingsMixin,
+    apply_base_post_configure,
+    ensure_celery_router_inputs,
     merge_jwt_signing_keys,
     spectacular_with_servers,
 )
@@ -31,6 +33,7 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "LMS_ROOT_URL",
         "JWT_PRIVATE_SIGNING_JWK",
         "JWT_PUBLIC_SIGNING_JWK_SET",
+        "LEARNING_MICROFRONTEND_URL",
         "SESSION_COOKIE_NAME",
         "SOCIAL_AUTH_REDIRECT_IS_HTTPS",
         "SOCIAL_AUTH_EDX_OAUTH2_KEY",
@@ -259,6 +262,20 @@ class TestSpectacularServers:
         assert not hasattr(StudioSettingsMixin(), "SPECTACULAR_SETTINGS")
 
 
+class TestLearningMicrofrontendUrl:
+    def test_arrives_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Regression: the setting is defined only in openedx/envs/common.py, which
+        # lms/envs/common.py star-imports, so codegen never generated a field and
+        # the env var was dropped -- settings.LEARNING_MICROFRONTEND_URL stayed
+        # None while the var sat in the pod's environment.
+        monkeypatch.setenv("LEARNING_MICROFRONTEND_URL", "https://lms.mit.dev/learn")
+        settings = ProductionSettingsMixin()
+        assert settings.LEARNING_MICROFRONTEND_URL == "https://lms.mit.dev/learn"
+
+    def test_defaults_to_none_when_unset(self) -> None:
+        assert ProductionSettingsMixin().LEARNING_MICROFRONTEND_URL is None
+
+
 class TestMergeJwtSigningKeys:
     def test_merges_into_the_overlaid_dict(
         self, monkeypatch: pytest.MonkeyPatch
@@ -278,6 +295,31 @@ class TestMergeJwtSigningKeys:
         merged = {"JWT_AUTH": jwt_auth}
         merge_jwt_signing_keys(merged, ProductionSettingsMixin())
         assert merged["JWT_AUTH"] is jwt_auth
+
+
+class TestEnsureCeleryRouterInputs:
+    def test_supplies_both_router_settings(self) -> None:
+        # route_task reads both unconditionally; common.py defines neither,
+        # so without this every apply_async raises AttributeError.
+        merged: dict = {}
+        ensure_celery_router_inputs(merged)
+        assert merged["EXPLICIT_QUEUES"] == {}
+        assert merged["ALTERNATE_ENV_TASKS"] == {}
+
+    def test_leaves_yaml_supplied_routing_alone(self) -> None:
+        supplied = {"some.task": {"queue": "edx.lms.core.high_mem"}}
+        merged: dict = {"EXPLICIT_QUEUES": supplied}
+        ensure_celery_router_inputs(merged)
+        assert merged["EXPLICIT_QUEUES"] is supplied
+
+    def test_base_post_configure_does_both_jobs(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("JWT_PRIVATE_SIGNING_JWK", '{"kid": "k"}')
+        merged: dict = {"JWT_AUTH": {"JWT_ISSUER": "http://lms/oauth2"}}
+        apply_base_post_configure(merged, ProductionSettingsMixin())
+        assert merged["JWT_AUTH"]["JWT_PRIVATE_SIGNING_JWK"] == '{"kid": "k"}'
+        assert merged["EXPLICIT_QUEUES"] == {}
 
 
 def test_redirect_is_https_parses_false(monkeypatch: pytest.MonkeyPatch) -> None:
