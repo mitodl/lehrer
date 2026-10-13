@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -11,6 +12,7 @@ from lehrer.settings.base import (
     StudioSettingsMixin,
     merge_jwt_signing_keys,
     spectacular_with_servers,
+    spectacular_without_undefined_hooks,
 )
 
 
@@ -211,6 +213,53 @@ def test_spectacular_servers_without_a_trimmed_prefix_offer_only_the_root(
     assert derived["SERVERS"] == [
         {"url": "https://studio.example.com", "description": "Local"}
     ]
+
+
+@pytest.fixture
+def release_spectacular(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    """An older release's ``lib/spectacular.py``: one hook, unsafe to import."""
+    unsafe = "raise RuntimeError('imported while settings were being built')\n"
+    package = tmp_path / "older_release"
+    package.mkdir()
+    (package / "__init__.py").write_text(unsafe)
+    (package / "spectacular.py").write_text(f"{unsafe}def api_filter(endpoints): ...\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    return "older_release.spectacular"
+
+
+class TestSpectacularHooks:
+    def test_hooks_the_release_does_not_define_are_dropped(
+        self, release_spectacular: str
+    ) -> None:
+        # The master model names hooks that verawood's cms/lib/spectacular.py
+        # lacks; drf-spectacular fails to import them when the schema is requested.
+        pruned = spectacular_without_undefined_hooks(
+            {
+                "TITLE": "Authoring API",
+                "PREPROCESSING_HOOKS": [f"{release_spectacular}.api_filter"],
+                "POSTPROCESSING_HOOKS": [
+                    "json.dumps",
+                    f"{release_spectacular}.mark_superseded_paths",
+                    "no_such_package.spectacular.hook",
+                ],
+            }
+        )
+        assert pruned == {
+            "TITLE": "Authoring API",
+            "PREPROCESSING_HOOKS": [f"{release_spectacular}.api_filter"],
+            "POSTPROCESSING_HOOKS": ["json.dumps"],
+        }
+
+    def test_settings_without_hooks_gain_none(self) -> None:
+        assert spectacular_without_undefined_hooks({"TITLE": "LMS"}) == {"TITLE": "LMS"}
+
+    def test_deriving_servers_drops_them_too(self, release_spectacular: str) -> None:
+        derived = spectacular_with_servers(
+            {"POSTPROCESSING_HOOKS": [f"{release_spectacular}.mark_migrated_paths"]},
+            "https://studio.example.com",
+            "x",
+        )
+        assert derived["POSTPROCESSING_HOOKS"] == []
 
 
 class TestSpectacularServers:

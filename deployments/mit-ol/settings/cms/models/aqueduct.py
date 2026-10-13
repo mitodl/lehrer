@@ -791,10 +791,14 @@ class AqueductSettings(BaseSettings):
             "VERSION": "0.1.0",
             "SERVE_INCLUDE_SCHEMA": False,
             "PREPROCESSING_HOOKS": ["cms.lib.spectacular.cms_api_filter"],
-            "SCHEMA_PATH_PREFIX": "/api/contentstore",
-            "SCHEMA_PATH_PREFIX_TRIM": "/api/contentstore",
+            "POSTPROCESSING_HOOKS": [
+                "drf_spectacular.hooks.postprocess_schema_enums",
+                "cms.lib.spectacular.cms_mark_superseded_paths",
+                "cms.lib.spectacular.cms_mark_migrated_paths",
+            ],
+            "SCHEMA_PATH_PREFIX": "/api/(contentstore|authoring)",
         },
-        description="The Authoring API schema, for any settings module that does not define its\nown SPECTACULAR_SETTINGS -- notably cms.envs.development, which generates the\ncommitted docs/cms-openapi.yaml in CI. Without these the document has no\ntitle, version 0.0.0, and every endpoint in the service rather than the\nAuthoring API's own surface.\ndevstack.py and production.py replace this wholesale, adding SERVERS and a\nlonger DESCRIPTION. Those are the only parts that depend on CMS_BASE and\nAUTHORING_API_URL, which are empty here; the filtering and the path prefix do\nnot, so they belong at this level.",  # noqa: E501
+        description="The Authoring API schema, for any settings module that does not define its\nown SPECTACULAR_SETTINGS -- notably cms.envs.development, which generates the\ncommitted docs/cms-openapi.yaml in CI. Without these the document has no\ntitle, version 0.0.0, and every endpoint in the service rather than the\nAuthoring API's own surface.\ndevstack.py and production.py replace this wholesale, adding SERVERS and a\nlonger DESCRIPTION. Those are the only parts that depend on CMS_BASE and\nAUTHORING_API_URL, which are empty here; the hooks and the path prefix do\nnot, so they belong at this level.",  # noqa: E501
     )
     SQUELCH_PII_IN_LOGS: bool = Field(
         default=False,

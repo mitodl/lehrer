@@ -267,6 +267,14 @@ _AQUEDUCT_TOML = (
 )
 
 
+_SPECTACULAR_HOOKS_SCRIPT = """\
+from drf_spectacular.settings import spectacular_settings
+for key in ("PREPROCESSING_HOOKS", "POSTPROCESSING_HOOKS"):
+    hooks = [hook.__name__ for hook in getattr(spectacular_settings, key)]
+    print(f"  spectacular OK: {key} resolve {hooks}")
+"""
+
+
 def _boot_self_test_script() -> str:
     """Python source asserting ``<svc>.envs.aqueduct`` boots without dropping apps.
 
@@ -3102,7 +3110,9 @@ class OpenedxPlatform:
            ``manage.py <svc> check`` under the entry module, which performs a
            full ``django.setup()``: every app in ``INSTALLED_APPS`` is imported
            and every registered system check runs.  This is what turns "the
-           settings parse" into "the platform would actually start".
+           settings parse" into "the platform would actually start".  It then
+           resolves ``SPECTACULAR_SETTINGS``' hooks, which drf-spectacular only
+           imports when a schema is requested.
         3. **Model drift** (``drift``, opt-in) — regenerate the model from this
            cell's edx-platform source through the identical pipeline
            :meth:`regenerate_aqueduct_settings` uses (static AST generation then
@@ -3208,6 +3218,17 @@ class OpenedxPlatform:
                         "-c",
                         f"SERVICE_VARIANT={svc} python manage.py {svc} check "
                         "--settings=aqueduct",
+                    ]
+                )
+                # drf-spectacular imports its hooks on first use, so a dotted
+                # path this release's edx-platform does not define passes
+                # `check` and only fails when the schema is requested.
+                container = container.with_exec(
+                    [
+                        "sh",
+                        "-c",
+                        f"SERVICE_VARIANT={svc} python manage.py {svc} shell "
+                        f"--settings=aqueduct -c {shlex.quote(_SPECTACULAR_HOOKS_SCRIPT)}",
                     ]
                 )
 

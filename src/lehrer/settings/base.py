@@ -70,8 +70,11 @@ module is also mypy-checked inside lehrer's own venv, which does not depend on
 
 from __future__ import annotations
 
+import ast
 import os
 import tempfile
+from collections.abc import Sequence
+from importlib.machinery import PathFinder, SourceFileLoader
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -792,6 +795,68 @@ class ProductionSettingsMixin(BaseSettings):
         return self
 
 
+def _module_source_binds(dotted_path: str) -> bool:
+    """Whether the module in *dotted_path* binds its last name at module level.
+
+    Read from the module's source rather than by importing it: this runs while
+    Django settings are still being built, and edx-platform's spectacular
+    modules import Django REST Framework, which reads settings on import.
+
+    :param dotted_path: An import string, e.g. ``cms.lib.spectacular.cms_api_filter``.
+    :returns: ``False`` when the module is missing or does not bind the name.
+    :rtype: bool
+    """
+    module_name, _, name = dotted_path.rpartition(".")
+    # One segment at a time through PathFinder: importlib.util.find_spec would
+    # import each parent package to learn where to look for the next one.
+    search_path: Sequence[str] | None = None
+    spec = None
+    for segment in module_name.split("."):
+        if spec is not None and search_path is None:
+            return False
+        spec = PathFinder.find_spec(segment, search_path)
+        if spec is None:
+            return False
+        search_path = spec.submodule_search_locations
+    if spec is None or not isinstance(spec.loader, SourceFileLoader):
+        return False
+    bound: set[str] = set()
+    for node in ast.parse(Path(spec.loader.path).read_text()).body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            bound.add(node.name)
+        elif isinstance(node, ast.Import | ast.ImportFrom):
+            bound.update(alias.asname or alias.name for alias in node.names)
+        elif isinstance(node, ast.Assign):
+            bound.update(
+                target.id for target in node.targets if isinstance(target, ast.Name)
+            )
+    return name in bound
+
+
+def spectacular_without_undefined_hooks(spectacular: dict[str, Any]) -> dict[str, Any]:
+    """Return *spectacular* without the hooks this edx-platform does not define.
+
+    The generated model is rendered from one release (the manifest's
+    ``settings_model_release``) and serves every release in the group. Where a
+    release's ``common.py`` has no ``SPECTACULAR_SETTINGS`` of its own, the
+    model's default is the live setting, so a hook that release's
+    ``<svc>/lib/spectacular.py`` lacks would be imported when the schema is
+    requested and fail the request.
+
+    :param spectacular: The service's ``SPECTACULAR_SETTINGS``.
+    :returns: A copy of *spectacular* with each hook list filtered.
+    :rtype: dict[str, Any]
+    """
+    return {
+        **spectacular,
+        **{
+            key: [hook for hook in spectacular[key] if _module_source_binds(hook)]
+            for key in ("PREPROCESSING_HOOKS", "POSTPROCESSING_HOOKS")
+            if key in spectacular
+        },
+    }
+
+
 def spectacular_with_servers(
     spectacular: dict[str, Any], root_url: str, prefix_description: str
 ) -> dict[str, Any]:
@@ -812,6 +877,10 @@ def spectacular_with_servers(
     django-aqueduct keeps a field the base also carries only when it is in
     ``model_fields_set``, which an in-place edit of the default does not touch.
 
+    The copy also leaves out hooks the running release does not define (see
+    ``spectacular_without_undefined_hooks``), so every caller that derives the
+    setting gets both.
+
     :param spectacular: The service's ``SPECTACULAR_SETTINGS``.
     :param root_url: The service's public root URL.
     :param prefix_description: Label for the server under the trimmed prefix.
@@ -827,7 +896,7 @@ def spectacular_with_servers(
         and prefix
     ):
         servers.insert(0, {"url": root_url + prefix, "description": prefix_description})
-    return {**spectacular, "SERVERS": servers}
+    return {**spectacular_without_undefined_hooks(spectacular), "SERVERS": servers}
 
 
 class StudioSettingsMixin(ProductionSettingsMixin):
