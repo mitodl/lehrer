@@ -1626,8 +1626,11 @@ class AqueductSettings(BaseSettings):
             "VERSION": "0.1.0",
             "SERVE_INCLUDE_SCHEMA": False,
             "PREPROCESSING_HOOKS": ["lms.lib.spectacular.lms_api_filter"],
+            "POSTPROCESSING_HOOKS": [
+                "drf_spectacular.hooks.postprocess_schema_enums",
+                "lms.lib.spectacular.lms_mark_legacy_paths_deprecated",
+            ],
             "SCHEMA_PATH_PREFIX": "/api/enrollment",
-            "SCHEMA_PATH_PREFIX_TRIM": "/api/enrollment",
             "SWAGGER_UI_DIST": "SIDECAR",
             "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
             "REDOC_DIST": "SIDECAR",
