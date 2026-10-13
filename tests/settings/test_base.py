@@ -218,13 +218,11 @@ def test_spectacular_servers_without_a_trimmed_prefix_offer_only_the_root(
 @pytest.fixture
 def release_spectacular(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """An older release's ``lib/spectacular.py``: one hook, unsafe to import."""
+    unsafe = "raise RuntimeError('imported while settings were being built')\n"
     package = tmp_path / "older_release"
     package.mkdir()
-    (package / "__init__.py").touch()
-    (package / "spectacular.py").write_text(
-        "raise RuntimeError('imported while settings were being built')\n"
-        "def api_filter(endpoints): ...\n"
-    )
+    (package / "__init__.py").write_text(unsafe)
+    (package / "spectacular.py").write_text(f"{unsafe}def api_filter(endpoints): ...\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     return "older_release.spectacular"
 

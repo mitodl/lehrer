@@ -71,9 +71,10 @@ module is also mypy-checked inside lehrer's own venv, which does not depend on
 from __future__ import annotations
 
 import ast
-import importlib.util
 import os
 import tempfile
+from collections.abc import Sequence
+from importlib.machinery import PathFinder, SourceFileLoader
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -806,14 +807,21 @@ def _module_source_binds(dotted_path: str) -> bool:
     :rtype: bool
     """
     module_name, _, name = dotted_path.rpartition(".")
-    try:
-        spec = importlib.util.find_spec(module_name)
-    except ModuleNotFoundError:
-        return False
-    if spec is None or not spec.has_location or spec.origin is None:
+    # One segment at a time through PathFinder: importlib.util.find_spec would
+    # import each parent package to learn where to look for the next one.
+    search_path: Sequence[str] | None = None
+    spec = None
+    for segment in module_name.split("."):
+        if spec is not None and search_path is None:
+            return False
+        spec = PathFinder.find_spec(segment, search_path)
+        if spec is None:
+            return False
+        search_path = spec.submodule_search_locations
+    if spec is None or not isinstance(spec.loader, SourceFileLoader):
         return False
     bound: set[str] = set()
-    for node in ast.parse(Path(spec.origin).read_text()).body:
+    for node in ast.parse(Path(spec.loader.path).read_text()).body:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             bound.add(node.name)
         elif isinstance(node, ast.Import | ast.ImportFrom):
