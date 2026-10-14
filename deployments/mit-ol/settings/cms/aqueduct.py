@@ -37,7 +37,7 @@ Loading strategy (highest → lowest priority):
 
 from __future__ import annotations
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from django_aqueduct import configure_django_settings
 
@@ -51,6 +51,23 @@ from .models.base import (
 
 class CMSProductionSettings(StudioSettingsMixin, AqueductSettings):
     """Typed CMS (Studio) production settings."""
+
+    # LMS-only settings the CMS also has to resolve, because
+    # ol-openedx-canvas-integration registers a cms.djangoapp entry point while
+    # its tasks.py imports lms.djangoapps.instructor_task -> bulk_email.tasks,
+    # which reads both of these at decorator-evaluation time.  CMS legitimately
+    # lacks them: lms/envs/common.py defines them, cms/envs/common.py does not.
+    #
+    # Not reachable by --openedx-plugins: these are not assigned by any
+    # plugin's plugin_settings() hook, they are *read* by edx-platform code the
+    # plugin pulls in transitively, so there is no declaration anywhere for the
+    # generator to find.  mit-ol rather than lehrer core because the only thing
+    # that makes CMS need them is a plugin only mit-ol cells pin.
+    #
+    # Defaults match upstream lms/envs/common.py.  Delete these once the plugin
+    # drops its cms.djangoapp entry point -- fixing the plugin is the real fix.
+    BULK_EMAIL_DEFAULT_RETRY_DELAY: int = Field(default=30)
+    BULK_EMAIL_MAX_RETRIES: int = Field(default=5)
 
     @model_validator(mode="after")
     def _derive_urlconf(self) -> CMSProductionSettings:
