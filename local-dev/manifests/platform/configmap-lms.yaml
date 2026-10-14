@@ -61,6 +61,30 @@ data:
   LMS_BASE: "localhost:8000"
   CMS_BASE: "localhost:8010"
 
+  # openedx-companion-auth redirects every anonymous request to
+  # MITX_REDIRECT_LOGIN_URL (/auth/login/ol-oauth2/), and its allow-list does
+  # not cover /heartbeat. A standalone install registers no ol-oauth2 provider
+  # -- there is no upstream MIT Open Learning application in front of it -- so
+  # that URL 404s. The LMS liveness/readiness probes hit /heartbeat, follow the
+  # redirect, get the 404, and the pod is restarted forever.
+  #
+  # Off rather than allow-listing /heartbeat (what xpro and mitxonline do in
+  # production): with no backend to redirect *to*, allow-listing the probe path
+  # would leave every other anonymous page dead-ending in the same 404. Disabled
+  # gives the LMS its own login page, which works with the superuser the
+  # provision step creates. mitx/mitx-staging run with this off in production
+  # too, so it is a supported value and not a local-dev-only hack.
+  #
+  # A caller that *does* have an upstream (ol-infrastructure's composed
+  # local-dev, which runs mitxonline alongside) turns this back on in its own
+  # overrides ConfigMap, together with THIRD_PARTY_AUTH_BACKENDS and an
+  # allow-list covering heartbeat. Both are plain env vars: the model declares
+  # THIRD_PARTY_AUTH_BACKENDS as list[str] (deployments/mit-ol/settings/lms/
+  # aqueduct.py) and pydantic-settings parses list-typed env vars as JSON, the
+  # same way ALLOWED_HOSTS below arrives. The YAML tier that OL_SETTINGS_DIR
+  # disables is not involved.
+  MITX_REDIRECT_ENABLED: "false"
+
   # Static files
   STATIC_ROOT_BASE: "/openedx/staticfiles"
 
