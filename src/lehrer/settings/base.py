@@ -55,7 +55,7 @@ of django-aqueduct 0.10.0 the overlay keeps a model field only when it is
 (the base is imported at runtime, so ``add_plugins`` has already run).  So this
 mixin does **not** need to redeclare those settings; the framework defers them
 automatically.  A validator that must *extend* a plugin-complete list runs as a
-``post_configure`` hook instead (see the mit-ol LMS entry module).
+``post_configure`` hook instead (see a deployment's LMS entry module).
 
 **Names a plugin's ``plugin_settings()`` hook assigns** are not fixed by that
 deferral.  Deferring hands back the plugin's own default, but there is still no
