@@ -41,20 +41,32 @@ the structural deferrals below take effect.
 Overlay & the openedx plugin framework
 --------------------------------------
 codegen v2 discovers settings by static AST analysis of ``common.py`` — it never
-imports the module, so it cannot see the settings openedx injects at *runtime*
-via ``add_plugins()`` (plugin apps appended to ``INSTALLED_APPS``, middleware,
-auth backends, template context processors, …).  A generated default for those
-is therefore plugin-*incomplete*.
+imports the module, so it cannot see what openedx's ``add_plugins()`` does at
+*runtime*.  That splits into two different problems with two different fixes.
 
-This is handled by ``configure_django_settings(base="<svc>.envs.common")`` in
-each entry module: as of django-aqueduct 0.10.0 the overlay keeps a model field
-only when it is *meaningfully carried* — set by a settings source (env/YAML) or
-assigned by a ``@model_validator``.  A field left at its static generated default
+**Structural appends** — plugin apps appended to ``INSTALLED_APPS``, middleware,
+auth backends, template context processors — make a generated default
+plugin-*incomplete*.  These are handled by
+``configure_django_settings(base="<svc>.envs.common")`` in each entry module: as
+of django-aqueduct 0.10.0 the overlay keeps a model field only when it is
+*meaningfully carried* — set by a settings source (env/YAML) or assigned by a
+``@model_validator``.  A field left at its static generated default
 (``INSTALLED_APPS`` and friends) defers to the live, plugin-complete base value
 (the base is imported at runtime, so ``add_plugins`` has already run).  So this
 mixin does **not** need to redeclare those settings; the framework defers them
 automatically.  A validator that must *extend* a plugin-complete list runs as a
 ``post_configure`` hook instead (see the mit-ol LMS entry module).
+
+**Names a plugin's ``plugin_settings()`` hook assigns** are not fixed by that
+deferral.  Deferring hands back the plugin's own default, but there is still no
+*field*, and the env source binds per declared field — so the pod's value for
+that name is dropped rather than applied, and the plugin default becomes
+unoverridable.  django-aqueduct 0.14.0 closes this: regeneration passes
+``--openedx-plugins <svc>.djangoapp``, which reads each *installed* plugin's
+``plugin_settings()`` by AST (still no imports) and declares what it assigns.
+Those fields therefore land in the generated model of the deployments that pin
+the plugin, and nowhere else — they do not belong in this shared mixin, which
+every deployment group composes.
 
 Reusable-derivations note
 -------------------------
@@ -395,36 +407,15 @@ class ProductionSettingsMixin(BaseSettings):
     # Base URL of the learning MFE, read by course_experience/url_helpers.py to
     # build courseware links. Same codegen gap as CELERY_BROKER_* above: it is
     # defined only in openedx/envs/common.py, which lms/envs/common.py reaches
-    # by star-import, so no field is generated and the env source drops the var
-    # -- the setting stays at the base None and the LMS silently keeps linking
-    # at the legacy /courses/<id>/course/ pages. Undeclared it fails *quietly*
-    # (None, not the string), which is why it survived a whole MFE rollout.
+    # by star-import, so codegen's AST pass over lms/envs/common.py never sees
+    # the assignment and generates no field. Without a field the env source has
+    # nothing to bind to -- pydantic-settings collects values per *declared*
+    # field, so the var sits in the pod's environment and is dropped, not
+    # mis-parsed. The setting stays at the base None and the LMS silently keeps
+    # linking at the legacy /courses/<id>/course/ pages, which is why this
+    # survived a whole MFE rollout: it fails quietly, with no bad value to
+    # notice. Declaring it is what admits the variable at all.
     LEARNING_MICROFRONTEND_URL: str | None = Field(default=None)
-
-    # Anonymous-user redirect from the openedx-companion-auth plugin, whose
-    # plugin_settings() hardcodes MITX_REDIRECT_ENABLED = True and an allow-list
-    # that does not include /heartbeat. Declared here because the plugin's own
-    # override path (its production.py) reads settings.ENV_TOKENS, which does not
-    # exist under aqueduct -- so without these fields there is no way to turn the
-    # redirect off, and an undeclared env var would arrive as the *string*
-    # "false", which is truthy. Every real deployment already overrides these
-    # (ol-infrastructure's edxapp config_builder: mitx/mitx-staging disable the
-    # redirect outright, xpro/mitxonline allow-list heartbeat), so the plugin
-    # default is never the intended value.
-    MITX_REDIRECT_ENABLED: bool = Field(default=True)
-    MITX_REDIRECT_LOGIN_URL: str | None = Field(default=None)
-    MITX_REDIRECT_ALLOW_RE_LIST: list[str] | None = Field(default=None)
-    MITX_REDIRECT_DENY_RE_LIST: list[str] | None = Field(default=None)
-
-    # LMS-only settings that the CMS also has to resolve, because
-    # ol-openedx-canvas-integration registers a cms.djangoapp entry point while
-    # its tasks.py imports lms.djangoapps.instructor_task -> bulk_email.tasks,
-    # which reads both of these at decorator-evaluation time. CMS legitimately
-    # lacks them: lms/envs/common.py defines them, cms/envs/common.py does not.
-    # Defaults match upstream lms/envs/common.py. Delete these once the plugin
-    # drops its cms.djangoapp entry point -- fixing the plugin is the real fix.
-    BULK_EMAIL_DEFAULT_RETRY_DELAY: int = Field(default=30)
-    BULK_EMAIL_MAX_RETRIES: int = Field(default=5)
 
     # ------------------------------------------------------------------
     # Source customisation

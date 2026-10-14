@@ -83,8 +83,8 @@ repos:
   - id: lehrer-core-boundary
     name: lehrer core boundary — no OL-specific strings
     language: pygrep
-    entry: 'deployments|mitol|mitxonline|mitodl|github\.mit\.edu|verificient|proctortrack'
-    files: ^src/lehrer/(core|infra)/
+    entry: 'deployments/|mitol|mitxonline|mitodl|github\.mit\.edu|verificient|proctortrack'
+    files: ^src/lehrer/(core|infra|settings)/
     exclude: ^src/lehrer/(core|infra)/__init__\.py$
   - id: build-config-schema
     name: regenerate build_config JSON schema from the Pydantic models

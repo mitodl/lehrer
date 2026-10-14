@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 from typing import Any
@@ -323,6 +324,98 @@ class TestLearningMicrofrontendUrl:
 
     def test_defaults_to_none_when_unset(self) -> None:
         assert ProductionSettingsMixin().LEARNING_MICROFRONTEND_URL is None
+
+
+_MIT_OL_CMS_ENTRY = (
+    Path(__file__).parents[2] / "deployments/mit-ol/settings/cms/aqueduct.py"
+)
+
+
+def _mit_ol_cms_declaration(name: str) -> tuple[str, Any]:
+    """Return ``(annotation, default)`` for a field on mit-ol's CMS settings."""
+    tree = ast.parse(_MIT_OL_CMS_ENTRY.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == name
+        ):
+            annotation = ast.unparse(node.annotation)
+            default = next(
+                ast.literal_eval(kw.value)
+                for kw in getattr(node.value, "keywords", [])
+                if kw.arg == "default"
+            )
+            return annotation, default
+    pytest.fail(f"{name} is not declared in {_MIT_OL_CMS_ENTRY}")
+
+
+class TestDeclarationAdmitsTheEnvVar:
+    """The invariant every star-import/plugin declaration in this tree rests on.
+
+    pydantic-settings' env source collects values *per declared field*: it
+    walks ``model_fields``, not ``os.environ``. So an undeclared name is not
+    loosely typed, it is absent -- which is why these gaps fail silently rather
+    than with a bad value, and why declaring the field is the fix rather than
+    coercing a string somewhere downstream.
+    """
+
+    def test_an_undeclared_var_never_reaches_the_model(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MITX_REDIRECT_ENABLED", "false")
+        settings = ProductionSettingsMixin()
+        # Not the string "false" (which would be truthy), not False -- absent.
+        # MITX_* is declared by openedx-companion-auth's plugin_settings(), so
+        # the generated model only carries it where that plugin is installed.
+        assert not hasattr(settings, "MITX_REDIRECT_ENABLED")
+        # Not in extras either: extra="allow" keeps values a *validator*
+        # assigns, it does not open the env source up to undeclared names.
+        assert "MITX_REDIRECT_ENABLED" not in (settings.model_extra or {})
+
+    def test_a_declared_bool_parses_the_false_string(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class _WithFlag(ProductionSettingsMixin):
+            MITX_REDIRECT_ENABLED: bool = Field(default=True)
+
+        monkeypatch.setenv("MITX_REDIRECT_ENABLED", "false")
+        assert _WithFlag().MITX_REDIRECT_ENABLED is False
+
+    def test_a_declared_list_parses_a_json_array(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class _WithList(ProductionSettingsMixin):
+            MITX_REDIRECT_ALLOW_RE_LIST: list[str] = Field(default_factory=list)
+
+        monkeypatch.setenv("MITX_REDIRECT_ALLOW_RE_LIST", '["^/heartbeat", "^/admin"]')
+        assert _WithList().MITX_REDIRECT_ALLOW_RE_LIST == ["^/heartbeat", "^/admin"]
+
+
+class TestBulkEmailDefaults:
+    def test_not_declared_in_lehrer_core(self) -> None:
+        # They live on mit-ol's CMSProductionSettings: nothing but a plugin only
+        # mit-ol cells pin (ol-openedx-canvas-integration's cms.djangoapp entry
+        # point) makes the CMS need them, so lehrer core must not carry them
+        # into every deployment group.
+        mixin_fields = StudioSettingsMixin.model_fields
+        assert "BULK_EMAIL_DEFAULT_RETRY_DELAY" not in mixin_fields
+        assert "BULK_EMAIL_MAX_RETRIES" not in mixin_fields
+
+    @pytest.mark.parametrize(
+        ("name", "expected"),
+        [("BULK_EMAIL_DEFAULT_RETRY_DELAY", 30), ("BULK_EMAIL_MAX_RETRIES", 5)],
+    )
+    def test_mit_ol_cms_declares_the_upstream_default(
+        self, name: str, expected: int
+    ) -> None:
+        # bulk_email.tasks reads both at decorator-evaluation time, so a wrong
+        # type here is an import-time crash in the CMS, not a runtime surprise.
+        # Read by AST: the entry module calls configure_django_settings at
+        # import time and needs the built platform, which this suite has not.
+        annotation, default = _mit_ol_cms_declaration(name)
+        assert annotation == "int"
+        assert default == expected
 
 
 class TestMergeJwtSigningKeys:

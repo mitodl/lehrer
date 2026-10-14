@@ -17,7 +17,7 @@ cells:
   deployment: generic
   platform_branch: master
   packages:
-  - django-aqueduct==0.13.0
+  - django-aqueduct==0.14.2
   - pydantic-settings[yaml]==2.15.0
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http

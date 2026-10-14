@@ -343,6 +343,24 @@ def _aqueduct_gen_setup(container: dagger.Container) -> dagger.Container:
     )
 
 
+def _aqueduct_codegen_cmd(service: str, output: str) -> str:
+    """Shell command that renders one service's AqueductSettings model.
+
+    Shared by regeneration and the drift check for the same reason
+    :func:`_resolve_field` is shared: the drift check only means anything if it
+    renders the model the *same* way regeneration does.  A flag added to one
+    call site and not the other turns every drift run red with a diff that
+    re-running the documented command cannot fix.
+    """
+    return (
+        f"DJANGO_SETTINGS_MODULE={_GEN_SETTINGS_MODULE} "
+        "python -m django generate_aqueduct_settings "
+        f"--modules {service}.envs.common "
+        f"--openedx-plugins {service}.djangoapp "
+        f"--output {output} --reset"
+    )
+
+
 def _tolerant(command: str, label: str, *, strict: bool) -> str:
     """Wrap a translations step so a failure is loud rather than invisible.
 
@@ -2915,6 +2933,20 @@ class OpenedxPlatform:
         (django-aqueduct >= 0.10.0 overlay semantics).  The boot self-test below
         exercises that overlay path and asserts no base/plugin app is dropped.
 
+        Deferring to the base is *not* enough for a setting a plugin introduces,
+        though, which is why ``--openedx-plugins <svc>.djangoapp`` is passed per
+        service (django-aqueduct >= 0.14.0).  A plugin's ``plugin_settings()``
+        hook assigns names that appear in no module this generator is pointed
+        at, so without a field the env source has nothing to bind: pydantic
+        collects env values *per declared field*, so ``MITX_REDIRECT_ENABLED``
+        in the pod's environment is dropped rather than parsed, and the plugin
+        default becomes unoverridable (the plugin's own ``production.py``
+        override path reads ``settings.ENV_TOKENS``, which does not exist under
+        aqueduct).  The flag reads each installed plugin's ``plugin_settings()``
+        by AST — no plugin code is imported — and declares what it assigns, so
+        the generated model is scoped to the plugins *this cell installs*
+        instead of every operator's union.
+
         Returns a directory containing:
           lms/models/aqueduct.py  — AqueductSettings(BaseSettings)
           cms/models/aqueduct.py  — AqueductSettings(BaseSettings)
@@ -2992,10 +3024,7 @@ class OpenedxPlatform:
                 [
                     "sh",
                     "-c",
-                    "DJANGO_SETTINGS_MODULE=lehrer_gen_settings "
-                    "python -m django generate_aqueduct_settings "
-                    f"--modules {svc}.envs.common "
-                    f"--output {svc}/envs/models/aqueduct.py --reset",
+                    _aqueduct_codegen_cmd(svc, f"{svc}/envs/models/aqueduct.py"),
                 ]
             )
 
@@ -3239,10 +3268,7 @@ class OpenedxPlatform:
                     [
                         "sh",
                         "-c",
-                        f"DJANGO_SETTINGS_MODULE={_GEN_SETTINGS_MODULE} "
-                        "python -m django generate_aqueduct_settings "
-                        f"--modules {svc}.envs.common "
-                        f"--output /tmp/{svc}_aqueduct.py --reset",  # noqa: S108
+                        _aqueduct_codegen_cmd(svc, f"/tmp/{svc}_aqueduct.py"),  # noqa: S108
                     ]
                 )
             # Same formatting step regeneration applies, so the diff below
