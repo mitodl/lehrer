@@ -132,7 +132,9 @@ def test_yml_extension_manifest_is_honored(tmp_path: Path) -> None:
 # Every cell declares django-aqueduct: the settings-verify matrix only covers
 # cells that actually use the aqueduct settings mechanism (see Cell.uses_aqueduct).
 SETTINGS_MANIFEST = MANIFEST.replace(
-    "cells:\n", "settings_model_release: master\ncells:\n", 1
+    "cells:\n",
+    "settings_model_release: master\nsettings_model_deployment: mitxonline\ncells:\n",
+    1,
 ).replace(
     "  - ol-openedx-logging==0.3.5\n",
     "  - ol-openedx-logging==0.3.5\n  - django-aqueduct==0.10.0\n",
@@ -189,14 +191,56 @@ def test_group_without_settings_tree_is_excluded(settings_repo: Path) -> None:
     assert {c["group"] for c in compat.all_settings_cells(settings_repo)} == {"mit-ol"}
 
 
-def test_drift_only_set_for_the_model_release(settings_repo: Path) -> None:
+def test_drift_only_set_for_the_model_cell(settings_repo: Path) -> None:
+    # Asserted over the whole coordinate, not just the release: the model's
+    # field set depends on the generating cell's plugin set, so a sibling cell
+    # in the same release renders a different model and cannot be drift-checked
+    # against the committed one. A (release, drift) assertion cannot tell the
+    # release-scoped gate from the cell-scoped one -- it passes under both.
     cells = compat.all_settings_cells(settings_repo)
-    drift = {(c["release"], c["drift"]) for c in cells}
-    assert ("master", True) in drift
-    assert ("ulmo", False) in drift
+    assert {(c["release"], c["deployment"]): c["drift"] for c in cells} == {
+        ("master", "mitxonline"): True,
+        ("master", "mitx"): False,  # same release, different plugin set
+        ("ulmo", "xpro"): False,
+    }
 
 
-def test_drift_never_set_without_settings_model_release(tmp_path: Path) -> None:
+# One deployment name under two releases -- the shape MANIFEST does not have.
+SAME_DEPLOYMENT_MANIFEST = """\
+version: 1
+settings_model_release: master
+settings_model_deployment: mitx
+cells:
+- release: master
+  deployment: mitx
+  packages:
+  - django-aqueduct==0.15.0
+- release: verawood
+  deployment: mitx
+  packages:
+  - django-aqueduct==0.15.0
+"""
+
+
+def test_drift_not_set_for_the_same_deployment_in_another_release(
+    tmp_path: Path,
+) -> None:
+    # The mirror of the non-cell cross product: a matching deployment half must
+    # not turn the gate on for a release the model was not generated from.
+    group_dir = tmp_path / "deployments" / "mit-ol"
+    group_dir.mkdir(parents=True)
+    (group_dir / "build_manifest.yaml").write_text(SAME_DEPLOYMENT_MANIFEST)
+    (group_dir / "settings").mkdir()
+    compat._manifest_file.cache_clear()
+
+    cells = compat.all_settings_cells(tmp_path)
+    assert {(c["release"], c["deployment"]): c["drift"] for c in cells} == {
+        ("master", "mitx"): True,
+        ("verawood", "mitx"): False,
+    }
+
+
+def test_drift_never_set_without_a_settings_model_cell(tmp_path: Path) -> None:
     group_dir = tmp_path / "deployments" / "mit-ol"
     group_dir.mkdir(parents=True)
     (group_dir / "build_manifest.yaml").write_text(MANIFEST)

@@ -326,28 +326,34 @@ class TestLearningMicrofrontendUrl:
         assert ProductionSettingsMixin().LEARNING_MICROFRONTEND_URL is None
 
 
-_MIT_OL_CMS_ENTRY = (
-    Path(__file__).parents[2] / "deployments/mit-ol/settings/cms/aqueduct.py"
-)
+_DEPLOYMENTS = Path(__file__).parents[2] / "deployments"
+_MIT_OL_CMS_ENTRY = _DEPLOYMENTS / "mit-ol/settings/cms/aqueduct.py"
+_MIT_OL_LMS_MODEL = _DEPLOYMENTS / "mit-ol/settings/lms/models/aqueduct.py"
 
 
-def _mit_ol_cms_declaration(name: str) -> tuple[str, Any]:
-    """Return ``(annotation, default)`` for a field on mit-ol's CMS settings."""
-    tree = ast.parse(_MIT_OL_CMS_ENTRY.read_text(encoding="utf-8"))
+def _declared_field(path: Path, name: str) -> tuple[str, dict[str, Any]]:
+    """Return ``(annotation, {kwarg: literal})`` for *name*'s ``Field()`` in *path*.
+
+    Read by AST rather than imported: an entry module calls
+    ``configure_django_settings`` at import time and a generated model imports
+    edx-platform symbols, neither of which this suite has. Keywords whose value
+    is not a literal (``default_factory=lambda: ...``) are omitted.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if (
             isinstance(node, ast.AnnAssign)
             and isinstance(node.target, ast.Name)
             and node.target.id == name
         ):
-            annotation = ast.unparse(node.annotation)
-            default = next(
-                ast.literal_eval(kw.value)
-                for kw in getattr(node.value, "keywords", [])
-                if kw.arg == "default"
-            )
-            return annotation, default
-    pytest.fail(f"{name} is not declared in {_MIT_OL_CMS_ENTRY}")
+            kwargs: dict[str, Any] = {}
+            for kw in getattr(node.value, "keywords", []):
+                try:
+                    kwargs[str(kw.arg)] = ast.literal_eval(kw.value)
+                except ValueError:
+                    continue
+            return ast.unparse(node.annotation), kwargs
+    pytest.fail(f"{name} is not declared in {path}")
 
 
 class TestDeclarationAdmitsTheEnvVar:
@@ -391,6 +397,22 @@ class TestDeclarationAdmitsTheEnvVar:
         monkeypatch.setenv("MITX_REDIRECT_ALLOW_RE_LIST", '["^/heartbeat", "^/admin"]')
         assert _WithList().MITX_REDIRECT_ALLOW_RE_LIST == ["^/heartbeat", "^/admin"]
 
+    def test_a_plugin_field_records_the_distribution_that_supplies_it(self) -> None:
+        # The other half of scoping these to the deployments that pin the
+        # plugin. One generated model serves six mit-ol cells and only
+        # mitxonline installs openedx-companion-auth, so a bare
+        # `default=True` would tell master/mitx -- which has no redirect
+        # middleware -- that the redirect is on. The marker is what makes
+        # django-aqueduct withhold the default where the distribution is
+        # absent (>= 0.15.0); the field itself stays, so an operator who sets
+        # the variable is still obeyed.
+        annotation, kwargs = _declared_field(_MIT_OL_LMS_MODEL, "MITX_REDIRECT_ENABLED")
+        assert annotation == "bool"
+        assert kwargs["default"] is True
+        assert kwargs["json_schema_extra"] == {
+            "aqueduct_plugin": "openedx-companion-auth"
+        }
+
 
 class TestBulkEmailDefaults:
     def test_not_declared_in_lehrer_core(self) -> None:
@@ -413,9 +435,9 @@ class TestBulkEmailDefaults:
         # type here is an import-time crash in the CMS, not a runtime surprise.
         # Read by AST: the entry module calls configure_django_settings at
         # import time and needs the built platform, which this suite has not.
-        annotation, default = _mit_ol_cms_declaration(name)
+        annotation, kwargs = _declared_field(_MIT_OL_CMS_ENTRY, name)
         assert annotation == "int"
-        assert default == expected
+        assert kwargs["default"] == expected
 
 
 class TestMergeJwtSigningKeys:

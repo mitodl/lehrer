@@ -861,12 +861,18 @@ def _module_source_binds(dotted_path: str) -> bool:
 def spectacular_without_undefined_hooks(spectacular: dict[str, Any]) -> dict[str, Any]:
     """Return *spectacular* without the hooks this edx-platform does not define.
 
-    The generated model is rendered from one release (the manifest's
-    ``settings_model_release``) and serves every release in the group. Where a
-    release's ``common.py`` has no ``SPECTACULAR_SETTINGS`` of its own, the
-    model's default is the live setting, so a hook that release's
-    ``<svc>/lib/spectacular.py`` lacks would be imported when the schema is
-    requested and fail the request.
+    The generated model is rendered from one cell (the manifest's
+    ``settings_model_release`` / ``settings_model_deployment``) and serves every
+    cell in the group. Where a release's ``common.py`` has no
+    ``SPECTACULAR_SETTINGS`` of its own, the model's default is the live
+    setting, so a hook that release's ``<svc>/lib/spectacular.py`` lacks would
+    be imported when the schema is requested and fail the request.
+
+    This covers the plugin case as well as the release case, and it is the only
+    thing that does. Codegen reads the ``plugin_settings()`` of the plugins the
+    *generating* cell installs, so the model can name a hook contributed by a
+    plugin a sibling cell does not have; resolving against the running
+    container's ``sys.path`` is what keeps that cell's schema endpoint working.
 
     :param spectacular: The service's ``SPECTACULAR_SETTINGS``.
     :returns: A copy of *spectacular* with each hook list filtered.

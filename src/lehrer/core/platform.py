@@ -3159,11 +3159,17 @@ class OpenedxPlatform:
            that is perfectly in sync.  Diffing after the same formatting step
            the generator applies compares like with like.
 
-           Drift is opt-in because one committed model serves every release in a
-           group, while the generated model is edx-platform-version-specific —
-           so it can only be in sync with the release regeneration was run
-           against — the manifest's ``settings_model_release``.  Enable it
-           for that release's cells only.
+           Drift is opt-in because one committed model serves every cell in
+           a group, while the generated model is specific to the single cell
+           regeneration was run against: to that cell's edx-platform version,
+           and — since ``--openedx-plugins`` (see
+           :meth:`regenerate_aqueduct_settings`) — to its installed plugin set
+           as well.  A sibling cell that does not pin the same plugins renders
+           a model with fewer fields, and diffing that against the committed
+           one reports a drift the documented remediation command cannot fix.
+           Enable it for the manifest's ``(settings_model_release,
+           settings_model_deployment)`` cell only; the rest are still booted
+           and system-checked against the committed model.
 
         Args:
             deployment_name: Deployment name.
