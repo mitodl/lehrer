@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,8 @@ from pydantic import Field
 from lehrer.settings.base import (
     ProductionSettingsMixin,
     StudioSettingsMixin,
+    apply_base_post_configure,
+    ensure_celery_router_inputs,
     merge_jwt_signing_keys,
     spectacular_with_servers,
     spectacular_without_undefined_hooks,
@@ -33,6 +36,7 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "LMS_ROOT_URL",
         "JWT_PRIVATE_SIGNING_JWK",
         "JWT_PUBLIC_SIGNING_JWK_SET",
+        "LEARNING_MICROFRONTEND_URL",
         "SESSION_COOKIE_NAME",
         "SOCIAL_AUTH_REDIRECT_IS_HTTPS",
         "SOCIAL_AUTH_EDX_OAUTH2_KEY",
@@ -308,6 +312,134 @@ class TestSpectacularServers:
         assert not hasattr(StudioSettingsMixin(), "SPECTACULAR_SETTINGS")
 
 
+class TestLearningMicrofrontendUrl:
+    def test_arrives_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Regression: the setting is defined only in openedx/envs/common.py, which
+        # lms/envs/common.py star-imports, so codegen never generated a field and
+        # the env var was dropped -- settings.LEARNING_MICROFRONTEND_URL stayed
+        # None while the var sat in the pod's environment.
+        monkeypatch.setenv("LEARNING_MICROFRONTEND_URL", "https://lms.mit.dev/learn")
+        settings = ProductionSettingsMixin()
+        assert settings.LEARNING_MICROFRONTEND_URL == "https://lms.mit.dev/learn"
+
+    def test_defaults_to_none_when_unset(self) -> None:
+        assert ProductionSettingsMixin().LEARNING_MICROFRONTEND_URL is None
+
+
+_DEPLOYMENTS = Path(__file__).parents[2] / "deployments"
+_MIT_OL_CMS_ENTRY = _DEPLOYMENTS / "mit-ol/settings/cms/aqueduct.py"
+_MIT_OL_LMS_MODEL = _DEPLOYMENTS / "mit-ol/settings/lms/models/aqueduct.py"
+
+
+def _declared_field(path: Path, name: str) -> tuple[str, dict[str, Any]]:
+    """Return ``(annotation, {kwarg: literal})`` for *name*'s ``Field()`` in *path*.
+
+    Read by AST rather than imported: an entry module calls
+    ``configure_django_settings`` at import time and a generated model imports
+    edx-platform symbols, neither of which this suite has. Keywords whose value
+    is not a literal (``default_factory=lambda: ...``) are omitted.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == name
+        ):
+            kwargs: dict[str, Any] = {}
+            for kw in getattr(node.value, "keywords", []):
+                try:
+                    kwargs[str(kw.arg)] = ast.literal_eval(kw.value)
+                except ValueError:
+                    continue
+            return ast.unparse(node.annotation), kwargs
+    pytest.fail(f"{name} is not declared in {path}")
+
+
+class TestDeclarationAdmitsTheEnvVar:
+    """The invariant every star-import/plugin declaration in this tree rests on.
+
+    pydantic-settings' env source collects values *per declared field*: it
+    walks ``model_fields``, not ``os.environ``. So an undeclared name is not
+    loosely typed, it is absent -- which is why these gaps fail silently rather
+    than with a bad value, and why declaring the field is the fix rather than
+    coercing a string somewhere downstream.
+    """
+
+    def test_an_undeclared_var_never_reaches_the_model(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MITX_REDIRECT_ENABLED", "false")
+        settings = ProductionSettingsMixin()
+        # Not the string "false" (which would be truthy), not False -- absent.
+        # MITX_* is declared by openedx-companion-auth's plugin_settings(), so
+        # the generated model only carries it where that plugin is installed.
+        assert not hasattr(settings, "MITX_REDIRECT_ENABLED")
+        # Not in extras either: extra="allow" keeps values a *validator*
+        # assigns, it does not open the env source up to undeclared names.
+        assert "MITX_REDIRECT_ENABLED" not in (settings.model_extra or {})
+
+    def test_a_declared_bool_parses_the_false_string(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class _WithFlag(ProductionSettingsMixin):
+            MITX_REDIRECT_ENABLED: bool = Field(default=True)
+
+        monkeypatch.setenv("MITX_REDIRECT_ENABLED", "false")
+        assert _WithFlag().MITX_REDIRECT_ENABLED is False
+
+    def test_a_declared_list_parses_a_json_array(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class _WithList(ProductionSettingsMixin):
+            MITX_REDIRECT_ALLOW_RE_LIST: list[str] = Field(default_factory=list)
+
+        monkeypatch.setenv("MITX_REDIRECT_ALLOW_RE_LIST", '["^/heartbeat", "^/admin"]')
+        assert _WithList().MITX_REDIRECT_ALLOW_RE_LIST == ["^/heartbeat", "^/admin"]
+
+    def test_a_plugin_field_records_the_distribution_that_supplies_it(self) -> None:
+        # The other half of scoping these to the deployments that pin the
+        # plugin. One generated model serves six mit-ol cells and only
+        # mitxonline installs openedx-companion-auth, so a bare
+        # `default=True` would tell master/mitx -- which has no redirect
+        # middleware -- that the redirect is on. The marker is what makes
+        # django-aqueduct withhold the default where the distribution is
+        # absent (>= 0.15.0); the field itself stays, so an operator who sets
+        # the variable is still obeyed.
+        annotation, kwargs = _declared_field(_MIT_OL_LMS_MODEL, "MITX_REDIRECT_ENABLED")
+        assert annotation == "bool"
+        assert kwargs["default"] is True
+        assert kwargs["json_schema_extra"] == {
+            "aqueduct_plugin": "openedx-companion-auth"
+        }
+
+
+class TestBulkEmailDefaults:
+    def test_not_declared_in_lehrer_core(self) -> None:
+        # They live on mit-ol's CMSProductionSettings: nothing but a plugin only
+        # mit-ol cells pin (ol-openedx-canvas-integration's cms.djangoapp entry
+        # point) makes the CMS need them, so lehrer core must not carry them
+        # into every deployment group.
+        mixin_fields = StudioSettingsMixin.model_fields
+        assert "BULK_EMAIL_DEFAULT_RETRY_DELAY" not in mixin_fields
+        assert "BULK_EMAIL_MAX_RETRIES" not in mixin_fields
+
+    @pytest.mark.parametrize(
+        ("name", "expected"),
+        [("BULK_EMAIL_DEFAULT_RETRY_DELAY", 30), ("BULK_EMAIL_MAX_RETRIES", 5)],
+    )
+    def test_mit_ol_cms_declares_the_upstream_default(
+        self, name: str, expected: int
+    ) -> None:
+        # bulk_email.tasks reads both at decorator-evaluation time, so a wrong
+        # type here is an import-time crash in the CMS, not a runtime surprise.
+        # Read by AST: the entry module calls configure_django_settings at
+        # import time and needs the built platform, which this suite has not.
+        annotation, kwargs = _declared_field(_MIT_OL_CMS_ENTRY, name)
+        assert annotation == "int"
+        assert kwargs["default"] == expected
+
+
 class TestMergeJwtSigningKeys:
     def test_merges_into_the_overlaid_dict(
         self, monkeypatch: pytest.MonkeyPatch
@@ -327,6 +459,31 @@ class TestMergeJwtSigningKeys:
         merged = {"JWT_AUTH": jwt_auth}
         merge_jwt_signing_keys(merged, ProductionSettingsMixin())
         assert merged["JWT_AUTH"] is jwt_auth
+
+
+class TestEnsureCeleryRouterInputs:
+    def test_supplies_both_router_settings(self) -> None:
+        # route_task reads both unconditionally; common.py defines neither,
+        # so without this every apply_async raises AttributeError.
+        merged: dict = {}
+        ensure_celery_router_inputs(merged)
+        assert merged["EXPLICIT_QUEUES"] == {}
+        assert merged["ALTERNATE_ENV_TASKS"] == {}
+
+    def test_leaves_yaml_supplied_routing_alone(self) -> None:
+        supplied = {"some.task": {"queue": "edx.lms.core.high_mem"}}
+        merged: dict = {"EXPLICIT_QUEUES": supplied}
+        ensure_celery_router_inputs(merged)
+        assert merged["EXPLICIT_QUEUES"] is supplied
+
+    def test_base_post_configure_does_both_jobs(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("JWT_PRIVATE_SIGNING_JWK", '{"kid": "k"}')
+        merged: dict = {"JWT_AUTH": {"JWT_ISSUER": "http://lms/oauth2"}}
+        apply_base_post_configure(merged, ProductionSettingsMixin())
+        assert merged["JWT_AUTH"]["JWT_PRIVATE_SIGNING_JWK"] == '{"kid": "k"}'
+        assert merged["EXPLICIT_QUEUES"] == {}
 
 
 def test_redirect_is_https_parses_false(monkeypatch: pytest.MonkeyPatch) -> None:

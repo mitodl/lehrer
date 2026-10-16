@@ -83,8 +83,18 @@ repos:
   - id: lehrer-core-boundary
     name: lehrer core boundary — no OL-specific strings
     language: pygrep
-    entry: 'deployments|mitol|mitxonline|mitodl|github\.mit\.edu|verificient|proctortrack'
-    files: ^src/lehrer/(core|infra)/
+    # `deployments` is matched only where it is a path or an import, not where
+    # it is the English word -- this module's docstring says "Kubernetes
+    # deployments" and "the deployments that pin", neither of which is a
+    # boundary violation. A bare `deployments` alternative would flag those, so
+    # the three forms that *are* violations are spelled out instead of dropping
+    # the guard: a path segment, a quoted literal (`Path("deployments")`), and
+    # an attribute/module reference (`deployments.generic`), the last anchored
+    # on a following lowercase char so a sentence ending in "deployments." does
+    # not match. `mit-ol` is listed separately because `mitol` does not cover
+    # the hyphenated spelling.
+    entry: 'deployments/|["'']deployments["'']|\bdeployments\.[a-z_]|mit-ol|mitol|mitxonline|mitodl|github\.mit\.edu|verificient|proctortrack'
+    files: ^src/lehrer/(core|infra|settings)/
     exclude: ^src/lehrer/(core|infra)/__init__\.py$
   - id: build-config-schema
     name: regenerate build_config JSON schema from the Pydantic models

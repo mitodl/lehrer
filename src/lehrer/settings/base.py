@@ -41,20 +41,32 @@ the structural deferrals below take effect.
 Overlay & the openedx plugin framework
 --------------------------------------
 codegen v2 discovers settings by static AST analysis of ``common.py`` — it never
-imports the module, so it cannot see the settings openedx injects at *runtime*
-via ``add_plugins()`` (plugin apps appended to ``INSTALLED_APPS``, middleware,
-auth backends, template context processors, …).  A generated default for those
-is therefore plugin-*incomplete*.
+imports the module, so it cannot see what openedx's ``add_plugins()`` does at
+*runtime*.  That splits into two different problems with two different fixes.
 
-This is handled by ``configure_django_settings(base="<svc>.envs.common")`` in
-each entry module: as of django-aqueduct 0.10.0 the overlay keeps a model field
-only when it is *meaningfully carried* — set by a settings source (env/YAML) or
-assigned by a ``@model_validator``.  A field left at its static generated default
+**Structural appends** — plugin apps appended to ``INSTALLED_APPS``, middleware,
+auth backends, template context processors — make a generated default
+plugin-*incomplete*.  These are handled by
+``configure_django_settings(base="<svc>.envs.common")`` in each entry module: as
+of django-aqueduct 0.10.0 the overlay keeps a model field only when it is
+*meaningfully carried* — set by a settings source (env/YAML) or assigned by a
+``@model_validator``.  A field left at its static generated default
 (``INSTALLED_APPS`` and friends) defers to the live, plugin-complete base value
 (the base is imported at runtime, so ``add_plugins`` has already run).  So this
 mixin does **not** need to redeclare those settings; the framework defers them
 automatically.  A validator that must *extend* a plugin-complete list runs as a
-``post_configure`` hook instead (see the mit-ol LMS entry module).
+``post_configure`` hook instead (see a deployment's LMS entry module).
+
+**Names a plugin's ``plugin_settings()`` hook assigns** are not fixed by that
+deferral.  Deferring hands back the plugin's own default, but there is still no
+*field*, and the env source binds per declared field — so the pod's value for
+that name is dropped rather than applied, and the plugin default becomes
+unoverridable.  django-aqueduct 0.14.0 closes this: regeneration passes
+``--openedx-plugins <svc>.djangoapp``, which reads each *installed* plugin's
+``plugin_settings()`` by AST (still no imports) and declares what it assigns.
+Those fields therefore land in the generated model of the deployments that pin
+the plugin, and nowhere else — they do not belong in this shared mixin, which
+every deployment group composes.
 
 Reusable-derivations note
 -------------------------
@@ -391,6 +403,19 @@ class ProductionSettingsMixin(BaseSettings):
     # openassessment's LoadStatic crashes at import time if LMS_ROOT_URL is None.
     LMS_BASE_URL: str = Field(default="")
     CMS_BASE_URL: str = Field(default="")
+
+    # Base URL of the learning MFE, read by course_experience/url_helpers.py to
+    # build courseware links. Same codegen gap as CELERY_BROKER_* above: it is
+    # defined only in openedx/envs/common.py, which lms/envs/common.py reaches
+    # by star-import, so codegen's AST pass over lms/envs/common.py never sees
+    # the assignment and generates no field. Without a field the env source has
+    # nothing to bind to -- pydantic-settings collects values per *declared*
+    # field, so the var sits in the pod's environment and is dropped, not
+    # mis-parsed. The setting stays at the base None and the LMS silently keeps
+    # linking at the legacy /courses/<id>/course/ pages, which is why this
+    # survived a whole MFE rollout: it fails quietly, with no bad value to
+    # notice. Declaring it is what admits the variable at all.
+    LEARNING_MICROFRONTEND_URL: str | None = Field(default=None)
 
     # ------------------------------------------------------------------
     # Source customisation
@@ -836,12 +861,18 @@ def _module_source_binds(dotted_path: str) -> bool:
 def spectacular_without_undefined_hooks(spectacular: dict[str, Any]) -> dict[str, Any]:
     """Return *spectacular* without the hooks this edx-platform does not define.
 
-    The generated model is rendered from one release (the manifest's
-    ``settings_model_release``) and serves every release in the group. Where a
-    release's ``common.py`` has no ``SPECTACULAR_SETTINGS`` of its own, the
-    model's default is the live setting, so a hook that release's
-    ``<svc>/lib/spectacular.py`` lacks would be imported when the schema is
-    requested and fail the request.
+    The generated model is rendered from one cell (the manifest's
+    ``settings_model_release`` / ``settings_model_deployment``) and serves every
+    cell in the group. Where a release's ``common.py`` has no
+    ``SPECTACULAR_SETTINGS`` of its own, the model's default is the live
+    setting, so a hook that release's ``<svc>/lib/spectacular.py`` lacks would
+    be imported when the schema is requested and fail the request.
+
+    This covers the plugin case as well as the release case, and it is the only
+    thing that does. Codegen reads the ``plugin_settings()`` of the plugins the
+    *generating* cell installs, so the model can name a hook contributed by a
+    plugin a sibling cell does not have; resolving against the running
+    container's ``sys.path`` is what keeps that cell's schema endpoint working.
 
     :param spectacular: The service's ``SPECTACULAR_SETTINGS``.
     :returns: A copy of *spectacular* with each hook list filtered.

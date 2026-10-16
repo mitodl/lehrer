@@ -238,29 +238,107 @@ class TestNodeVersionValidation:
             )
 
 
+# ── settings-model cell ───────────────────────────────────────────────────────
+#
+# The committed model is generated from exactly one cell -- codegen is passed
+# ``--openedx-plugins``, so its field set depends on that cell's installed
+# plugins, not just on the release. Every case below is a coordinate that parses
+# but that the drift gate could never act on, which is the whole failure class
+# the validator exists to close: silently marking every cell drift=False.
+
+
+def _model_cell_manifest(
+    release: str | None,
+    deployment: str | None,
+    cells: list[tuple[str, str]] | None = None,
+    packages: list[str] | None = None,
+) -> dict[str, object]:
+    pkgs = ["django-aqueduct==0.15.0"] if packages is None else packages
+    manifest: dict[str, object] = {
+        "version": 1,
+        "cells": [
+            {"release": r, "deployment": d, "packages": pkgs}
+            for r, d in cells or [("master", "mitx")]
+        ],
+    }
+    if release is not None:
+        manifest["settings_model_release"] = release
+    if deployment is not None:
+        manifest["settings_model_deployment"] = deployment
+    return manifest
+
+
 def test_settings_model_release_must_match_a_cell() -> None:
-    # A typo here would otherwise parse fine and silently mark every cell
-    # drift=False, disabling the gate the field exists to enable.
-    manifest = {
-        "version": 1,
-        "settings_model_release": "mastr",
-        "cells": [
-            {"release": "master", "deployment": "mitx", "packages": ["a==1"]},
-        ],
-    }
     with pytest.raises(ValidationError, match="settings_model_release"):
-        BuildManifest.model_validate(manifest)
+        BuildManifest.model_validate(_model_cell_manifest("mastr", "mitx"))
 
 
-def test_settings_model_release_matching_a_cell_is_accepted() -> None:
-    manifest = {
-        "version": 1,
-        "settings_model_release": "master",
-        "cells": [
-            {"release": "master", "deployment": "mitx", "packages": ["a==1"]},
-        ],
-    }
-    assert BuildManifest.model_validate(manifest).settings_model_release == "master"
+def test_settings_model_deployment_must_match_a_cell() -> None:
+    # The regression that red-lit settings mit-ol/master/mitx: the deployment
+    # half is what identifies the plugin set the model was rendered against.
+    with pytest.raises(ValidationError, match="settings_model_deployment"):
+        BuildManifest.model_validate(_model_cell_manifest("master", "mitxonlin"))
+
+
+def test_settings_model_cell_rejects_a_non_cell_cross_product() -> None:
+    # Both halves name something real; the pair names nothing. Two independent
+    # membership tests would accept this, which is why the validator resolves
+    # the pair.
+    with pytest.raises(ValidationError, match="matches no cell"):
+        BuildManifest.model_validate(
+            _model_cell_manifest(
+                "master",
+                "mitx",
+                cells=[("master", "mitxonline"), ("verawood", "mitx")],
+            )
+        )
+
+
+def test_settings_model_release_without_a_deployment_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="must be set together"):
+        BuildManifest.model_validate(_model_cell_manifest("master", None))
+
+
+def test_settings_model_deployment_without_a_release_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="must be set together"):
+        BuildManifest.model_validate(_model_cell_manifest(None, "mitx"))
+
+
+def test_settings_model_cell_must_use_aqueduct() -> None:
+    # The cell exists, so nothing above fires -- but a cell that does not
+    # install the framework is filtered out of the settings matrix, so the gate
+    # would be enabled on no cell at all.
+    with pytest.raises(ValidationError, match="django-aqueduct"):
+        BuildManifest.model_validate(
+            _model_cell_manifest("master", "mitx", packages=["a==1"])
+        )
+
+
+def test_settings_model_cell_matching_a_cell_is_accepted() -> None:
+    manifest = BuildManifest.model_validate(_model_cell_manifest("master", "mitx"))
+    assert manifest.settings_model_release == "master"
+    assert manifest.settings_model_deployment == "mitx"
+
+
+def test_no_settings_model_cell_is_accepted() -> None:
+    manifest = BuildManifest.model_validate(_model_cell_manifest(None, None))
+    assert manifest.settings_model_release is None
+    assert manifest.settings_model_deployment is None
+
+
+@pytest.mark.parametrize("fixture", ["mit_ol_manifest", "generic_manifest"])
+def test_repo_manifests_name_an_aqueduct_cell(
+    fixture: str, request: pytest.FixtureRequest
+) -> None:
+    # Guards the real manifests, which is where the mistake would be made: the
+    # committed model's source cell has to be one the settings matrix enumerates.
+    manifest: BuildManifest = request.getfixturevalue(fixture)
+    assert manifest.settings_model_release is not None
+    assert manifest.settings_model_deployment is not None
+    cell = manifest.resolve_cell(
+        manifest.settings_model_release, manifest.settings_model_deployment
+    )
+    assert cell.uses_aqueduct()
 
 
 @pytest.mark.parametrize(

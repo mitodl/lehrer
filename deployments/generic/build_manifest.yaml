@@ -9,15 +9,20 @@ defaults:
   node_version: '24'
 release_python:
   master: '3.12'
-# The committed settings/*/models/aqueduct.py was generated from this
-# release's edx-platform source; only its cells can be drift-checked.
+# The committed settings/*/models/aqueduct.py was generated from this one
+# cell -- from its edx-platform source *and* from its installed plugin set,
+# since codegen is passed --openedx-plugins <svc>.djangoapp. A cell in the same
+# release with a different plugin set renders a different field set, so only
+# this cell can be drift-checked; the others are still booted and
+# system-checked against the committed model.
 settings_model_release: master
+settings_model_deployment: generic
 cells:
 - release: master
   deployment: generic
   platform_branch: master
   packages:
-  - django-aqueduct==0.13.0
+  - django-aqueduct==0.15.0
   - pydantic-settings[yaml]==2.15.0
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http

@@ -173,7 +173,8 @@ def verify_settings(cell: CellArg = None, *dagger_args: DaggerArgs) -> None:
     of the cell's installed plugins and runs Django's system checks, so a
     settings tree that cannot start is caught before a build. Pass ``--drift``
     to also fail when the committed model is stale against edx-platform (only
-    meaningful for the manifest's ``settings_model_release``).
+    meaningful for the manifest's ``(settings_model_release,
+    settings_model_deployment)`` cell — the one the model was generated from).
     Remember ``--custom-settings ./deployments/<group>/settings``.
     """
     _platform_cell_command("verify-settings", cell, dagger_args)

@@ -31,6 +31,7 @@ class AqueductSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="", extra="allow")
 
     # >>> aqueduct:generated:fields
+    # ===== cms.envs.common =====
     ADVANCED_PROBLEM_TYPES: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: [
             {"component": "drag-and-drop-v2", "boilerplate_name": None},
@@ -53,7 +54,7 @@ class AqueductSettings(BaseSettings):
     )  # REDACTED: name looks secret-like — set via a source, not here
     BRANCH_IO_KEY: str = Field(default="")
     BROKER_USE_SSL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     BUGS_EMAIL: str = Field(default="bugs@example.com")
     BULK_EMAIL_DEFAULT_FROM_EMAIL: str = Field(
@@ -70,7 +71,7 @@ class AqueductSettings(BaseSettings):
     )
     CELERY_ALWAYS_EAGER: bool = Field(default=False)
     CELERY_QUEUES: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     CERT_QUEUE: str = Field(default="certificates")
     CLEAR_REQUEST_CACHE_ON_TASK_COMPLETION: bool = Field(default=True)
@@ -79,7 +80,7 @@ class AqueductSettings(BaseSettings):
         description="Public domain name of Studio (should be resolvable from the end-user's browser)",  # noqa: E501
     )  # refine type
     CMS_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     CMS_ROOT_URL: Any = Field(default=None)  # refine type
     CMS_SEGMENT_KEY: Any = Field(
@@ -88,7 +89,7 @@ class AqueductSettings(BaseSettings):
     COMMENTS_SERVICE_KEY: str = Field(default="password")
     COMMENTS_SERVICE_URL: str = Field(default="http://localhost:18080")
     COMMON_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     CONTACT_EMAIL: str = Field(default="info@example.com")
     CONTACT_MAILING_ADDRESS: Any = Field(
@@ -106,7 +107,7 @@ class AqueductSettings(BaseSettings):
         description="Set CORS_ALLOW_HEADERS regardless of whether we've enabled ENABLE_CORS_HEADERS\nbecause that decision might happen in a later config file. (The headers to\nallow is an application logic, and not site policy.)",  # noqa: E501
     )  # refine type
     COURSES_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     COURSE_EXPORT_DOWNLOAD_CHUNK_SIZE: int = Field(
         default=8192,
@@ -135,10 +136,11 @@ class AqueductSettings(BaseSettings):
     )
     DEFAULT_ORG_LOGO_URL: Any = Field(
         default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
         description=".. setting_name: DEFAULT_ORG_LOGO_URL\n.. setting_default: Derived(lambda settings: settings.STATIC_URL + 'images/logo.png')\n.. setting_description: The default logo url for organizations that do not have a logo set.\n.. setting_warning: This url is used as a placeholder for organizations that do not have a logo set.",  # noqa: E501
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     DEFAULT_PRIORITY_QUEUE: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     DEPRECATE_OLD_COURSE_KEYS_IN_STUDIO: bool = Field(
         default=True,
@@ -181,7 +183,7 @@ class AqueductSettings(BaseSettings):
         default_factory=lambda: {"start_date": {"type": "date"}}
     )
     EMAIL_FILE_PATH: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ENABLE_CONTENT_LIBRARIES: bool = Field(
         default=True,
@@ -248,16 +250,16 @@ class AqueductSettings(BaseSettings):
         description="Turn off Video Upload Pipeline through Studio, by default",
     )
     ENTERPRISE_API_URL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ENTERPRISE_CONSENT_API_URL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ENTRANCE_EXAMS: bool = Field(
         default=False, description="Toggle course entrance exams feature"
     )
     ENV_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     EXAMS_SERVICE_URL: str = Field(default="http://localhost:18740/api/v1")
     EXAMS_SERVICE_USERNAME: str = Field(default="edx_exams_worker")
@@ -359,18 +361,18 @@ class AqueductSettings(BaseSettings):
         description='.. setting_name: FRONTEND_APP_PUBLISHER_URL\n.. setting_default: None\n.. setting_description: Base URL of the publisher frontend app. When set (globally here or per-org via\nsite configuration), the course "settings" page in Studio links out to the publisher app. Left unset\n(None) by default, in which case no publisher link is shown.',  # noqa: E501
     )  # refine type
     FRONTEND_LOGIN_URL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     FRONTEND_LOGOUT_URL: str = Field(
         default="/logout/",
         description="Warning: Must have trailing slash to activate correct logout view\n(auth_backends, not LMS user_authn)",  # noqa: E501
     )
     FRONTEND_REGISTER_URL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     GITHUB_PUSH: bool = Field(default=False)
     GITHUB_REPO_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     GIT_EXPORT_DEFAULT_IDENT: Annotated[dict[str, Any], NoDecode] = Field(
         default_factory=lambda: {
@@ -395,6 +397,7 @@ class AqueductSettings(BaseSettings):
     )
     HIGH_PRIORITY_QUEUE: Any = Field(
         default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
         description="Name the exchange and queues w.r.t the SERVICE_VARIANT",
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     HOTJAR_ID: int = Field(default=0)
@@ -404,6 +407,7 @@ class AqueductSettings(BaseSettings):
     )
     INACTIVE_USER_URL: Any = Field(
         default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
         description="Redirect URL for inactive user. If not set, user will be redirected to /login after the login itself (loop)",  # noqa: E501
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     INSTALLED_APPS: Any = Field(
@@ -635,14 +639,14 @@ class AqueductSettings(BaseSettings):
     )
     LMS_BASE: Any = Field(default=None)  # refine type
     LMS_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     LOGIN_REDIRECT_URL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     LOGIN_URL: str = Field(default="/login/")
     LOW_PRIORITY_QUEUE: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     MAINTENANCE_BANNER_TEXT: str = Field(default="Sample banner message")
     MARKETING_EMAILS_OPT_IN: bool = Field(default=False)
@@ -659,7 +663,7 @@ class AqueductSettings(BaseSettings):
         default_factory=lambda: 30 * 60
     )  # refine type
     MEDIA_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     MEILISEARCH_API_KEY: str | None = Field(
         default=None
@@ -728,7 +732,7 @@ class AqueductSettings(BaseSettings):
         description="5 minute expiration time for JWT id tokens issued for external API requests.",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
     OPENEDX_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     OPTIONAL_FIELD_API_RATELIMIT: str = Field(default="10/h")
     ORA2_FILE_PREFIX: str = Field(
@@ -749,20 +753,24 @@ class AqueductSettings(BaseSettings):
         default_factory=dict
     )
     PROJECT_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     REPO_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     REQUIRE_JS: str = Field(
         default="js/vendor/requiresjs/require.js",
         description="The name of the require.js script used by your project, relative to REQUIRE_BASE_URL.",  # noqa: E501
     )
     RETIRED_EMAIL_FMT: Any = Field(
-        default=None, description="See annotations in lms/envs/common.py for details."
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="See annotations in lms/envs/common.py for details.",
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     RETIRED_USERNAME_FMT: Any = Field(
-        default=None, description="See annotations in lms/envs/common.py for details."
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="See annotations in lms/envs/common.py for details.",
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     RETIRED_USER_SALTS: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: ["abc", "123"],
@@ -773,7 +781,7 @@ class AqueductSettings(BaseSettings):
         description="See annotations in lms/envs/common.py for details.",
     )
     SCRAPE_YOUTUBE_THUMBNAILS_JOB_QUEUE: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     SECRET_KEY: str | None = Field(
         default=None, description="Dummy secret key for dev/test"
@@ -805,7 +813,9 @@ class AqueductSettings(BaseSettings):
         description="Hide any Personally Identifiable Information from application logs",  # noqa: E501
     )
     STATIC_ROOT: str | None = Field(
-        default=None, validation_alias=AliasChoices("STATIC_ROOT_CMS")
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        validation_alias=AliasChoices("STATIC_ROOT_CMS"),
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     STATIC_URL: str = Field(default="/static/studio/", description="Static content")
     STUDIO_NAME: Any = Field(
@@ -820,7 +830,7 @@ class AqueductSettings(BaseSettings):
     TECH_SUPPORT_EMAIL: str = Field(default="technical@example.com")
     UNIVERSITY_EMAIL: str = Field(default="university@example.com")
     UPDATE_SEARCH_INDEX_JOB_QUEUE: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     UPLOAD_CHUNK_SIZE_IN_MB: int = Field(
         default=10,
@@ -850,7 +860,7 @@ class AqueductSettings(BaseSettings):
     VIDEO_IMAGE_MIN_HEIGHT: int = Field(default=360)
     VIDEO_IMAGE_MIN_WIDTH: int = Field(default=640)
     VIDEO_IMAGE_SETTINGS: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     VIDEO_IMAGE_SUPPORTED_FILE_FORMATS: Annotated[dict[str, Any], NoDecode] = Field(
         default_factory=lambda: {
@@ -863,24 +873,174 @@ class AqueductSettings(BaseSettings):
         },
     )
     VIDEO_TRANSCRIPT_MIGRATIONS_JOB_QUEUE: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     XBLOCK_FS_STORAGE_BUCKET: Any = Field(default=None)  # refine type
     XBLOCK_FS_STORAGE_PREFIX: Any = Field(default=None)  # refine type
     XBLOCK_MIXINS: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     XMODULE_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ZENDESK_API_KEY: str | None = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     ZENDESK_USER: str = Field(default="")
+    # ===== edx-proctoring =====
+    PROCTORING_BACKENDS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {"DEFAULT": "null", "null": {}},
+        json_schema_extra={"aqueduct_plugin": "edx-proctoring"},
+    )
+    # ===== openedx-authz =====
+    CASBIN_AUTO_LOAD_POLICY_INTERVAL: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    CASBIN_AUTO_SAVE_POLICY: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    CASBIN_LOG_LEVEL: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    CASBIN_MODEL: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    ENABLE_AUTOMATIC_AUTHZ_COURSE_AUTHORING_MIGRATION: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    OPENEDX_AUTHZ_CONTENT_LIBRARY_MODEL: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    OPENEDX_AUTHZ_COURSE_OVERVIEW_MODEL: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    # ===== openedx-platform =====
+    ACE_CHANNEL_DEFAULT_EMAIL: str = Field(
+        default="django_email",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_CHANNEL_DEFAULT_PUSH: str = Field(
+        default="push_notification",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_CHANNEL_SAILTHRU_API_KEY: str | None = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    ACE_CHANNEL_SAILTHRU_API_SECRET: str | None = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    ACE_CHANNEL_SAILTHRU_DEBUG: bool = Field(
+        default=True, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )
+    ACE_CHANNEL_SAILTHRU_TEMPLATE_NAME: str = Field(
+        default="Automated Communication Engine Email",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_CHANNEL_TRANSACTIONAL_EMAIL: str = Field(
+        default="django_email",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_ENABLED_CHANNELS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: ["django_email"],
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_ENABLED_POLICIES: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: ["bulk_email_optout"],
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_ROUTING_KEY: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-platform",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    ALLOW_HIDING_DISCUSSION_TAB: bool = Field(
+        default=False,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description=".. toggle_name: ALLOW_HIDING_DISCUSSION_TAB\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: If True, it adds an option to show/hide the discussions tab.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-06-15\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/8474",  # noqa: E501
+    )
+    DISCUSSION_SETTINGS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "MAX_COMMENT_DEPTH": 2,
+            "COURSE_PUBLISH_TASK_DELAY": 30,
+        },
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    FCM_APP_NAME: str = Field(
+        default="fcm-edx-platform",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    FIREBASE_APP: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-platform",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    FIREBASE_CREDENTIALS: str | None = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    FIREBASE_CREDENTIALS_PATH: str | None = Field(
+        default=None,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description="Note: To local development with Firebase, you must set FIREBASE_CREDENTIALS_PATH\n(path to json file with FIREBASE_CREDENTIALS)\nor FIREBASE_CREDENTIALS dictionary.",  # noqa: E501
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    PASSWORD_POLICY_COMPLIANCE_API_TIMEOUT: str | None = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    PASSWORD_POLICY_COMPLIANCE_ROLLOUT_CONFIG: str | None = Field(
+        default=None,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description="Settings for managing the rollout of password policy compliance enforcement.",  # noqa: E501
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    PUSH_NOTIFICATIONS_SETTINGS: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-platform",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    ZENDESK_OAUTH_ACCESS_TOKEN: str | None = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    ZENDESK_URL: Any = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # refine type
     # <<< aqueduct:generated:fields
 
     # >>> aqueduct:generated:container_decoders
     @field_validator(
+        "ACE_ENABLED_CHANNELS",
+        "ACE_ENABLED_POLICIES",
         "ADVANCED_PROBLEM_TYPES",
         "DEFAULT_GRADE_DESIGNATIONS",
         "EXTENDED_VIDEO_TRANSCRIPT_LANGUAGES",
@@ -913,12 +1073,14 @@ class AqueductSettings(BaseSettings):
         return [item.strip() for item in stripped.split(",")]
 
     @field_validator(
+        "DISCUSSION_SETTINGS",
         "EDXAPP_PARSE_KEYS",
         "ELASTIC_FIELD_MAPPINGS",
         "FILES_AND_UPLOAD_TYPE_FILTERS",
         "GIT_EXPORT_DEFAULT_IDENT",
         "GRADES_DOWNLOAD",
         "PARSE_KEYS",
+        "PROCTORING_BACKENDS",
         "PROCTORING_SETTINGS",
         "SPECTACULAR_SETTINGS",
         "VIDEO_IMAGE_SUPPORTED_FILE_FORMATS",
