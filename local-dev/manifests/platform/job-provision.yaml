@@ -2,8 +2,9 @@
 # Provisions a freshly-migrated edxapp database with the objects the stack
 # needs in order to be usable: a superuser to log in as, the notes and Studio
 # SSO OAuth clients, and the waffle flags for the enabled features. What it
-# creates is declared in local-dev/provision/bootstrap.yaml; the runner is
-# lehrer_bootstrap, baked into the platform image from src/lehrer/bootstrap.
+# creates is declared in local-dev/provision/bootstrap.yaml (its users,
+# oauth_applications and waffle_flags steps); the runner is lehrer_bootstrap,
+# baked into the platform image from src/lehrer/bootstrap.
 #
 # Runs after edxapp-migrate (see lehrer-core.star) and before the LMS/CMS
 # deployments are considered ready. Everything it does is idempotent, so Tilt
@@ -36,7 +37,9 @@ spec:
         - python
         - -m
         - lehrer_bootstrap
-        - /openedx/provision/bootstrap.yaml
+        - /openedx/bootstrap/bootstrap.yaml
+        - --steps
+        - users,oauth_applications,waffle_flags
         env:
         # The runner calls django.setup() directly rather than going through
         # manage.py, so the settings module has to come from the environment.
@@ -55,8 +58,8 @@ spec:
             name: lms-config-overrides
             optional: true
         volumeMounts:
-        - name: provision
-          mountPath: /openedx/provision
+        - name: bootstrap
+          mountPath: /openedx/bootstrap
         resources:
           requests:
             memory: "1Gi"
@@ -64,6 +67,6 @@ spec:
           limits:
             memory: "2Gi"
       volumes:
-      - name: provision
+      - name: bootstrap
         configMap:
-          name: edxapp-provision
+          name: edxapp-bootstrap

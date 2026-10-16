@@ -1,5 +1,69 @@
 {
   "$defs": {
+    "DemoCourse": {
+      "additionalProperties": false,
+      "description": "The Open edX demo course, imported into the CMS modulestore.\n\nRe-importing overwrites the course in place.",
+      "properties": {
+        "repo": {
+          "default": "https://github.com/openedx/openedx-demo-course",
+          "title": "Repo",
+          "type": "string"
+        },
+        "branch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Branch to import. Omitted, the first of release/<line>, open-release/<line>.master and <line> that exists, where <line> is the platform's own RELEASE_LINE (e.g. verawood, master).",
+          "title": "Branch"
+        }
+      },
+      "title": "DemoCourse",
+      "type": "object"
+    },
+    "Migration": {
+      "additionalProperties": false,
+      "description": "One ``manage.py <service> migrate`` run.\n\nEach runs in a subprocess with that service's settings, since the runner\nitself is set up for one settings module and the CMS migrates under its\nown.",
+      "properties": {
+        "service": {
+          "enum": [
+            "lms",
+            "cms"
+          ],
+          "title": "Service",
+          "type": "string"
+        },
+        "app_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Migrate only this app. Omitted, migrates all.",
+          "title": "App Label"
+        },
+        "database": {
+          "default": "default",
+          "description": "The DATABASES alias to migrate. migrate never touches another alias on its own, so an app routed to a separate database (e.g. coursewarehistoryextended on student_module_history) needs its own entry.",
+          "title": "Database",
+          "type": "string"
+        }
+      },
+      "required": [
+        "service"
+      ],
+      "title": "Migration",
+      "type": "object"
+    },
     "OAuthApplication": {
       "additionalProperties": false,
       "description": "A django-oauth-toolkit Application and its oauth_dispatch access record.\n\nMatched on ``client_id``, so an application created by hand in a deployed\nenvironment is adopted (and brought in line with the spec) rather than\nduplicated.\n\n``name`` and each redirect URI may reference Django settings as\n``{SETTING}``, e.g. ``{CMS_ROOT_URL}/complete/edx-oauth2/``, so one spec\nserves every environment whose settings differ.",
@@ -188,6 +252,13 @@
   "additionalProperties": false,
   "description": "Everything a fresh install needs in its database, by step.",
   "properties": {
+    "migrate": {
+      "items": {
+        "$ref": "#/$defs/Migration"
+      },
+      "title": "Migrate",
+      "type": "array"
+    },
     "users": {
       "items": {
         "$ref": "#/$defs/User"
@@ -208,6 +279,17 @@
       },
       "title": "Waffle Flags",
       "type": "array"
+    },
+    "demo_course": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DemoCourse"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "title": "BootstrapSpec",
