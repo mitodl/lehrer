@@ -204,14 +204,23 @@ def _settings_cells_for_group(
     manifest = _load_group_manifest(repo_root, group)
     if manifest is None or not _has_settings_tree(repo_root, group):
         return []
-    drift_release = manifest.settings_model_release
+    # The whole coordinate, not just the release: codegen is passed
+    # ``--openedx-plugins``, so the committed model's field set depends on the
+    # generating cell's installed plugins too, and a sibling cell in the same
+    # release with a different plugin set renders a different model.
+    #
+    # Both-or-neither is enforced at manifest load, so this pair is either a
+    # complete coordinate or ``(None, None)`` -- which matches no cell, since a
+    # Cell's release and deployment are required strs. Relaxing that validator
+    # would silently disable the gate here.
+    drift_cell = (manifest.settings_model_release, manifest.settings_model_deployment)
     return [
         _settings_cell(
             repo_root,
             group,
             c.release,
             c.deployment,
-            drift=drift_release is not None and c.release == drift_release,
+            drift=(c.release, c.deployment) == drift_cell,
         )
         for c in manifest.cells
         if c.uses_aqueduct()
@@ -333,9 +342,10 @@ def settings_matrix(
 
     Output shape: ``{"any": <bool>, "cells": [{group, release, deployment,
     manifest, settings, drift}, ...]}`` — ``settings`` is the group's settings
-    directory and ``drift`` says whether that cell's release matches the
-    manifest's ``settings_model_release`` (only then can the committed model be
-    compared against a fresh render).
+    directory and ``drift`` says whether that cell *is* the manifest's
+    ``(settings_model_release, settings_model_deployment)`` cell (only the cell
+    the committed model was generated from can be compared against a fresh
+    render).
     """
     repo_root = _paths.repo_root()
     cells = (

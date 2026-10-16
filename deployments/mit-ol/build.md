@@ -181,9 +181,9 @@ cp generated/cms/models/aqueduct.py deployments/mit-ol/settings/cms/models/aqued
 This is no longer honour-system: the **Settings Verification** workflow
 (`.github/workflows/settings-verify.yml`) boots the committed settings tree on
 every PR that touches `deployments/*/settings/**`, `src/lehrer/settings/**`, or
-a manifest, and for the manifest's `settings_model_release` it also regenerates
-the model and fails on a diff. A stale model blocks the merge with the command
-above in the failure message.
+a manifest, and for the one cell the model was generated from it also
+regenerates the model and fails on a diff. A stale model blocks the merge with
+the command above in the failure message.
 
 Reproduce a CI failure locally with the same function CI runs:
 
@@ -192,10 +192,25 @@ uv run lehrer build verify-settings --cell mit-ol/master/mitxonline \
   --custom-settings ./deployments/mit-ol/settings --drift=true
 ```
 
-`settings_model_release` in the manifest names the release the committed model
-was generated from. One settings tree serves every cell in the group, but the
-generated model is edx-platform-version-specific, so only that release's cells
-can be drift-checked; the others are still booted and system-checked.
+`settings_model_release` and `settings_model_deployment` in the manifest name
+the cell the committed model was generated from -- `master/mitxonline`. One
+settings tree serves every cell in the group, but the generated model is
+specific to that one cell: to its edx-platform version, and -- because codegen
+is passed `--openedx-plugins <svc>.djangoapp` -- to its installed plugin set.
+Regenerating in `master/mitx`, which pins neither `openedx-companion-auth` nor
+`ol-openedx-feedback`, renders a model with those plugins' fields missing
+entirely, so diffing it against the committed model reports a drift no
+regeneration can fix.
+
+So only `master/mitxonline` is drift-checked. `master/mitx` and
+`master/mitx-staging` are still booted and system-checked against the same
+committed model, which carries `mitxonline`-only plugin fields into their
+containers; django-aqueduct withholds those fields' defaults where the
+supplying distribution is not installed (the `aqueduct_plugin` marker on the
+generated field), so an absent plugin's default is never applied. One
+consequence worth knowing: adding a plugin to `master/mitx` alone produces no
+drift signal, because that cell is not drift-checked and regenerating from
+`mitxonline` would not pick the plugin up.
 
 ---
 

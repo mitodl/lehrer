@@ -143,32 +143,78 @@ class BuildManifest(BaseModel):
     settings_model_release: str | None = Field(
         default=None,
         description=(
-            "Release whose edx-platform source the group's committed "
-            "settings/*/models/aqueduct.py was generated from. One settings "
-            "tree serves every cell in the group, but the generated model is "
-            "edx-platform-version-specific, so only this release's cells can "
-            "be checked for model drift. Unset disables the drift gate."
+            "Release of the cell the group's committed "
+            "settings/*/models/aqueduct.py was generated from. Paired with "
+            "settings_model_deployment. One settings tree serves every cell "
+            "in the group, but the generated model is specific to both the "
+            "edx-platform release and the generating cell's installed plugin "
+            "set (codegen is passed --openedx-plugins <svc>.djangoapp), so "
+            "only that one cell can be checked for model drift. Unset -- with "
+            "settings_model_deployment also unset -- disables the drift gate."
+        ),
+    )
+    settings_model_deployment: str | None = Field(
+        default=None,
+        description=(
+            "Deployment of the cell the group's committed "
+            "settings/*/models/aqueduct.py was generated from. Required "
+            "whenever settings_model_release is set: the generated field set "
+            "depends on which Open edX plugins the generating cell installs, "
+            "so a release alone does not identify the model's source."
         ),
     )
     cells: list[Cell] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def _settings_model_release_is_a_real_release(self) -> BuildManifest:
-        """Reject a ``settings_model_release`` no cell actually declares.
+    def _settings_model_cell_is_a_real_aqueduct_cell(self) -> BuildManifest:
+        """Reject a model-cell coordinate the drift gate could never act on.
 
-        The failure this prevents is silent: a typo or a stale release name
-        parses fine, but then matches no cell, so every cell is enumerated with
-        ``drift=False`` and the drift gate the field exists to enable is turned
-        off with no error anywhere. A gate that quietly stops gating is worse
-        than no gate, so this has to fail at manifest-load time.
+        The failure this prevents is silent: a typo, a half-written
+        coordinate, or a cell outside the settings matrix all parse fine, but
+        then match no enumerated cell, so every cell is enumerated with
+        ``drift=False`` and the gate these fields exist to enable is turned off
+        with no error anywhere. A gate that quietly stops gating is worse than
+        no gate, so this has to fail at manifest-load time.
+
+        The pair is checked through :meth:`resolve_cell` rather than as two
+        independent membership tests, because both halves can name something
+        real while the pair names nothing: a manifest whose only cells are
+        ``main/alpha`` and ``legacy/beta`` would accept ``main`` + ``beta``,
+        which is not a cell.
         """
-        if self.settings_model_release is None:
+        release = self.settings_model_release
+        deployment = self.settings_model_deployment
+        if release is None and deployment is None:
             return self
-        releases = {cell.release for cell in self.cells}
-        if self.settings_model_release not in releases:
+        if release is None or deployment is None:
             msg = (
-                f"settings_model_release={self.settings_model_release!r} matches "
-                f"no cell — available releases: {', '.join(sorted(releases))}"
+                "settings_model_release and settings_model_deployment must be "
+                "set together -- the committed model is generated from exactly "
+                "one cell, so half a coordinate cannot say which. Got "
+                f"settings_model_release={release!r}, "
+                f"settings_model_deployment={deployment!r}"
+            )
+            raise ValueError(msg)
+        try:
+            cell = self.resolve_cell(release, deployment)
+        except ValueError as exc:
+            msg = (
+                f"settings_model_release={release!r} "
+                f"settings_model_deployment={deployment!r} matches no cell "
+                f"-- available cells: {self._cell_coordinates()}"
+            )
+            raise ValueError(msg) from exc
+        if not cell.uses_aqueduct():
+            # Same bug class as a typo, one step further in: the cell exists,
+            # so nothing above fires, but ``_settings_cells_for_group`` filters
+            # it out of the settings matrix, leaving ``drift=True`` on no cell
+            # at all.
+            msg = (
+                f"settings_model_release={release!r} "
+                f"settings_model_deployment={deployment!r} names a cell that "
+                f"does not install {AQUEDUCT_DISTRIBUTION} -- that cell is "
+                "excluded from the settings-verify matrix, so the drift gate "
+                "it enables would never run"
             )
             raise ValueError(msg)
         return self
@@ -194,14 +240,15 @@ class BuildManifest(BaseModel):
         for cell in self.cells:
             if cell.release == release_name and cell.deployment == deployment_name:
                 return cell
-        available = ", ".join(
-            f"{cell.release}/{cell.deployment}" for cell in self.cells
-        )
         msg = (
             f"no cell for release={release_name!r} deployment={deployment_name!r} "
-            f"— available cells: {available}"
+            f"— available cells: {self._cell_coordinates()}"
         )
         raise ValueError(msg)
+
+    def _cell_coordinates(self) -> str:
+        """``release/deployment`` for every cell, for error messages."""
+        return ", ".join(f"{cell.release}/{cell.deployment}" for cell in self.cells)
 
 
 def load_manifest(path: str | Path) -> BuildManifest:
