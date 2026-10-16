@@ -889,109 +889,206 @@ class AqueductSettings(BaseSettings):
     ZENDESK_USER: str = Field(default="")
     # ===== edx-proctoring =====
     PROCTORING_BACKENDS: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {"DEFAULT": "null", "null": {}}
+        default_factory=lambda: {"DEFAULT": "null", "null": {}},
+        json_schema_extra={"aqueduct_plugin": "edx-proctoring"},
     )
     # ===== ol-openedx-canvas-integration =====
     CANVAS_ACCESS_TOKEN: str | None = Field(
-        default=None
+        default=None,
+        json_schema_extra={"aqueduct_plugin": "ol-openedx-canvas-integration"},
     )  # REDACTED: name looks secret-like — set via a source, not here
-    CANVAS_BASE_URL: Any = Field(default=None)  # refine type
+    CANVAS_BASE_URL: Any = Field(
+        default=None,
+        json_schema_extra={"aqueduct_plugin": "ol-openedx-canvas-integration"},
+    )  # refine type
     CELERYBEAT_SCHEDULE: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-canvas-integration",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     # ===== ol-openedx-chat =====
     MIT_LEARN_AI_API_URL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-chat",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     MIT_LEARN_API_BASE_URL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-chat",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     MIT_LEARN_SUMMARY_FLASHCARD_URL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-chat",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     # ===== ol-openedx-chat-xblock =====
     MIT_LEARN_AI_XBLOCK_CHAT_API_TOKEN: str | None = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_plugin": "ol-openedx-chat-xblock"}
     )  # REDACTED: name looks secret-like — set via a source, not here
     MIT_LEARN_AI_XBLOCK_CHAT_API_URL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-chat-xblock",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     MIT_LEARN_AI_XBLOCK_CHAT_RATING_URL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-chat-xblock",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     MIT_LEARN_AI_XBLOCK_PROBLEM_SET_LIST_URL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-chat-xblock",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     MIT_LEARN_AI_XBLOCK_TUTOR_CHAT_API_URL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-chat-xblock",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     # ===== ol-openedx-course-sync =====
     OL_OPENEDX_COURSE_SYNC_SERVICE_WORKER_USERNAME: Any = Field(
         default=None,
-        json_schema_extra={"aqueduct_unresolved": True},
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-course-sync",
+        },
         description='.. setting_name: OL_OPENEDX_COURSE_SYNC_SERVICE_WORKER_USERNAME\n.. setting_default: ""\n.. setting_description: The username of the service worker that\nwill be used to sync courses.',  # noqa: E501
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     # ===== ol-openedx-git-auto-export =====
     GITHUB_ACCESS_TOKEN: str | None = Field(
-        default=None
+        default=None,
+        json_schema_extra={"aqueduct_plugin": "ol-openedx-git-auto-export"},
     )  # REDACTED: name looks secret-like — set via a source, not here
     GITHUB_ORG_API_URL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-git-auto-export",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     GIT_AUTO_EXPORT_AUTHORING_URL_PREFIX: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-git-auto-export",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     # ===== ol-openedx-logging =====
     LOGGING_CONFIG: str = Field(
-        default="ol_openedx_logging.logging.configure_from_logging_dict"
+        default="ol_openedx_logging.logging.configure_from_logging_dict",
+        json_schema_extra={"aqueduct_plugin": "ol-openedx-logging"},
     )
     # ===== openedx-authz =====
     CASBIN_AUTO_LOAD_POLICY_INTERVAL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     CASBIN_AUTO_SAVE_POLICY: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     CASBIN_LOG_LEVEL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     CASBIN_MODEL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ENABLE_AUTOMATIC_AUTHZ_COURSE_AUTHORING_MIGRATION: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     OPENEDX_AUTHZ_CONTENT_LIBRARY_MODEL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     OPENEDX_AUTHZ_COURSE_OVERVIEW_MODEL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     # ===== openedx-platform =====
-    ACE_CHANNEL_DEFAULT_EMAIL: str = Field(default="django_email")
-    ACE_CHANNEL_DEFAULT_PUSH: str = Field(default="push_notification")
+    ACE_CHANNEL_DEFAULT_EMAIL: str = Field(
+        default="django_email",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_CHANNEL_DEFAULT_PUSH: str = Field(
+        default="push_notification",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
     ACE_CHANNEL_SAILTHRU_API_KEY: str | None = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )  # REDACTED: name looks secret-like — set via a source, not here
     ACE_CHANNEL_SAILTHRU_API_SECRET: str | None = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )  # REDACTED: name looks secret-like — set via a source, not here
-    ACE_CHANNEL_SAILTHRU_DEBUG: bool = Field(default=True)
-    ACE_CHANNEL_SAILTHRU_TEMPLATE_NAME: str = Field(
-        default="Automated Communication Engine Email"
+    ACE_CHANNEL_SAILTHRU_DEBUG: bool = Field(
+        default=True, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )
-    ACE_CHANNEL_TRANSACTIONAL_EMAIL: str = Field(default="django_email")
+    ACE_CHANNEL_SAILTHRU_TEMPLATE_NAME: str = Field(
+        default="Automated Communication Engine Email",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_CHANNEL_TRANSACTIONAL_EMAIL: str = Field(
+        default="django_email",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
     ACE_ENABLED_CHANNELS: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: ["django_email"]
+        default_factory=lambda: ["django_email"],
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
     )
     ACE_ENABLED_POLICIES: Annotated[list[Any], NoDecode] = Field(
-        default_factory=lambda: ["bulk_email_optout"]
+        default_factory=lambda: ["bulk_email_optout"],
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
     )
     ACE_ROUTING_KEY: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-platform",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ALLOW_HIDING_DISCUSSION_TAB: bool = Field(
         default=False,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
         description=".. toggle_name: ALLOW_HIDING_DISCUSSION_TAB\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: If True, it adds an option to show/hide the discussions tab.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-06-15\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/8474",  # noqa: E501
     )
     DISCUSSION_SETTINGS: Annotated[dict[str, Any], NoDecode] = Field(
@@ -999,34 +1096,52 @@ class AqueductSettings(BaseSettings):
             "MAX_COMMENT_DEPTH": 2,
             "COURSE_PUBLISH_TASK_DELAY": 30,
         },
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
     )
-    FCM_APP_NAME: str = Field(default="fcm-edx-platform")
+    FCM_APP_NAME: str = Field(
+        default="fcm-edx-platform",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
     FIREBASE_APP: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-platform",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     FIREBASE_CREDENTIALS: str | None = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )  # REDACTED: name looks secret-like — set via a source, not here
     FIREBASE_CREDENTIALS_PATH: str | None = Field(
         default=None,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
         description="Note: To local development with Firebase, you must set FIREBASE_CREDENTIALS_PATH\n(path to json file with FIREBASE_CREDENTIALS)\nor FIREBASE_CREDENTIALS dictionary.",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
     PASSWORD_POLICY_COMPLIANCE_API_TIMEOUT: str | None = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )  # REDACTED: name looks secret-like — set via a source, not here
     PASSWORD_POLICY_COMPLIANCE_ROLLOUT_CONFIG: str | None = Field(
         default=None,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
         description="Settings for managing the rollout of password policy compliance enforcement.",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
     PUSH_NOTIFICATIONS_SETTINGS: Any = Field(
-        default=None, json_schema_extra={"aqueduct_unresolved": True}
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-platform",
+        },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ZENDESK_OAUTH_ACCESS_TOKEN: str | None = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )  # REDACTED: name looks secret-like — set via a source, not here
-    ZENDESK_URL: Any = Field(default=None)  # refine type
+    ZENDESK_URL: Any = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # refine type
     # ===== rapid-response-xblock =====
-    ENABLE_RAPID_RESPONSE_AUTHOR_VIEW: bool = Field(default=False)
+    ENABLE_RAPID_RESPONSE_AUTHOR_VIEW: bool = Field(
+        default=False, json_schema_extra={"aqueduct_plugin": "rapid-response-xblock"}
+    )
     # <<< aqueduct:generated:fields
 
     # >>> aqueduct:generated:container_decoders
