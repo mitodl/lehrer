@@ -1350,7 +1350,7 @@ class AqueductSettings(BaseSettings):
     PROCTORED_EXAM_VIEWABLE_PAST_DUE: bool = Field(default=False)
     PROFILE_EXTENSION_FORM: Any = Field(
         default=None,
-        description="PROFILE_EXTENSION_FORM is a Django ModelForm class used for extending user profiles\nbeyond the default fields. This setting enables new capabilities for profile management:\n- Data is stored in a dedicated model (not just UserProfile.meta)\n- Users can update their extended profile fields via the account settings API\nThis setting supersedes REGISTRATION_EXTENSION_FORM and provides more accurate naming\nfor profile extension functionality.\nExample: PROFILE_EXTENSION_FORM = 'myapp.forms.ExtendedProfileForm'\nThe custom form's model should have:\n- A OneToOneField to User (typically named 'user')\n- Additional fields for extended profile data\nMIGRATION NOTE: If you're currently using REGISTRATION_EXTENSION_FORM (deprecated),\nyour custom fields will continue working as before (data in meta field).\nTo get the new capabilities, migrate to PROFILE_EXTENSION_FORM.",  # noqa: E501
+        description="Usage:\n- Set this to the dot-separated path of a valid ModelForm class.\nExample: PROFILE_EXTENSION_FORM = 'my_custom_app.forms.ExtendedProfileForm'\nRequirements:\n1. Linked Model: The form must be based on a model with a OneToOneField to\nthe User (typically named 'user').\n2. Installed Apps: Ensure the app containing your model is included in\nthe ADDL_INSTALLED_APPS array.",  # noqa: E501
     )  # refine type
     PROFILE_INFORMATION_REPORT_PRIVATE_FIELDS: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: ["year_of_birth"],
@@ -1395,10 +1395,6 @@ class AqueductSettings(BaseSettings):
         description=".. setting_name: RECAPTCHA_SITE_KEYS\n.. setting_default: empty dictionary\n.. setting_description: Add recaptcha site keys to use captcha feature in discussion app.\n.. setting_warning: This setting is used to configure the reCAPTCHA keys for web,\niOS, and Android platforms.\nThe keys are expected to be in the format:\n'web': 'your-web-site-key',\n'ios': 'your-ios-site-key',\n'android': 'your-android-site-key',",  # noqa: E501
     )
     REGISTRATION_CODE_LENGTH: int = Field(default=8)
-    REGISTRATION_EXTENSION_FORM: Any = Field(
-        default=None,
-        description="Only used if combined login/registration is enabled.\nThis can be used to add fields to the registration page.\nIt must be a path to a valid form, in dot-separated syntax.\nIE: custom_form_app.forms.RegistrationExtensionForm\nNote: If you want to use a model to store the results of the form, you will\nneed to add the model's app to the ADDL_INSTALLED_APPS array in your\nlms.yml file.\nREGISTRATION_EXTENSION_FORM is deprecated but will continue to work for backward compatibility.\nSites using this setting will maintain the old behavior:\n- Data is stored in UserProfile.meta JSON field\n- No ability to update extended fields after registration via account settings API\nTo get new capabilities (model-based storage), migrate to PROFILE_EXTENSION_FORM.",  # noqa: E501
-    )  # refine type
     REGISTRATION_FIELD_ORDER: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: [
             "name",
