@@ -674,7 +674,22 @@ def setup(cfg):
     # than inlined into a ConfigMap manifest, so it stays schema-checked and
     # readable. kubectl renders it into the ConfigMap; --dry-run=client never
     # contacts the cluster.
-    provision_dir = local_dev + "/provision"
+    #
+    # Scoped to the deployment, like settings/, codejail_config/, notes_config/
+    # and mfe_slot_config/ -- operator-specific provisioning does not belong on
+    # the generic path. Unlike those four this one feeds a ConfigMap rather
+    # than a custom_build, so it is watched explicitly instead of through a
+    # build's deps=.
+    provision_dir = dep_cfg + "/provision"
+    # watch_file() tolerates a path that does not exist, so without this the
+    # first sign of a deployment missing the directory is a kubectl error that
+    # never names lehrer.
+    if not os.path.exists(provision_dir + "/bootstrap.yaml"):
+        fail(
+            "no bootstrap.yaml in " + provision_dir + ". Every deployment " +
+            "carries its own provisioning spec; copy one from another " +
+            "deployment's provision/ directory to start from."
+        )
     watch_file(provision_dir)
     k8s_yaml(local(
         "kubectl create configmap edxapp-provision --namespace " + namespace +
@@ -746,7 +761,8 @@ def setup(cfg):
     # resource, so leaving them automatic would turn every settings edit back
     # into the full rebuild the live_update above exists to avoid. Trigger
     # edxapp-migrate yourself after a change that brings new migrations (a
-    # build_manifest.yaml bump), and edxapp-provision after editing provision/.
+    # build_manifest.yaml bump), and edxapp-provision after editing the
+    # deployment's provision/.
     k8s_resource(
         "edxapp-migrate",
         resource_deps=infra_deps,
