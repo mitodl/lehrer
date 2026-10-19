@@ -2,8 +2,8 @@
 name: Settings Verification
 
 # Boot each group's *committed* aqueduct settings tree against a build cell's
-# pinned plugin set, and (where the model is release-matched) fail on model
-# drift. This is the tier above plugin-compat: that one proves the plugins
+# pinned plugin set, and (for the one cell the model was generated from) fail on
+# model drift. This is the tier above plugin-compat: that one proves the plugins
 # install and import, this one proves the settings they feed still resolve into
 # a Django configuration that starts.
 #
@@ -116,8 +116,10 @@ jobs:
         RELEASE: ${{ matrix.cell.release }}
         DEPLOYMENT: ${{ matrix.cell.deployment }}
         SETTINGS: ${{ matrix.cell.settings }}
-        # Only the release the committed model was generated from can be
-        # compared against a fresh render (see settings_model_release).
+        # Only the cell the committed model was generated from can be
+        # compared against a fresh render -- the model is specific to that
+        # cell's plugin set as well as its release (see
+        # settings_model_release / settings_model_deployment).
         DRIFT: ${{ matrix.cell.drift }}
       run: |
         set -euo pipefail

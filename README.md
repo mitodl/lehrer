@@ -49,6 +49,12 @@ lehrer dev status      # show cluster / pod state
 lehrer dev db-collation  # audit MariaDB schema-collation drift (see below)
 ```
 
+`setup`, `start` and `check` each take `--deployment-config <dir>`. `setup`
+and `start` default to `deployments/generic`; `check` skips its deployment
+hostname checks entirely when the flag is omitted. For `setup` the flag only
+selects the bootstrap spec whose superuser gets reported — the cluster and the
+Secret are shared — so pass `start` the same one.
+
 Use a deployment-specific config and MFE hot-reload:
 
 ```bash
@@ -185,14 +191,22 @@ starts; after that they wait for a trigger (see
 Trigger `edxapp-migrate` after a change that brings new migrations, such as a
 `build_manifest.yaml` bump.
 
-`edxapp-provision` applies `local-dev/provision/bootstrap.yaml`: the `edx` /
-`edx` superuser (override the password with `PROVISION_SUPERUSER_PASSWORD`
-before `lehrer dev setup`), the DOT OAuth Application that LMS↔notes SSO signs
-its tokens with, the `cms-sso` Application Studio logs in through, and the
-waffle flags. Add users, OAuth clients or flags there; `bootstrap.schema.json`
+`edxapp-provision` applies the selected deployment's
+`provision/bootstrap.yaml` — `deployments/generic/provision/bootstrap.yaml`
+unless `--deployment-config` names another. It declares the `edx` / `edx`
+superuser (override the password with `PROVISION_SUPERUSER_PASSWORD` before
+`lehrer dev setup`), the DOT OAuth Application that LMS↔notes SSO signs its
+tokens with, the `cms-sso` Application Studio logs in through, and the waffle
+flags. Add users, OAuth clients or flags there; `bootstrap.schema.json`
 describes the format, and secrets are named by the `openedx-secrets` key that
 holds them, never inlined. The Job re-runs whenever that file changes. Every
 step is idempotent, so re-running is always safe.
+
+Each deployment carries its own spec, so provisioning an operator's identity
+provider or service account does not land on the generic path. A deployment's
+spec repeats what the generic one declares and adds its own rows on top; a
+test asserts none of them drops a shared object, so an addition to the generic
+spec has to be made in each of the others too.
 
 The runner is `src/lehrer/bootstrap`, which the platform image carries as
 `lehrer_bootstrap`, so a deployed environment can apply its own spec the same

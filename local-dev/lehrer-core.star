@@ -223,6 +223,15 @@ def setup(cfg):
     lehrer_base = local_dev + "/../src/lehrer/settings/base.py"
     lehrer_bootstrap = local_dev + "/../src/lehrer/bootstrap"
 
+    # Every image build shells out to `dagger call`, which resolves its module
+    # from the working directory. Tilt runs custom_build commands in the cwd of
+    # whichever Tiltfile started the run, so under composition that is the
+    # caller's repo -- which has no dagger.json, so dagger loads only the core
+    # API and every build dies with `unknown command "platform" for "dagger
+    # call"`. Pin it to the repo that owns dagger.json. A no-op for lehrer's own
+    # standalone path, where the two are already the same directory.
+    lehrer_root = local_dev + "/.."
+
     # Absolute path to the deployment config directory.
     # Relative paths are treated as relative to local_dev (where tilt up is run from).
     if deploy_config.startswith("/"):
@@ -476,6 +485,7 @@ def setup(cfg):
         ],
         skips_local_docker=True,
         live_update=platform_live_update,
+        dir=lehrer_root,
     )
 
     # ------------------------------------------------------------------ #
@@ -500,6 +510,7 @@ def setup(cfg):
         ),
         deps=[dep_cfg + "/codejail_config"],
         skips_local_docker=True,
+        dir=lehrer_root,
     )
 
     # ------------------------------------------------------------------ #
@@ -525,6 +536,7 @@ def setup(cfg):
         ),
         deps=[dep_cfg + "/notes_config"],
         skips_local_docker=True,
+        dir=lehrer_root,
     )
 
     # ------------------------------------------------------------------ #
@@ -578,6 +590,7 @@ def setup(cfg):
             ),
             deps=[site_dir] + mfe_deps_base,
             skips_local_docker=True,
+            dir=lehrer_root,
         )
 
     if mfe_hot_reload:
@@ -639,6 +652,10 @@ def setup(cfg):
                     shared_src_flag +
                     " up --ports " + port + ":8080"
                 ),
+                # Same reason as lehrer_root on every custom_build above:
+                # serve_cmd otherwise runs in the caller's Tiltfile directory,
+                # which under composition has no dagger.json.
+                serve_dir=lehrer_root,
                 deps=[site_dir] + mfe_deps_base,
                 labels=["mfe"],
             )
@@ -657,7 +674,22 @@ def setup(cfg):
     # than inlined into a ConfigMap manifest, so it stays schema-checked and
     # readable. kubectl renders it into the ConfigMap; --dry-run=client never
     # contacts the cluster.
-    provision_dir = local_dev + "/provision"
+    #
+    # Scoped to the deployment, like settings/, codejail_config/, notes_config/
+    # and mfe_slot_config/ -- operator-specific provisioning does not belong on
+    # the generic path. Unlike those four this one feeds a ConfigMap rather
+    # than a custom_build, so it is watched explicitly instead of through a
+    # build's deps=.
+    provision_dir = dep_cfg + "/provision"
+    # Checked before anything reads it, so a deployment without the file is
+    # told what is missing and why, rather than failing further down in
+    # whichever of kubectl, sha256sum or the watcher gets there first.
+    if not os.path.exists(provision_dir + "/bootstrap.yaml"):
+        fail(
+            "no bootstrap.yaml in " + provision_dir + ". Every deployment " +
+            "carries its own provisioning spec; copy one from another " +
+            "deployment's provision/ directory to start from."
+        )
     watch_file(provision_dir)
     k8s_yaml(local(
         "kubectl create configmap edxapp-provision --namespace " + namespace +
@@ -729,7 +761,8 @@ def setup(cfg):
     # resource, so leaving them automatic would turn every settings edit back
     # into the full rebuild the live_update above exists to avoid. Trigger
     # edxapp-migrate yourself after a change that brings new migrations (a
-    # build_manifest.yaml bump), and edxapp-provision after editing provision/.
+    # build_manifest.yaml bump), and edxapp-provision after editing the
+    # deployment's provision/.
     k8s_resource(
         "edxapp-migrate",
         resource_deps=infra_deps,

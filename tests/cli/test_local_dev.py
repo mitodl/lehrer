@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 import pytest
 import yaml
 
+from lehrer.bootstrap.spec import BootstrapSpec
 from lehrer.bootstrap.spec import load as load_bootstrap_spec
 from lehrer.cli import _paths, local_dev
 
@@ -253,6 +254,11 @@ class TestPreflightHostPorts:
         local_dev._preflight_host_ports()
 
 
+def _deployments() -> list[Path]:
+    root = _paths.repo_root() / "deployments"
+    return [d for d in sorted(root.iterdir()) if (d / "mfe_slot_config").is_dir()]
+
+
 def _manifest(name: str) -> dict[str, Any]:
     path = _paths.local_dev_dir() / "manifests" / "platform" / name
     return yaml.safe_load(path.read_text())
@@ -267,20 +273,66 @@ class TestProvisioningManifests:
     until the Job failed, so pin them here.
     """
 
-    def test_the_local_dev_spec_is_valid(self) -> None:
-        spec = load_bootstrap_spec(_paths.bootstrap_spec())
+    @pytest.mark.parametrize("deployment", _deployments(), ids=lambda d: d.name)
+    def test_every_deployment_has_a_bootstrap_spec(self, deployment: Path) -> None:
+        # Deployments are discovered by mfe_slot_config, not by provision/, so
+        # that one missing the spec fails here instead of quietly dropping out
+        # of the parametrisation.
+        assert _paths.bootstrap_spec(deployment).is_file()
+
+    @pytest.mark.parametrize("deployment", _deployments(), ids=lambda d: d.name)
+    def test_every_deployment_spec_is_valid(self, deployment: Path) -> None:
+        spec = load_bootstrap_spec(_paths.bootstrap_spec(deployment))
         assert spec.users and spec.oauth_applications and spec.waffle_flags
 
-    def test_secret_supplies_every_env_var_the_spec_reads(self) -> None:
-        spec = load_bootstrap_spec(_paths.bootstrap_spec())
+    @pytest.mark.parametrize("deployment", _deployments(), ids=lambda d: d.name)
+    def test_secret_supplies_every_env_var_the_spec_reads(
+        self, deployment: Path
+    ) -> None:
+        # Deliberately only users and oauth_applications. A
+        # third_party_auth_providers or service_access_tokens row is inert
+        # until its caller supplies the value (from_env_optional), so those
+        # names are not in secret-defaults.yaml and asserting on them here
+        # would fail by design.
+        spec = load_bootstrap_spec(_paths.bootstrap_spec(deployment))
         read = {user.password_env for user in spec.users if user.password_env}
         for application in spec.oauth_applications:
             read |= {application.client_id_env, application.client_secret_env}
         provisioned = {key for key, _ in local_dev._load_secret_defaults()[0]}
         assert read <= provisioned
 
-    def test_setup_reports_the_spec_superuser(self) -> None:
-        superuser = local_dev._bootstrap_superuser()
+    def test_every_deployment_carries_what_generic_declares(self) -> None:
+        """A shared object added to generic has to be added to the others too.
+
+        The specs are duplicated rather than layered, so nothing but this stops
+        a new waffle flag or OAuth application landing in generic alone and the
+        other deployments silently losing it. Only this direction is asserted:
+        a deployment carrying rows generic does not is the point of the split.
+        """
+        generic = _paths.repo_root() / "deployments" / "generic"
+        shared = load_bootstrap_spec(_paths.bootstrap_spec(generic))
+        for deployment in _deployments():
+            if deployment == generic:
+                continue
+            spec = load_bootstrap_spec(_paths.bootstrap_spec(deployment))
+            # Every step the model declares, not a hand-kept subset: a
+            # shared row in a step this forgot would go missing from the
+            # other deployments with nothing to catch it. The two
+            # operator-specific steps are empty in generic today, so those
+            # iterations assert nothing until one is not.
+            for field in BootstrapSpec.model_fields:
+                # Compared whole, not by name: a drifted `everyone` value or a
+                # changed redirect_uri is the divergence duplication produces.
+                carried = [item.model_dump() for item in getattr(spec, field)]
+                for declared in getattr(shared, field):
+                    assert declared.model_dump() in carried, (
+                        f"{deployment.name} drops the {field} entry "
+                        f"generic declares: {declared.model_dump()}"
+                    )
+
+    @pytest.mark.parametrize("deployment", _deployments(), ids=lambda d: d.name)
+    def test_setup_reports_the_spec_superuser(self, deployment: Path) -> None:
+        superuser = local_dev._bootstrap_superuser(deployment)
         assert superuser.superuser
         assert superuser.password_env
 
@@ -299,13 +351,35 @@ class TestProvisioningManifests:
         spec: str,
         error: str,
         tmp_path: Path,
+    ) -> None:
+        # A real deployment-shaped directory rather than a stubbed
+        # _paths.bootstrap_spec, so the path join under test is the one that
+        # runs.
+        (tmp_path / "provision").mkdir()
+        (tmp_path / "provision" / _paths.SPEC_NAME).write_text(spec)
+        with pytest.raises(ValueError, match=error):
+            local_dev._bootstrap_superuser(tmp_path)
+
+    def test_setup_refuses_a_deployment_with_no_spec_before_touching_the_cluster(
+        self,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        spec_path = tmp_path / "bootstrap.yaml"
-        spec_path.write_text(spec)
-        monkeypatch.setattr(_paths, "bootstrap_spec", lambda: spec_path)
-        with pytest.raises(ValueError, match=error):
-            local_dev._bootstrap_superuser()
+        """A mistyped --deployment-config must not get as far as creating one.
+
+        The spec is read at the very end of setup(), after the cluster,
+        namespace and Secret exist, so without an up-front check a typo costs
+        a half-built cluster and a traceback in place of the next-step output.
+        """
+        monkeypatch.setattr(local_dev, "check_deps", lambda **_: None)
+
+        def _fail(*_: object, **__: object) -> None:
+            msg = "setup reached the cluster with no spec to apply"
+            raise AssertionError(msg)
+
+        monkeypatch.setattr(local_dev, "_cluster_state", _fail)
+        with pytest.raises(SystemExit, match="no bootstrap spec at"):
+            local_dev.setup(deployment_config=str(tmp_path))
 
     def test_the_job_runs_the_spec_the_configmap_carries(self) -> None:
         container = _manifest("job-provision.yaml")["spec"]["template"]["spec"][
@@ -313,9 +387,22 @@ class TestProvisioningManifests:
         ][0]
         assert container["command"][:3] == ["python", "-m", "lehrer_bootstrap"]
         mount = container["volumeMounts"][0]["mountPath"]
-        assert container["command"][3] == f"{mount}/{_paths.bootstrap_spec().name}"
+        assert container["command"][3] == f"{mount}/{_paths.SPEC_NAME}"
         star = (_paths.local_dev_dir() / "lehrer-core.star").read_text()
-        assert f'"/{_paths.bootstrap_spec().name}"' in star
+        assert f'"/{_paths.SPEC_NAME}"' in star
+
+    def test_setup_and_tilt_agree_on_the_default_deployment(self) -> None:
+        """The CLI default and the Tiltfile's are separate literals.
+
+        `lehrer dev setup` reports a superuser from one and `tilt up` without
+        --deployment-config provisions from the other, so a drift between them
+        shows up as a stack provisioned from a spec nobody was shown.
+        """
+        tiltfile = _paths.tiltfile().read_text()
+        match = re.search(r'config\.main_dir \+ "(/\.\./deployments/[\w-]+)"', tiltfile)
+        assert match, "no deployment-config default found in the Tiltfile"
+        tilt_default = (_paths.local_dev_dir() / match.group(1).lstrip("/")).resolve()
+        assert tilt_default == _paths.default_deployment_config()
 
 
 class TestOperatorSecretRefs:
@@ -913,11 +1000,6 @@ class TestSetupContract:
         assert read - passed == set(), (
             f"setup() keys read but never passed: {sorted(read - passed)}"
         )
-
-
-def _deployments() -> list[Path]:
-    root = _paths.repo_root() / "deployments"
-    return [d for d in sorted(root.iterdir()) if (d / "mfe_slot_config").is_dir()]
 
 
 def _sites(deployment: Path) -> set[str]:

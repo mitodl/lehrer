@@ -294,8 +294,21 @@
         }
       ],
       "default": null,
-      "description": "Release whose edx-platform source the group's committed settings/*/models/aqueduct.py was generated from. One settings tree serves every cell in the group, but the generated model is edx-platform-version-specific, so only this release's cells can be checked for model drift. Unset disables the drift gate.",
+      "description": "Release of the cell the group's committed settings/*/models/aqueduct.py was generated from. Paired with settings_model_deployment. One settings tree serves every cell in the group, but the generated model is specific to both the edx-platform release and the generating cell's installed plugin set (codegen is passed --openedx-plugins <svc>.djangoapp), so only that one cell can be checked for model drift. Unset -- with settings_model_deployment also unset -- disables the drift gate.",
       "title": "Settings Model Release"
+    },
+    "settings_model_deployment": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Deployment of the cell the group's committed settings/*/models/aqueduct.py was generated from. Required whenever settings_model_release is set: the generated field set depends on which Open edX plugins the generating cell installs, so a release alone does not identify the model's source.",
+      "title": "Settings Model Deployment"
     },
     "cells": {
       "items": {

@@ -68,6 +68,132 @@
       "title": "OAuthApplication",
       "type": "object"
     },
+    "ServiceAccessToken": {
+      "additionalProperties": false,
+      "description": "A long-lived OAuth2 bearer token for an upstream service integration.\n\nSome integrations do not perform an OAuth2 exchange at all: they are handed\none opaque token and send it as ``Authorization: Bearer`` forever. MITx\nOnline's ``OPENEDX_SERVICE_WORKER_API_TOKEN`` is the example -- it is read\nstraight out of settings and used to enrol learners through the LMS API, so\nwithout a matching ``AccessToken`` row here every enrolment silently fails\nand the upstream records ``edx_enrolled=False``.\n\nSelf-contained on purpose: the entry owns its service account and its\napplication as well as the token, because all three exist only to serve one\nintegration and should appear and disappear together. **Skipped entirely\nwhen ``token_env`` is unset or empty**, so an install with no such\nintegration does not grow an unused staff account.\n\nThe account gets an unusable password: it authenticates only by this token.",
+      "properties": {
+        "username": {
+          "description": "Service account to create and own the token.",
+          "title": "Username",
+          "type": "string"
+        },
+        "email": {
+          "title": "Email",
+          "type": "string"
+        },
+        "token_env": {
+          "description": "Environment variable holding the bearer token. The upstream must be configured with the identical value.",
+          "title": "Token Env",
+          "type": "string"
+        },
+        "application_name": {
+          "description": "Name for the owning OAuth2 application.",
+          "title": "Application Name",
+          "type": "string"
+        },
+        "staff": {
+          "default": true,
+          "description": "Django is_staff. Enrolling a *different* user through the LMS enrollment API requires it, so a service worker that provisions enrolments needs it set.",
+          "title": "Staff",
+          "type": "boolean"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "expires_in_days": {
+          "default": 3650,
+          "description": "Lifetime from apply time. Long by default: this stands in for a credential a deployed environment would hold in a secret store.",
+          "title": "Expires In Days",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "username",
+        "email",
+        "token_env",
+        "application_name"
+      ],
+      "title": "ServiceAccessToken",
+      "type": "object"
+    },
+    "ThirdPartyAuthProvider": {
+      "additionalProperties": false,
+      "description": "An ``OAuth2ProviderConfig``: an external IdP the LMS federates login to.\n\n``THIRD_PARTY_AUTH_BACKENDS`` makes a backend *importable*; this row is what\nmakes it *usable*. Without one, ``/auth/login/<backend>/`` 404s even though\nthe backend class is installed and in ``AUTHENTICATION_BACKENDS``.\n\nThe provider's endpoint URLs cannot come from Django settings:\n``OAuth2ProviderConfig.get_setting`` serves ``KEY`` and ``SECRET`` from this\nrow and every other name out of its ``other_settings`` JSON, so that JSON is\nthe only channel for ``AUTHORIZATION_URL`` / ``ACCESS_TOKEN_URL`` /\n``API_ROOT`` / ``DISCOVERY_URL``.\n\nWhich IdP to federate to is a property of the surrounding deployment, not of\nthis stack, so the JSON arrives by environment variable like the credentials\ndo. **An entry whose referenced variables are unset or empty is skipped**,\nwhich is how a standalone install -- one with no upstream IdP in front of it\n-- declines the whole step without needing a different spec file.",
+      "properties": {
+        "backend_name": {
+          "description": "social-core backend name, e.g. ol-oauth2. Must appear in THIRD_PARTY_AUTH_BACKENDS or the provider is never registered.",
+          "title": "Backend Name",
+          "type": "string"
+        },
+        "slug": {
+          "title": "Slug",
+          "type": "string"
+        },
+        "name": {
+          "description": "Label shown on the LMS login page.",
+          "title": "Name",
+          "type": "string"
+        },
+        "client_id_env": {
+          "title": "Client Id Env",
+          "type": "string"
+        },
+        "client_secret_env": {
+          "title": "Client Secret Env",
+          "type": "string"
+        },
+        "other_settings_env": {
+          "description": "Environment variable holding the other_settings JSON object. The endpoint URLs live here because Django settings cannot reach them.",
+          "title": "Other Settings Env",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "visible": {
+          "default": true,
+          "title": "Visible",
+          "type": "boolean"
+        },
+        "skip_hinted_login_dialog": {
+          "default": true,
+          "title": "Skip Hinted Login Dialog",
+          "type": "boolean"
+        },
+        "skip_registration_form": {
+          "default": true,
+          "description": "Provision the account straight from the IdP's user data instead of prompting. Required when the IdP, not the LMS, owns registration.",
+          "title": "Skip Registration Form",
+          "type": "boolean"
+        },
+        "skip_email_verification": {
+          "default": true,
+          "title": "Skip Email Verification",
+          "type": "boolean"
+        },
+        "sync_learner_profile_data": {
+          "default": false,
+          "title": "Sync Learner Profile Data",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "backend_name",
+        "slug",
+        "name",
+        "client_id_env",
+        "client_secret_env",
+        "other_settings_env"
+      ],
+      "title": "ThirdPartyAuthProvider",
+      "type": "object"
+    },
     "User": {
       "additionalProperties": false,
       "description": "A user the install needs, e.g. a local-dev superuser or a service user.\n\nApplied as declared, including on an existing account: one the spec does\nnot mark ``superuser`` or ``staff`` loses those flags, and every declared\nuser is made active.",
@@ -200,6 +326,20 @@
         "$ref": "#/$defs/OAuthApplication"
       },
       "title": "Oauth Applications",
+      "type": "array"
+    },
+    "third_party_auth_providers": {
+      "items": {
+        "$ref": "#/$defs/ThirdPartyAuthProvider"
+      },
+      "title": "Third Party Auth Providers",
+      "type": "array"
+    },
+    "service_access_tokens": {
+      "items": {
+        "$ref": "#/$defs/ServiceAccessToken"
+      },
+      "title": "Service Access Tokens",
       "type": "array"
     },
     "waffle_flags": {

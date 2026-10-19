@@ -8,9 +8,9 @@ Runs inside the platform image, where lehrer bakes this package in as
 
 Every step converges the database on the spec, so re-running it is safe. Each
 object applied prints one JSON line on stdout (``{"step", "target",
-"result"}``, result one of created/updated), which is what a Job's caller, and
-later an operator, reads to tell what changed. A failure raises and exits
-non-zero after the lines for everything already applied.
+"result"}``, result one of created/updated/unchanged), which is what a Job's
+caller, and later an operator, reads to tell what changed. A failure raises
+and exits non-zero after the lines for everything already applied.
 
 argparse rather than cyclopts: the image has no cyclopts, and this must not
 depend on anything the platform does not already install.
@@ -21,14 +21,26 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from typing import Any
+from typing import Any, Literal
 
-from .spec import STEPS, BootstrapSpec, from_env, load, resolve
+from .spec import (
+    STEPS,
+    BootstrapSpec,
+    from_env,
+    from_env_optional,
+    load,
+    resolve,
+)
+
+Result = Literal["created", "updated", "unchanged"]
 
 
-def _report(step: str, target: str, *, created: bool) -> None:
-    result = "created" if created else "updated"
+def _report(step: str, target: str, result: Result) -> None:
     print(json.dumps({"step": step, "target": target, "result": result}), flush=True)  # noqa: T201
+
+
+def _written(*, created: bool) -> Result:
+    return "created" if created else "updated"
 
 
 def apply_users(spec: BootstrapSpec, settings: Any) -> None:  # noqa: ARG001
@@ -60,7 +72,7 @@ def apply_users(spec: BootstrapSpec, settings: Any) -> None:  # noqa: ARG001
         # Most of the LMS assumes user.profile exists, and a User row made
         # outside registration has none: the account and dashboard views 500.
         UserProfile.objects.get_or_create(user=user, defaults={"name": user.username})
-        _report("users", declared.username, created=created)
+        _report("users", declared.username, _written(created=created))
 
 
 def apply_oauth_applications(spec: BootstrapSpec, settings: Any) -> None:
@@ -114,7 +126,182 @@ def apply_oauth_applications(spec: BootstrapSpec, settings: Any) -> None:
             ApplicationAccess.objects.update_or_create(
                 application=application, defaults={"scopes": declared.scopes}
             )
-        _report("oauth_applications", fields["name"], created=created)
+        _report("oauth_applications", fields["name"], _written(created=created))
+
+
+def apply_third_party_auth_providers(spec: BootstrapSpec, settings: Any) -> None:
+    from django.contrib.sites.models import Site  # type: ignore[import-not-found]  # noqa: PLC0415
+
+    from common.djangoapps.third_party_auth.models import (  # type: ignore[import-not-found]  # noqa: PLC0415
+        OAuth2ProviderConfig,
+    )
+
+    for declared in spec.third_party_auth_providers:
+        other_settings = from_env_optional(declared.other_settings_env)
+        client_id = from_env_optional(declared.client_id_env)
+        client_secret = from_env_optional(declared.client_secret_env)
+        if not (other_settings and client_id and client_secret):
+            # Not an error: an install with no upstream IdP in front of it
+            # leaves these unset, and creating the row anyway would put a login
+            # button on the page that cannot work. See ThirdPartyAuthProvider.
+            print(  # noqa: T201
+                f"third_party_auth_providers: skipping {declared.backend_name} "
+                "(credentials or other_settings not supplied)",
+                file=sys.stderr,
+            )
+            continue
+
+        # Validated here rather than at the far end of a login redirect, where
+        # a malformed value surfaces as a social-core KeyError on whichever
+        # setting the backend happened to read first.
+        try:
+            parsed = json.loads(other_settings)
+        except json.JSONDecodeError as error:
+            msg = (
+                f"{declared.other_settings_env} must be a JSON object of "
+                f"provider settings: {error}"
+            )
+            raise ValueError(msg) from None
+        if not isinstance(parsed, dict):
+            msg = f"{declared.other_settings_env} must be a JSON object, not a {type(parsed).__name__}"  # noqa: E501
+            raise ValueError(msg)
+
+        site = Site.objects.get(pk=settings.SITE_ID)
+        fields = {
+            "slug": declared.slug,
+            "name": declared.name,
+            "enabled": declared.enabled,
+            "visible": declared.visible,
+            "skip_hinted_login_dialog": declared.skip_hinted_login_dialog,
+            "skip_registration_form": declared.skip_registration_form,
+            "skip_email_verification": declared.skip_email_verification,
+            "sync_learner_profile_data": declared.sync_learner_profile_data,
+            "key": client_id,
+            "secret": client_secret,
+            # Canonicalised, so a reordered or reindented env value does not
+            # read as a change and append a new version on every apply.
+            "other_settings": json.dumps(parsed, sort_keys=True),
+        }
+        # OAuth2ProviderConfig is a ConfigurationModel: rows are an append-only
+        # history keyed on KEY_FIELDS (site_id, backend_name) and the newest
+        # wins. There is nothing to update in place -- a change means a new row
+        # -- so idempotency has to be a comparison against the newest one.
+        #
+        # Queried directly rather than through .current(): that override takes
+        # only the non-site key fields and resolves site_id itself from the
+        # *current request*, which a provisioning job does not have.
+        current = (
+            OAuth2ProviderConfig.objects.filter(
+                site_id=site.id, backend_name=declared.backend_name
+            )
+            .order_by("-change_date", "-id")
+            .first()
+        )
+        unchanged = current is not None and all(
+            getattr(current, key) == value for key, value in fields.items()
+        )
+        if not unchanged:
+            OAuth2ProviderConfig.objects.create(
+                site=site, backend_name=declared.backend_name, **fields
+            )
+        # Unchanged is its own result here, not an update: a
+        # ConfigurationModel row is never written in place, so "updated" would
+        # claim a new history row that this run did not append.
+        _report(
+            "third_party_auth_providers",
+            declared.backend_name,
+            "unchanged" if unchanged else "created",
+        )
+
+
+def apply_service_access_tokens(spec: BootstrapSpec, settings: Any) -> None:  # noqa: ARG001
+    from datetime import timedelta  # noqa: PLC0415
+
+    from django.contrib.auth import get_user_model  # type: ignore[import-not-found]  # noqa: PLC0415
+    from django.utils import timezone  # type: ignore[import-not-found]  # noqa: PLC0415
+    from common.djangoapps.student.models import (  # type: ignore[import-not-found]  # noqa: PLC0415
+        UserProfile,
+    )
+    from oauth2_provider.models import (  # type: ignore[import-not-found]  # noqa: PLC0415
+        get_access_token_model,
+        get_application_model,
+    )
+
+    user_model = get_user_model()
+    application_model = get_application_model()
+    token_model = get_access_token_model()
+
+    for declared in spec.service_access_tokens:
+        token = from_env_optional(declared.token_env)
+        if not token:
+            print(  # noqa: T201
+                f"service_access_tokens: skipping {declared.username} "
+                f"({declared.token_env} not supplied)",
+                file=sys.stderr,
+            )
+            continue
+
+        user, _ = user_model.objects.get_or_create(
+            username=declared.username,
+            defaults={"email": declared.email, "is_active": True},
+        )
+        # Reasserted rather than left to the defaults above, so an account that
+        # already exists converges on the spec instead of keeping whatever it
+        # was created with by hand.
+        user.email = declared.email
+        user.is_active = True
+        user.is_staff = declared.staff
+        if user.has_usable_password():
+            user.set_unusable_password()
+        user.save()
+        # Same reason as apply_users: the LMS assumes user.profile exists.
+        UserProfile.objects.get_or_create(user=user, defaults={"name": user.username})
+
+        # Same reasoning as apply_oauth_applications, and the same remedy:
+        # Application.name carries no uniqueness constraint, so an install that
+        # already has two rows under this name makes update_or_create raise
+        # MultipleObjectsReturned with nothing naming the duplicate.
+        if application_model.objects.filter(name=declared.application_name).count() > 1:
+            msg = (
+                f"more than one OAuth application is named "
+                f"{declared.application_name!r}; delete all but the one this "
+                "spec should own before applying it"
+            )
+            raise ValueError(msg)
+        application, _ = application_model.objects.update_or_create(
+            name=declared.application_name,
+            defaults={
+                "user": user,
+                "client_type": application_model.CLIENT_CONFIDENTIAL,
+                "authorization_grant_type": application_model.GRANT_CLIENT_CREDENTIALS,
+            },
+        )
+        # A token string is a credential, not a key to overwrite: if this exact
+        # value already belongs to somebody else, the spec and the database
+        # disagree about who owns it, and update_or_create would silently
+        # reassign it and break whatever integration was using it.
+        existing = token_model.objects.filter(token=token).first()
+        if existing is not None and existing.user_id != user.id:
+            msg = (
+                f"the token in {declared.token_env} already belongs to a "
+                f"different user than {declared.username!r}; rotate it or "
+                "delete the existing AccessToken before applying this spec"
+            )
+            raise ValueError(msg)
+        _, created = token_model.objects.update_or_create(
+            token=token,
+            defaults={
+                "user": user,
+                "application": application,
+                "expires": timezone.now() + timedelta(days=declared.expires_in_days),
+                "scope": " ".join(declared.scopes),
+            },
+        )
+        # Any older token for this account is now unreachable by the upstream,
+        # which only ever sends the configured one; leaving them would be a
+        # credential with no owner.
+        token_model.objects.filter(user=user).exclude(token=token).delete()
+        _report("service_access_tokens", declared.username, _written(created=created))
 
 
 def apply_waffle_flags(spec: BootstrapSpec, settings: Any) -> None:  # noqa: ARG001
@@ -126,12 +313,14 @@ def apply_waffle_flags(spec: BootstrapSpec, settings: Any) -> None:  # noqa: ARG
         # waffle_flag narrates every option it sets; stdout is reserved for
         # the one JSON line per object.
         management.call_command("waffle_flag", *declared.argv(), stdout=sys.stderr)
-        _report("waffle_flags", declared.name, created=created)
+        _report("waffle_flags", declared.name, _written(created=created))
 
 
 APPLY = {
     "users": apply_users,
     "oauth_applications": apply_oauth_applications,
+    "third_party_auth_providers": apply_third_party_auth_providers,
+    "service_access_tokens": apply_service_access_tokens,
     "waffle_flags": apply_waffle_flags,
 }
 

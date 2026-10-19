@@ -46,6 +46,50 @@ class AqueductSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="", extra="allow")
 
     # >>> aqueduct:generated:fields
+    # ===== edx-bulk-grades =====
+    ANALYTICS_API_CLIENT: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "url": "http://host.docker.internal:8000/api/v0",
+            "token": "edx",
+        },
+        json_schema_extra={"aqueduct_plugin": "edx-bulk-grades"},
+    )
+    # ===== edx-completion =====
+    COMPLETION_VIDEO_COMPLETE_PERCENTAGE: float = Field(
+        default=0.95,
+        json_schema_extra={"aqueduct_plugin": "edx-completion"},
+        description="Once a user has watched this percentage of a video, mark it as complete:\n(0.0 = 0%, 1.0 = 100%)",  # noqa: E501
+    )
+    # ===== edx-enterprise =====
+    OPEN_EDX_FILTERS_CONFIG: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "edx-enterprise",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    OVERRIDE_COURSE_HOME_PROGRESS_USERNAME: str = Field(
+        default="enterprise.overrides.course_home_progress.enterprise_obfuscated_username",  # noqa: E501
+        json_schema_extra={"aqueduct_plugin": "edx-enterprise"},
+        description="Register pluggable overrides.\nThese map override hook points within the platform to enterprise implementations.",  # noqa: E501
+    )
+    OVERRIDE_LEARNER_HOME_GET_ENTERPRISE_CUSTOMER: str = Field(
+        default="enterprise.overrides.learner_home.enterprise_get_enterprise_customer",
+        json_schema_extra={"aqueduct_plugin": "edx-enterprise"},
+    )
+    OVERRIDE_PROGRAMS_GET_ENTERPRISE_COURSE_IDS: str = Field(
+        default="enterprise.overrides.programs.enterprise_get_enterprise_course_ids",
+        json_schema_extra={"aqueduct_plugin": "edx-enterprise"},
+    )
+    # ===== edx-proctoring =====
+    PROCTORING_BACKENDS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {"DEFAULT": "null", "null": {}},
+        json_schema_extra={"aqueduct_plugin": "edx-proctoring"},
+    )
+    PROCTORING_SETTINGS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=dict, json_schema_extra={"aqueduct_plugin": "edx-proctoring"}
+    )
+    # ===== lms.envs.common =====
     ACCOUNT_VISIBILITY_CONFIGURATION: Annotated[dict[str, Any], NoDecode] = Field(
         default_factory=lambda: {
             "default_visibility": "all_users",
@@ -134,10 +178,12 @@ class AqueductSettings(BaseSettings):
     )
     BULK_EMAIL_ROUTING_KEY: Any = Field(
         default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
         description="We want Bulk Email running on the high-priority queue, so we define the\nrouting key that points to it.  At the moment, the name is the same.",  # noqa: E501
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     BULK_EMAIL_ROUTING_KEY_SMALL_JOBS: Any = Field(
         default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
         description="We also define a queue for smaller jobs so that large courses don't block\nsmaller emails (see BULK_EMAIL_JOB_SIZE_THRESHOLD setting)",  # noqa: E501
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     CATALOG_MICROFRONTEND_URL: Any = Field(
@@ -153,7 +199,7 @@ class AqueductSettings(BaseSettings):
         description=".. setting_name: CCX_MAX_STUDENTS_ALLOWED\n.. setting_default: 200\n.. setting_description: Maximum number of students allowed in a CCX (Custom Courses for edX), This is an arbitrary\nhard limit, chosen so that a CCX does not compete with public MOOCs.",  # noqa: E501
     )
     CC_MERCHANT_NAME: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     CELERYBEAT_SCHEDULE: Annotated[dict[str, Any], NoDecode] = Field(
         default_factory=dict
@@ -169,7 +215,7 @@ class AqueductSettings(BaseSettings):
         default_factory=lambda: ["poll.tasks"]
     )
     CELERY_QUEUES: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     CELERY_ROUTES: str = Field(default="openedx.core.lib.celery.routers.route_task")
     CERTIFICATE_DATE_FORMAT: str = Field(
@@ -195,7 +241,7 @@ class AqueductSettings(BaseSettings):
     COMMENTS_SERVICE_KEY: str = Field(default="")
     COMMENTS_SERVICE_URL: str = Field(default="")
     COMMON_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     COMMUNICATIONS_MICROFRONTEND_URL: Any = Field(
         default=None,
@@ -241,7 +287,7 @@ class AqueductSettings(BaseSettings):
         description="Can be turned off if course lists need to be hidden. Effects views and templates.\n.. toggle_name: settings.COURSES_ARE_BROWSABLE\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: When this is set to True, all the courses will be listed on the /courses page and Explore\nCourses link will be visible. Set to False if courses list and Explore Courses link need to be hidden.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2013-09-28\n.. toggle_warning: This Effects views and templates.\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/1073",  # noqa: E501
     )
     COURSES_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     COURSE_BLOCKS_API_EXTRA_FIELDS: Annotated[list[Any], NoDecode] = Field(
         default_factory=list,
@@ -284,10 +330,10 @@ class AqueductSettings(BaseSettings):
     )  # refine type
     DEBUG_TRACK_LOG: bool = Field(default=False)
     DEFAULT_ENTERPRISE_API_URL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     DEFAULT_ENTERPRISE_CONSENT_API_URL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     DEFAULT_FEEDBACK_EMAIL: str = Field(default="feedback@example.com")
     DEFAULT_FROM_EMAIL: str = Field(default="registration@example.com")
@@ -295,10 +341,10 @@ class AqueductSettings(BaseSettings):
         default_factory=list, description="Used for A/B testing"
     )
     DEFAULT_PRIORITY_QUEUE: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     DEFAULT_TEMPLATE_ENGINE_DIRS: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     DEV_CONTENT: bool = Field(default=True)
     DISABLED_ORGS_FOR_PROGRAM_NUDGE: Annotated[list[Any], NoDecode] = Field(
@@ -385,10 +431,14 @@ class AqueductSettings(BaseSettings):
         description=".. setting_name: ELASTIC_SEARCH_INDEX_PREFIX\n.. setting_default: ''\n.. setting_description: Specifies the prefix used when naming elasticsearch indexes related to edx-search.",  # noqa: E501
     )
     EMAIL_FILE_PATH: Any = Field(
-        default=None, description="Platform Email"
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="Platform Email",
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     EMAIL_OPTIN_MINIMUM_AGE: Any = Field(
-        default=None, description="Minimum age for organization-wide email opt in"
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="Minimum age for organization-wide email opt in",
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ENABLED_PAYMENT_REPORTS: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: [
@@ -615,10 +665,10 @@ class AqueductSettings(BaseSettings):
         description="Defines the usernames of service users who should be throttled\nat a higher rate than normal users when making requests of enterprise endpoints.",  # noqa: E501
     )
     ENTERPRISE_API_URL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ENTERPRISE_CONSENT_API_URL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ENTERPRISE_COURSE_ENROLLMENT_AUDIT_MODES: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: ["audit", "honor"]
@@ -652,7 +702,7 @@ class AqueductSettings(BaseSettings):
         ),
     )  # refine type
     ENTERPRISE_PUBLIC_ENROLLMENT_API_URL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ENTERPRISE_READONLY_ACCOUNT_FIELDS: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: ["username", "name", "email", "country"]
@@ -670,13 +720,13 @@ class AqueductSettings(BaseSettings):
     ENTERPRISE_TAGLINE: str = Field(default="")
     ENTERPRISE_VSF_UUID: str = Field(default="e815503343644ac7845bc82325c34460")
     ENTITLEMENTS_EXPIRATION_ROUTING_KEY: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ENTITLEMENT_EXPIRED_ALERT_PERIOD: int = Field(
         default=90, description="Days before the expired date that we warn the user"
     )
     ENV_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     EXAMS_DASHBOARD_MICROFRONTEND_URL: Any = Field(
         default=None,
@@ -761,6 +811,7 @@ class AqueductSettings(BaseSettings):
     )
     GRADES_DOWNLOAD_ROUTING_KEY: Any = Field(
         default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
         description="These keys are used for all of our asynchronous downloadable files, including\nthe ones that contain information other than grades.",  # noqa: E501
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     HIBP_LOGIN_BLOCK_PASSWORD_FREQUENCY_THRESHOLD: str | None = Field(
@@ -780,10 +831,11 @@ class AqueductSettings(BaseSettings):
         description=".. toggle_name: settings.HIDE_DASHBOARD_COURSES_UNTIL_ACTIVATED\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When set, it hides the Courses list on the Learner Dashboard page if the learner has not\nyet activated the account and not enrolled in any courses.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2018-05-18\n.. toggle_tickets: https://openedx.atlassian.net/browse/OSPR-1814",  # noqa: E501
     )
     HIGH_MEM_QUEUE: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     HIGH_PRIORITY_QUEUE: Any = Field(
         default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
         description="Name the exchange and queues w.r.t the SERVICE_VARIANT",
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     HOMEPAGE_COURSE_MAX: Any = Field(default=None)  # refine type
@@ -1063,10 +1115,10 @@ class AqueductSettings(BaseSettings):
     )
     LMS_SEGMENT_KEY: Any = Field(default=None)  # refine type
     LOGIN_REDIRECT_URL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     LOGIN_URL: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     LOG_POSTPAY_CALLBACKS: bool = Field(
         default=True, description="log all information from cybersource callbacks"
@@ -1089,7 +1141,7 @@ class AqueductSettings(BaseSettings):
         description=".. setting_name: MAINTENANCE_BANNER_TEXT\n.. setting_default: None\n.. setting_description: Specifies the text that is rendered on the maintenance banner.\n.. setting_warning: Depends on the `open_edx_util.display_maintenance_warning` waffle switch.\nThe banner is only rendered when the switch is activated.",  # noqa: E501
     )  # refine type
     MAKO_TEMPLATE_DIRS_BASE: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     MAX_BLOCKS_PER_CONTENT_LIBRARY: int = Field(default=1000)
     MAX_FILEUPLOADS_PER_INPUT: int = Field(default=20)
@@ -1098,7 +1150,7 @@ class AqueductSettings(BaseSettings):
         description="Maximum number of rows to include in the csv file for downloading problem responses.",  # noqa: E501
     )
     MEDIA_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     MFE_CONFIG: Annotated[dict[str, Any], NoDecode] = Field(
         default_factory=dict,
@@ -1198,7 +1250,7 @@ class AqueductSettings(BaseSettings):
     )  # refine type
     MONGODB_LOG: Annotated[dict[str, Any], NoDecode] = Field(default_factory=dict)
     NODE_MODULES_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     NOTES_DISABLED_TABS: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: ["course_structure", "tags"],
@@ -1221,7 +1273,7 @@ class AqueductSettings(BaseSettings):
         description="Scope description strings are presented to the user\non the application authorization page. See\nlms/templates/oauth2_provider/authorize.html for details.\nNon-default scopes should be added directly to OAUTH2_PROVIDER['SCOPES'] below.",  # noqa: E501
     )  # refine type
     OAUTH2_PROVIDER: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     OAUTH_DELETE_EXPIRED: bool = Field(
         default=True,
@@ -1234,7 +1286,7 @@ class AqueductSettings(BaseSettings):
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     OPENEDX_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ORA2_FILE_PREFIX: Any = Field(
         default=None, description="By default, don't use a file prefix"
@@ -1271,7 +1323,7 @@ class AqueductSettings(BaseSettings):
         default=12, description="Height of the Co-brand Logo in mm"
     )
     PDF_RECEIPT_COBRAND_LOGO_PATH: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     PDF_RECEIPT_DISCLAIMER_TEXT: str = Field(
         default="ENTER YOUR RECEIPT DISCLAIMER TEXT HERE."
@@ -1281,7 +1333,7 @@ class AqueductSettings(BaseSettings):
         default=12, description="Height of the Logo in mm"
     )
     PDF_RECEIPT_LOGO_PATH: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     PDF_RECEIPT_TAX_ID: str = Field(
         default="00-0000000",
@@ -1298,7 +1350,7 @@ class AqueductSettings(BaseSettings):
     PROCTORED_EXAM_VIEWABLE_PAST_DUE: bool = Field(default=False)
     PROFILE_EXTENSION_FORM: Any = Field(
         default=None,
-        description="PROFILE_EXTENSION_FORM is a Django ModelForm class used for extending user profiles\nbeyond the default fields. This setting enables new capabilities for profile management:\n- Data is stored in a dedicated model (not just UserProfile.meta)\n- Users can update their extended profile fields via the account settings API\nThis setting supersedes REGISTRATION_EXTENSION_FORM and provides more accurate naming\nfor profile extension functionality.\nExample: PROFILE_EXTENSION_FORM = 'myapp.forms.ExtendedProfileForm'\nThe custom form's model should have:\n- A OneToOneField to User (typically named 'user')\n- Additional fields for extended profile data\nMIGRATION NOTE: If you're currently using REGISTRATION_EXTENSION_FORM (deprecated),\nyour custom fields will continue working as before (data in meta field).\nTo get the new capabilities, migrate to PROFILE_EXTENSION_FORM.",  # noqa: E501
+        description="Usage:\n- Set this to the dot-separated path of a valid ModelForm class.\nExample: PROFILE_EXTENSION_FORM = 'my_custom_app.forms.ExtendedProfileForm'\nRequirements:\n1. Linked Model: The form must be based on a model with a OneToOneField to\nthe User (typically named 'user').\n2. Installed Apps: Ensure the app containing your model is included in\nthe ADDL_INSTALLED_APPS array.",  # noqa: E501
     )  # refine type
     PROFILE_INFORMATION_REPORT_PRIVATE_FIELDS: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: ["year_of_birth"],
@@ -1309,11 +1361,13 @@ class AqueductSettings(BaseSettings):
         description=".. setting_name: PROFILE_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based profile page.\n.. setting_warning: Also set site's ENABLE_PROFILE_MICROFRONTEND and\nlearner_profile.redirect_to_microfrontend waffle flag",  # noqa: E501
     )  # refine type
     PROGRAM_CERTIFICATES_ROUTING_KEY: Any = Field(
-        default=None, description="Queue to use for award program certificates"
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="Queue to use for award program certificates",
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     PROGRAM_CONSOLE_MICROFRONTEND_URL: Any = Field(default=None)  # refine type
     PROJECT_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     PYTHON_LIB_FILENAME: str = Field(
         default="python_lib.zip",
@@ -1341,10 +1395,6 @@ class AqueductSettings(BaseSettings):
         description=".. setting_name: RECAPTCHA_SITE_KEYS\n.. setting_default: empty dictionary\n.. setting_description: Add recaptcha site keys to use captcha feature in discussion app.\n.. setting_warning: This setting is used to configure the reCAPTCHA keys for web,\niOS, and Android platforms.\nThe keys are expected to be in the format:\n'web': 'your-web-site-key',\n'ios': 'your-ios-site-key',\n'android': 'your-android-site-key',",  # noqa: E501
     )
     REGISTRATION_CODE_LENGTH: int = Field(default=8)
-    REGISTRATION_EXTENSION_FORM: Any = Field(
-        default=None,
-        description="Only used if combined login/registration is enabled.\nThis can be used to add fields to the registration page.\nIt must be a path to a valid form, in dot-separated syntax.\nIE: custom_form_app.forms.RegistrationExtensionForm\nNote: If you want to use a model to store the results of the form, you will\nneed to add the model's app to the ADDL_INSTALLED_APPS array in your\nlms.yml file.\nREGISTRATION_EXTENSION_FORM is deprecated but will continue to work for backward compatibility.\nSites using this setting will maintain the old behavior:\n- Data is stored in UserProfile.meta JSON field\n- No ability to update extended fields after registration via account settings API\nTo get new capabilities (model-based storage), migrate to PROFILE_EXTENSION_FORM.",  # noqa: E501
-    )  # refine type
     REGISTRATION_FIELD_ORDER: Annotated[list[Any], NoDecode] = Field(
         default_factory=lambda: [
             "name",
@@ -1371,7 +1421,7 @@ class AqueductSettings(BaseSettings):
         ],
     )
     REPO_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     REQUIRE_JS: str = Field(
         default="common/js/vendor/require.js",
@@ -1456,6 +1506,7 @@ class AqueductSettings(BaseSettings):
     )
     SOCIAL_AUTH_CLEAN_USERNAMES: Any = Field(
         default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
         description="Computed setting: disable clean usernames check when unicode usernames are enabled",  # noqa: E501
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     SOCIAL_AUTH_CLEAN_USERNAME_FUNCTION: str = Field(
@@ -1652,12 +1703,16 @@ class AqueductSettings(BaseSettings):
         description="Configuration option for when we want to grab server error pages",
     )
     STATIC_ROOT: str | None = Field(
-        default=None, validation_alias=AliasChoices("STATIC_ROOT_LMS")
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        validation_alias=AliasChoices("STATIC_ROOT_LMS"),
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     STATIC_TEMPLATE_VIEW_DEFAULT_FILE_EXTENSION: str = Field(default="html")
     STATIC_URL: str = Field(default="/static/", description="Static content")
     STATUS_MESSAGE_PATH: Any = Field(
-        default=None, description="Where to look for a status message"
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="Where to look for a status message",
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     STUDENTMODULEHISTORYEXTENDED_OFFSET: int = Field(
         default=10000,
@@ -1800,16 +1855,302 @@ class AqueductSettings(BaseSettings):
         description="Default cache expiration for the cross-domain proxy HTML page.\nThis is a static page that can be iframed into an external page\nto simulate cross-domain requests.",  # noqa: E501
     )  # refine type
     XMODULE_ROOT: Any = Field(
-        default=None
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     ZENDESK_API_KEY: str | None = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     ZENDESK_USER: Any = Field(default=None)  # refine type
+    # ===== openedx-authz =====
+    CASBIN_AUTO_LOAD_POLICY_INTERVAL: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    CASBIN_AUTO_SAVE_POLICY: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    CASBIN_LOG_LEVEL: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    CASBIN_MODEL: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    ENABLE_AUTOMATIC_AUTHZ_COURSE_AUTHORING_MIGRATION: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    OPENEDX_AUTHZ_CONTENT_LIBRARY_MODEL: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    OPENEDX_AUTHZ_COURSE_OVERVIEW_MODEL: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    # ===== openedx-forum =====
+    FORUM_ELASTIC_SEARCH_CONFIG: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-forum",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    FORUM_ENABLE_HTTP_API: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-forum",
+        },
+        description=".. toggle_name: FORUM_ENABLE_HTTP_API\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Route the legacy forum HTTP API under the plugin's\nURL prefix. These endpoints are a compatibility layer from when the forum\nran as a standalone cs_comments_service on a private network. They read\nthe acting user from a request parameter, so a caller may act on behalf\nof any user and is required to authenticate as a staff service account.\nedx-platform does not use them -- it calls forum.api in process -- so they\nare disabled by default. Only enable this if you serve the forum as a\nseparate HTTP service, and prefer to keep it off the public internet even\nso, since a single leaked staff credential reaches every user's content.\n.. toggle_use_cases: opt_in\n.. toggle_creation_date: 2026-09-21",  # noqa: E501
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    FORUM_MONGODB_CLIENT_PARAMETERS: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-forum",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    FORUM_MONGODB_DATABASE: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-forum",
+        },
+        description="Unfortunately we can't copy settings from edx-platform because tutor patches have\nnot been applied yet",  # noqa: E501
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    FORUM_SEARCH_BACKEND: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-forum",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    USE_TZ: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-forum",
+        },
+        description="Timezone-awareness is required for mysql fields",
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    # ===== openedx-platform =====
+    ACE_CHANNEL_DEFAULT_EMAIL: str = Field(
+        default="django_email",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_CHANNEL_DEFAULT_PUSH: str = Field(
+        default="push_notification",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_CHANNEL_SAILTHRU_API_KEY: str | None = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    ACE_CHANNEL_SAILTHRU_API_SECRET: str | None = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    ACE_CHANNEL_SAILTHRU_DEBUG: bool = Field(
+        default=True, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )
+    ACE_CHANNEL_SAILTHRU_TEMPLATE_NAME: str = Field(
+        default="Automated Communication Engine Email",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_CHANNEL_TRANSACTIONAL_EMAIL: str = Field(
+        default="django_email",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_ENABLED_CHANNELS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: ["django_email"],
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ACE_ENABLED_POLICIES: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: ["bulk_email_optout"],
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    ALLOW_AUTOMATED_SIGNUPS: bool = Field(
+        default=False,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description=".. toggle_name: ALLOW_AUTOMATED_SIGNUPS\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Enable to show a section in the membership tab of the instructor\ndashboard to allow an upload of a CSV file that contains a list of new accounts to create\nand register for course.\n.. toggle_use_cases: opt_in\n.. toggle_creation_date: 2014-10-21\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/5670",  # noqa: E501
+    )
+    ALLOW_COURSE_STAFF_GRADE_DOWNLOADS: bool = Field(
+        default=False,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description=".. toggle_name: ALLOW_COURSE_STAFF_GRADE_DOWNLOADS\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Enable to give course staff unrestricted access to grade downloads;\nif set to False, only edX superusers can perform the downloads.\n.. toggle_use_cases: opt_in\n.. toggle_creation_date: 2018-03-26\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/1750",  # noqa: E501
+    )
+    ALLOW_HIDING_DISCUSSION_TAB: bool = Field(
+        default=False,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description=".. toggle_name: ALLOW_HIDING_DISCUSSION_TAB\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: If True, it adds an option to show/hide the discussions tab.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-06-15\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/8474",  # noqa: E501
+    )
+    ANALYTICS_DASHBOARD_NAME: Any = Field(
+        default_factory=lambda: _("Your Platform Insights"),
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )  # refine type
+    ANALYTICS_DASHBOARD_URL: str = Field(
+        default="",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description="Analytics Dashboard (Insights) settings",
+    )
+    BATCH_ENROLLMENT_NOTIFY_USERS_DEFAULT: bool = Field(
+        default=True,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description='.. toggle_name: BATCH_ENROLLMENT_NOTIFY_USERS_DEFAULT\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: Controls if the "Notify users by email" checkbox in the batch\nenrollment form on the instructor dashboard is already checked on page load or not.\n.. toggle_use_cases: opt_out\n.. toggle_creation_date: 2017-07-05\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/15392',  # noqa: E501
+    )
+    CERTIFICATES_INSTRUCTOR_GENERATION: bool = Field(
+        default=False,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description=".. toggle_name: CERTIFICATES_INSTRUCTOR_GENERATION\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Enable to allow batch generation of certificates from the instructor dashboard.\nIn case of self-paced courses, the certificate generation button is hidden if certificate\ngeneration is not explicitly enabled globally or for the specific course.\n.. toggle_use_cases: opt_in\n.. toggle_creation_date: 2017-06-16",  # noqa: E501
+    )
+    CREDENTIALS_INTERNAL_SERVICE_URL: str | None = Field(
+        default=None,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description="Credentials Settings",
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    CREDENTIALS_PUBLIC_SERVICE_URL: str | None = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    DISCUSSION_SETTINGS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "MAX_COMMENT_DEPTH": 2,
+            "COURSE_PUBLISH_TASK_DELAY": 30,
+        },
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    DISPLAY_ANALYTICS_ENROLLMENTS: bool = Field(
+        default=True,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description=".. toggle_name: DISPLAY_ANALYTICS_ENROLLMENTS\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: Enable display of enrollment counts in instructor dashboard and\nanalytics section.\n.. toggle_use_cases: opt_out\n.. toggle_creation_date: 2014-11-12\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/5838",  # noqa: E501
+    )
+    ENABLE_AUTOMATED_SIGNUPS_EXTRA_FIELDS: bool = Field(
+        default=False,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description=".. toggle_name: ENABLE_AUTOMATED_SIGNUPS_EXTRA_FIELDS\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When True, the CSV file that contains a list of\nnew accounts to create and register for a course in the membership\ntab of the instructor dashboard will accept the cohort name to\nassign the new user and the enrollment course mode.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2021-10-26\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/21260",  # noqa: E501
+    )
+    ENABLE_CCX_ANALYTICS_DASHBOARD_URL: bool = Field(
+        default=False,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description=".. toggle_name: ENABLE_CCX_ANALYTICS_DASHBOARD_URL\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Display the 'Analytics' tab in the instructor dashboard for CCX courses.\nNote: This has no effect unless ANALYTICS_DASHBOARD_URL is already set, because without that\nsetting, the tab does not show up for any courses.\n.. toggle_use_cases: opt_in\n.. toggle_creation_date: 2016-10-07\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/13196",  # noqa: E501
+    )
+    ENABLE_CERTIFICATES_INSTRUCTOR_MANAGE: bool = Field(
+        default=False,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description=".. toggle_name: ENABLE_CERTIFICATES_INSTRUCTOR_MANAGE\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Allow course instructors to manage certificates from the instructor dashboard.\n.. toggle_use_cases: opt_in\n.. toggle_creation_date: 2025-11-19",  # noqa: E501
+    )
+    ENABLE_GRADE_DOWNLOADS: bool = Field(
+        default=False,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description=".. toggle_name: ENABLE_GRADE_DOWNLOADS\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Enable grade CSV downloads from the instructor dashboard. Grade\ncalculation started from the instructor dashboard will write grades CSV files to the\nconfigured storage backend and give links for downloads.\n.. toggle_use_cases: opt_in\n.. toggle_creation_date: 2016-07-06\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/11286",  # noqa: E501
+    )
+    FCM_APP_NAME: str = Field(
+        default="fcm-edx-platform",
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+    )
+    FIREBASE_APP: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-platform",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    FIREBASE_CREDENTIALS: str | None = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    FIREBASE_CREDENTIALS_PATH: str | None = Field(
+        default=None,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description="Note: To local development with Firebase, you must set FIREBASE_CREDENTIALS_PATH\n(path to json file with FIREBASE_CREDENTIALS)\nor FIREBASE_CREDENTIALS dictionary.",  # noqa: E501
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    MAX_BOOKMARKS_PER_COURSE: int = Field(
+        default=100,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description="Course Content Bookmarks Settings",
+    )
+    MAX_ENROLLMENT_INSTR_BUTTONS: int = Field(
+        default=200,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description='.. setting_name: MAX_ENROLLMENT_INSTR_BUTTONS\n.. setting_default: 200\n.. setting_description: Disable instructor dashboard buttons for downloading course data\nwhen enrollment exceeds this number. The number indicates the maximum allowed enrollments\nfor the course to be considered "small". Courses exceeding the upper limit of "small"\ncourses will have disabled buttons at the instructor dashboard.',  # noqa: E501
+    )
+    PASSWORD_POLICY_COMPLIANCE_API_TIMEOUT: str | None = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    PASSWORD_POLICY_COMPLIANCE_ROLLOUT_CONFIG: str | None = Field(
+        default=None,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description="Settings for managing the rollout of password policy compliance enforcement.",  # noqa: E501
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    POLICY_CHANGE_GRADES_ROUTING_KEY: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-platform",
+        },
+        description="Queue to use for updating grades due to grading policy change",
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    PUSH_NOTIFICATIONS_SETTINGS: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-platform",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    RECALCULATE_GRADES_ROUTING_KEY: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-platform",
+        },
+        description="Queue to use for updating persistent grades",
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    SINGLE_LEARNER_COURSE_REGRADE_ROUTING_KEY: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-platform",
+        },
+        description="Queue to use for individual learner course regrades",
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    ZENDESK_OAUTH_ACCESS_TOKEN: str | None = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    ZENDESK_URL: Any = Field(
+        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    )  # refine type
+    # ===== super-csv =====
+    CSV_EXPIRATION_DAYS: int = Field(
+        default=90,
+        json_schema_extra={"aqueduct_plugin": "super-csv"},
+        description="expire stored CSV data after 90 days",
+    )
     # <<< aqueduct:generated:fields
 
     # >>> aqueduct:generated:container_decoders
     @field_validator(
+        "ACE_ENABLED_CHANNELS",
+        "ACE_ENABLED_POLICIES",
         "AVAILABLE_DISCUSSION_TOURS",
         "CELERY_EXTRA_IMPORTS",
         "CELERY_IMPORTS",
@@ -1862,9 +2203,11 @@ class AqueductSettings(BaseSettings):
 
     @field_validator(
         "ACCOUNT_VISIBILITY_CONFIGURATION",
+        "ANALYTICS_API_CLIENT",
         "CELERYBEAT_SCHEDULE",
         "CODE_JAIL",
         "COURSE_LISTINGS",
+        "DISCUSSION_SETTINGS",
         "FOOTER_CSS",
         "FRONTEND_SITE_CONFIG",
         "GENERAL_RECOMMENDATION",
@@ -1874,6 +2217,8 @@ class AqueductSettings(BaseSettings):
         "MOBILE_STORE_ACE_URLS",
         "MOBILE_STORE_LOGO_URLS",
         "MONGODB_LOG",
+        "PROCTORING_BACKENDS",
+        "PROCTORING_SETTINGS",
         "RECAPTCHA_SITE_KEYS",
         "REQUIRE_JS_PATH_OVERRIDES",
         "SOCIAL_AUTH_AZUREAD_OAUTH2_AUTH_EXTRA_ARGUMENTS",

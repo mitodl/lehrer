@@ -58,8 +58,10 @@ my-deployment/
 │       └── {deployment_name}/
 ├── codejail_config/
 │   └── 01-sandbox
-└── notes_config/
-    └── env_config.py
+├── notes_config/
+│   └── env_config.py
+└── provision/                   # local-dev provisioning — see below
+    └── bootstrap.yaml
 ```
 
 `settings/` contains no top-level `models/base.py`. That file is supplied by
@@ -430,6 +432,39 @@ and `--shared-src` on the `build_site` / `watch_site` call.
 | `notes_code` | `Directory` | `None` | Local edx-notes-api source |
 | `notes_repo` | `str` | `None` | Git URL (required if `notes_code` not provided) |
 | `notes_config` | `Directory` | **required** | Directory with `env_config.py`. There is no fallback — omitting it raises a `ValueError` naming the flag |
+
+---
+
+## Provisioning — `provision/bootstrap.yaml`
+
+Not a builder: this one is read at `tilt up` by `lehrer-core.star`, which
+renders it into the `edxapp-provision` ConfigMap and runs it through the
+`lehrer_bootstrap` package baked into the platform image. It declares what a
+fresh database needs before the stack is usable — the superuser, OAuth
+applications, third-party auth providers, service access tokens and waffle
+flags. `bootstrap.schema.json` at the repo root describes the format, and
+every step is idempotent.
+
+Required, like `codejail_config/` and `notes_config/`: a deployment without
+one fails at `tilt up` with a message naming the missing path, rather than
+silently provisioning nothing.
+
+Each deployment carries its own copy rather than layering over a shared base.
+Start from `deployments/generic/provision/bootstrap.yaml` and add the rows
+your deployment needs — an identity provider to federate login to, a service
+account an upstream drives an API with. Two rules follow from the
+duplication:
+
+- Everything the generic spec declares has to be repeated in yours. A test
+  asserts it, so a shared object added to generic and forgotten here fails in
+  CI rather than going missing from your stack.
+- Nothing operator-specific belongs in the generic spec. A prek hook enforces
+  that, since it is the one spec every consumer gets.
+
+Values ending in `_env` name a key of the `openedx-secrets` Secret, never the
+value itself. A row whose env vars are unset skips itself, so a provider or
+token that only makes sense alongside an upstream stays inert in a standalone
+install.
 
 ---
 

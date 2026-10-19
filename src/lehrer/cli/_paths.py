@@ -54,6 +54,14 @@ def repo_root() -> Path:
     raise RepoNotFoundError()
 
 
+SPEC_NAME = "bootstrap.yaml"
+"""Filename of a deployment's bootstrap spec.
+
+Pinned by the ConfigMap key ``lehrer-core.star`` creates and by the path
+``job-provision.yaml`` passes the runner; a test asserts all three agree.
+"""
+
+
 def local_dev_dir() -> Path:
     """Return ``<repo>/local-dev``."""
     return repo_root() / "local-dev"
@@ -74,9 +82,25 @@ def namespace_manifest() -> Path:
     return local_dev_dir() / "manifests" / "namespace.yaml"
 
 
-def bootstrap_spec() -> Path:
-    """Return the path to the bootstrap spec the edxapp-provision Job applies."""
-    return local_dev_dir() / "provision" / "bootstrap.yaml"
+def bootstrap_spec(deployment_config: Path) -> Path:
+    """Return the bootstrap spec the edxapp-provision Job applies.
+
+    Scoped to a deployment, like every other config directory one carries, so
+    operator-specific provisioning does not ship on the generic path. Required
+    rather than defaulted: a default would reconstitute the implicit generic
+    path, and a caller that does not know its deployment should say so.
+    """
+    return deployment_config / "provision" / SPEC_NAME
+
+
+def default_deployment_config() -> Path:
+    """Return the deployment config directory used when none is named.
+
+    The same default ``local-dev/Tiltfile`` applies, spelled there as
+    ``config.main_dir + "/../deployments/generic"``. Kept here rather than
+    inlined at the call site so the two can be pinned to one another.
+    """
+    return repo_root() / "deployments" / "generic"
 
 
 def traefik_config() -> Path:

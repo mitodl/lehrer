@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=../../bootstrap.schema.json
+# yaml-language-server: $schema=../../../bootstrap.schema.json
 #
 # What a fresh local-dev database needs before the stack is usable. Applied by
 # the edxapp-provision Job with the lehrer_bootstrap runner baked into the
@@ -8,6 +8,13 @@
 #
 # Values ending in _env name a key of the openedx-secrets Secret
 # (local-dev/secret-defaults.yaml), never the value itself.
+#
+# Scoped to this deployment. Every other deployment's provision/bootstrap.yaml
+# repeats what this file declares and adds its own operator-specific rows on
+# top, and a test asserts none of them drops an object declared here -- so an
+# addition here has to be made in each of them too. A prek hook keeps
+# operator-specific names out of this file; they belong in the deployment that
+# needs them.
 
 users:
 - username: edx
@@ -45,10 +52,9 @@ oauth_applications:
   - user_id
   skip_authorization: true
 
-# Deliberately small. The generic stack runs only the shell, header and footer
-# MFE apps and has no discussions/forum service, so the larger flag sets
-# ol-infrastructure applies to the residential and mitxonline deployments do
-# not carry over.
+# Deliberately small. This stack runs only the shell, header and footer MFE
+# apps and has no discussions/forum service, so the larger flag sets a
+# deployment applies to its own environments do not carry over.
 waffle_flags:
 - name: course_experience.relative_dates
   everyone: true

@@ -85,9 +85,13 @@ def _load_secret_defaults() -> tuple[
     return defaults, mirrors
 
 
-def _bootstrap_superuser() -> User:
-    """The superuser the edxapp-provision Job creates, from its bootstrap spec."""
-    spec_path = _paths.bootstrap_spec()
+def _bootstrap_superuser(deployment_config: Path) -> User:
+    """The superuser the edxapp-provision Job creates, from its bootstrap spec.
+
+    The spec is per deployment, so the answer depends on which one the stack
+    will be started with.
+    """
+    spec_path = _paths.bootstrap_spec(deployment_config)
     for user in load_bootstrap_spec(spec_path).users:
         if user.superuser:
             if user.password_env is None:
@@ -658,14 +662,45 @@ def check_deps(*, deployment_config: str | None = None) -> None:
 
 
 @app.command
-def setup() -> None:
+def setup(*, deployment_config: str | None = None) -> None:
     """Create the k3d cluster, namespace, and bootstrap secrets.
 
     Idempotent: safe to re-run. Reads secret values from the environment
     (``MYSQL_ROOT_PASSWORD``, ``DJANGO_SECRET_KEY``, ...) falling back to
     local-dev defaults.
+
+    Parameters
+    ----------
+    deployment_config
+        Path to a deployment config directory (default: the generic config).
+        Only the superuser this reports comes from it -- the cluster and the
+        Secret are shared -- so pass ``start`` the same one.
     """
+    # check_deps is called bare even when a deployment was named. Forwarding
+    # it would switch on check's hostname resolution, which exits non-zero on
+    # a name that does not resolve -- turning `setup --deployment-config ...`
+    # into a command that creates no cluster when run offline. `lehrer dev
+    # check` is where a developer asks for that.
     check_deps()
+
+    # Resolved against the cwd, like start() does, so the path is unambiguous
+    # wherever `lehrer` was invoked from.
+    config_dir = (
+        Path(deployment_config).resolve()
+        if deployment_config
+        else _paths.default_deployment_config()
+    )
+    # Checked here rather than where the spec is read, which is after the
+    # cluster, namespace and Secret exist: a typo in the path would otherwise
+    # surface as a traceback at the very end, with everything already created
+    # and none of the next-step output printed.
+    if not _paths.bootstrap_spec(config_dir).is_file():
+        msg = (
+            f"no bootstrap spec at {_paths.bootstrap_spec(config_dir)}. "
+            "--deployment-config takes a deployment directory, and every one "
+            "carries its own provisioning spec."
+        )
+        raise SystemExit(msg)
 
     state = _cluster_state()
     if state == "running":
@@ -748,9 +783,9 @@ def setup() -> None:
     # would otherwise land in terminal scrollback and captured setup logs.
     # Only ever one of the two literals below; naming it for the secret it
     # deliberately does not hold also trips CodeQL's name heuristic.
-    superuser = _bootstrap_superuser()
+    superuser = _bootstrap_superuser(config_dir)
     credential_origin = (
-        "the variable its password_env names in local-dev/provision/bootstrap.yaml"
+        f"the variable its password_env names in {_paths.bootstrap_spec(config_dir)}"
         if superuser.password_env in os.environ
         else "the local-dev default"
     )
@@ -762,6 +797,8 @@ def setup() -> None:
         f"    lehrer dev start --deployment-config {local_dev}/../deployments/mit-ol\n\n"
         "The edxapp-provision Job creates a superuser once the stack is up:\n"
         f"    username {superuser.username}, password from {credential_origin}\n"
+        f"    (from {config_dir.name}; start the stack with that same "
+        "deployment config)\n"
         "Import the demo course by triggering edxapp-demo-course in the Tilt UI\n"
         "(or `tilt trigger edxapp-demo-course`).\n\n"
         "Tear down with:\n"
