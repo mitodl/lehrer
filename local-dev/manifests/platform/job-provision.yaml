@@ -2,7 +2,7 @@
 # Provisions a freshly-migrated edxapp database with the objects the stack
 # needs in order to be usable: a superuser to log in as, the notes and Studio
 # SSO OAuth clients, and the waffle flags for the enabled features. What it
-# creates is declared in local-dev/provision/bootstrap.yaml; the runner is
+# creates is declared in the deployment's provision/bootstrap.yaml; the runner is
 # lehrer_bootstrap, baked into the platform image from src/lehrer/bootstrap.
 #
 # Runs after edxapp-migrate (see lehrer-core.star) and before the LMS/CMS

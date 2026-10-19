@@ -13,6 +13,7 @@ for building Open edX services with lehrer.
 | `mfe_slot_config/frontend/` | Future OEP-65 Site Project (see README inside) |
 | `codejail_config/` | sudoers file for the codejail sandbox |
 | `notes_config/` | `env_config.py` settings for edx-notes-api |
+| `provision/` | Bootstrap spec the edxapp-provision Job applies in local dev |
 | `build.md` | Copy-pasteable `dagger call` commands for every service |
 
 ## Deployments supported
