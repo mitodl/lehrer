@@ -55,7 +55,7 @@ repos:
   rev: v2.3.1
   hooks:
   - id: mypy
-    exclude: ^(deployments|local-dev/provision)/
+    exclude: ^deployments/
     args:
     - --config-file=pyproject.toml
     - --warn-unused-configs
@@ -96,6 +96,16 @@ repos:
     entry: 'deployments/|["'']deployments["'']|\bdeployments\.[a-z_]|mit-ol|mitol|mitxonline|mitodl|github\.mit\.edu|verificient|proctortrack'
     files: ^src/lehrer/(core|infra|settings)/
     exclude: ^src/lehrer/(core|infra)/__init__\.py$
+  - id: lehrer-generic-provision-boundary
+    name: generic provisioning — no OL-specific names
+    language: pygrep
+    # The generic deployment's bootstrap spec is the one file every consumer
+    # gets regardless of operator, so an OL-specific row belongs in
+    # deployments/mit-ol/provision/ instead. The `deployments` alternatives the
+    # hook above carries are dropped here: this path is itself under
+    # deployments/, so they would match every self-reference.
+    entry: 'mit-ol|mitol|mitxonline|mitodl|github\.mit\.edu|verificient|proctortrack'
+    files: ^deployments/generic/provision/
   - id: build-config-schema
     name: regenerate build_config JSON schema from the Pydantic models
     language: system
