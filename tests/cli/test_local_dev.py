@@ -360,6 +360,27 @@ class TestProvisioningManifests:
         with pytest.raises(ValueError, match=error):
             local_dev._bootstrap_superuser(tmp_path)
 
+    def test_setup_refuses_a_deployment_with_no_spec_before_touching_the_cluster(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A mistyped --deployment-config must not get as far as creating one.
+
+        The spec is read at the very end of setup(), after the cluster,
+        namespace and Secret exist, so without an up-front check a typo costs
+        a half-built cluster and a traceback in place of the next-step output.
+        """
+        monkeypatch.setattr(local_dev, "check_deps", lambda **_: None)
+
+        def _fail(*_: object, **__: object) -> None:
+            msg = "setup reached the cluster with no spec to apply"
+            raise AssertionError(msg)
+
+        monkeypatch.setattr(local_dev, "_cluster_state", _fail)
+        with pytest.raises(SystemExit, match="no bootstrap spec at"):
+            local_dev.setup(deployment_config=str(tmp_path))
+
     def test_the_job_runs_the_spec_the_configmap_carries(self) -> None:
         container = _manifest("job-provision.yaml")["spec"]["template"]["spec"][
             "containers"

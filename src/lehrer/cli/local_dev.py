@@ -676,12 +676,31 @@ def setup(*, deployment_config: str | None = None) -> None:
         Only the superuser this reports comes from it -- the cluster and the
         Secret are shared -- so pass ``start`` the same one.
     """
-    # Called bare even when a deployment was named. Forwarding it would switch
-    # on check's hostname resolution, which exits non-zero on a name that does
-    # not resolve -- turning `setup --deployment-config ...` into a command
-    # that creates no cluster when run offline. `lehrer dev check` is where a
-    # developer asks for that.
+    # check_deps is called bare even when a deployment was named. Forwarding
+    # it would switch on check's hostname resolution, which exits non-zero on
+    # a name that does not resolve -- turning `setup --deployment-config ...`
+    # into a command that creates no cluster when run offline. `lehrer dev
+    # check` is where a developer asks for that.
     check_deps()
+
+    # Resolved against the cwd, like start() does, so the path is unambiguous
+    # wherever `lehrer` was invoked from.
+    config_dir = (
+        Path(deployment_config).resolve()
+        if deployment_config
+        else _paths.default_deployment_config()
+    )
+    # Checked here rather than where the spec is read, which is after the
+    # cluster, namespace and Secret exist: a typo in the path would otherwise
+    # surface as a traceback at the very end, with everything already created
+    # and none of the next-step output printed.
+    if not _paths.bootstrap_spec(config_dir).is_file():
+        msg = (
+            f"no bootstrap spec at {_paths.bootstrap_spec(config_dir)}. "
+            "--deployment-config takes a deployment directory, and every one "
+            "carries its own provisioning spec."
+        )
+        raise SystemExit(msg)
 
     state = _cluster_state()
     if state == "running":
@@ -760,13 +779,6 @@ def setup(*, deployment_config: str | None = None) -> None:
     _warn_on_schema_collation_drift()
 
     local_dev = _paths.local_dev_dir()
-    # Resolved against the cwd, like start() does, so the path is unambiguous
-    # wherever `lehrer` was invoked from.
-    config_dir = (
-        Path(deployment_config).resolve()
-        if deployment_config
-        else _paths.default_deployment_config()
-    )
     # Report where the credential came from, never the value — a custom one
     # would otherwise land in terminal scrollback and captured setup logs.
     # Only ever one of the two literals below; naming it for the secret it

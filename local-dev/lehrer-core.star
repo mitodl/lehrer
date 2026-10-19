@@ -681,9 +681,9 @@ def setup(cfg):
     # than a custom_build, so it is watched explicitly instead of through a
     # build's deps=.
     provision_dir = dep_cfg + "/provision"
-    # watch_file() tolerates a path that does not exist, so without this the
-    # first sign of a deployment missing the directory is a kubectl error that
-    # never names lehrer.
+    # Checked before anything reads it, so a deployment without the file is
+    # told what is missing and why, rather than failing further down in
+    # whichever of kubectl, sha256sum or the watcher gets there first.
     if not os.path.exists(provision_dir + "/bootstrap.yaml"):
         fail(
             "no bootstrap.yaml in " + provision_dir + ". Every deployment " +
