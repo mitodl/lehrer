@@ -22,6 +22,11 @@ cells:
   deployment: generic
   platform_branch: master
   packages:
+  # The LMS and CMS Deployments run Granian rather than the Gunicorn upstream
+  # ships, so that Granian's static handler serves /static (see
+  # local-dev/manifests/platform/deployment-lms.yaml). Nothing in
+  # edx-platform installs it, and local-dev defaults to this cell.
+  - granian==2.8.3
   - django-aqueduct==0.15.0
   - pydantic-settings[yaml]==2.15.0
   - opentelemetry-distro

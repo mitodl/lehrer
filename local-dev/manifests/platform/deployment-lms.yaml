@@ -25,9 +25,10 @@ spec:
         # and substitutes the built ref, registry included.
         image: openedx-platform
         # Granian, not gunicorn, because gunicorn serves no static files and
-        # aqueduct runs with DEBUG=False, so Django will not either: every
-        # /static/... URL the LMS emits 404s and the pages render unstyled and
-        # scriptless. The assets are in the image at /openedx/staticfiles (the
+        # neither does Django under a WSGI server -- staticfiles only serves
+        # them from runserver, DEBUG or not, and this stack sets DEBUG=true
+        # (configmap-lms.yaml) without that changing. So every /static/... URL
+        # the LMS emits 404s and the pages render unstyled and scriptless. The assets are in the image at /openedx/staticfiles (the
         # build runs collectstatic); nothing was serving them.
         #
         # --static-path-mount is Granian's own static handler, so this needs no

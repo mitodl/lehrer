@@ -652,6 +652,10 @@ def setup(cfg):
                     shared_src_flag +
                     " up --ports " + port + ":8080"
                 ),
+                # Same reason as lehrer_root on every custom_build above:
+                # serve_cmd otherwise runs in the caller's Tiltfile directory,
+                # which under composition has no dagger.json.
+                serve_dir=lehrer_root,
                 deps=[site_dir] + mfe_deps_base,
                 labels=["mfe"],
             )

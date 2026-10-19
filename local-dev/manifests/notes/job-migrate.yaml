@@ -46,6 +46,12 @@ spec:
         - sh
         - -c
         - |
+          # Bounded, and the driver's error is kept rather than discarded: a
+          # wrong host, database or password never resolves itself, and an
+          # unbounded silent loop leaves the Job in Init forever -- blocking
+          # the notes resource -- with nothing in the log naming the cause.
+          # 60 x 3s covers a cold operator start with room to spare.
+          attempts=0
           until python -c "
           import os
           import MySQLdb
@@ -56,7 +62,13 @@ spec:
               passwd=os.environ['DB_PASSWORD'],
               db=os.environ['DB_NAME'],
           ).close()
-          " 2>/dev/null; do
+          " 2>/tmp/mysql-probe.err; do
+            attempts=$((attempts + 1))
+            if [ "$attempts" -ge 60 ]; then
+              echo "==> mysql never accepted ${DB_USER}@${DB_HOST}/${DB_NAME} after 3m; last error:" >&2
+              cat /tmp/mysql-probe.err >&2
+              exit 1
+            fi
             echo "waiting for mysql to accept ${DB_USER}@${DB_HOST}/${DB_NAME}"
             sleep 3
           done
