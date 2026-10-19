@@ -26,7 +26,7 @@ cells:
   # ships, so that Granian's static handler serves /static (see
   # local-dev/manifests/platform/deployment-lms.yaml). Nothing in
   # edx-platform installs it, and local-dev defaults to this cell.
-  - granian==2.8.3
+  - granian==2.8.4
   - django-aqueduct==0.15.0
   - pydantic-settings[yaml]==2.15.0
   - opentelemetry-distro
