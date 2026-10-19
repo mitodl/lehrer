@@ -676,11 +676,12 @@ def setup(*, deployment_config: str | None = None) -> None:
         Only the superuser this reports comes from it -- the cluster and the
         Secret are shared -- so pass ``start`` the same one.
     """
-    # Forwarded rather than called bare, so a caller naming a deployment gets
-    # its hostnames checked too. Not forwarded when none was named: that check
-    # resolves names and exits non-zero when they do not, which would make a
-    # plain `lehrer dev setup` fail offline.
-    check_deps(deployment_config=deployment_config)
+    # Called bare even when a deployment was named. Forwarding it would switch
+    # on check's hostname resolution, which exits non-zero on a name that does
+    # not resolve -- turning `setup --deployment-config ...` into a command
+    # that creates no cluster when run offline. `lehrer dev check` is where a
+    # developer asks for that.
+    check_deps()
 
     state = _cluster_state()
     if state == "running":

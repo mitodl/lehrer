@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 import pytest
 import yaml
 
+from lehrer.bootstrap.spec import BootstrapSpec
 from lehrer.bootstrap.spec import load as load_bootstrap_spec
 from lehrer.cli import _paths, local_dev
 
@@ -314,7 +315,12 @@ class TestProvisioningManifests:
             if deployment == generic:
                 continue
             spec = load_bootstrap_spec(_paths.bootstrap_spec(deployment))
-            for field in ("users", "oauth_applications", "waffle_flags"):
+            # Every step the model declares, not a hand-kept subset: a
+            # shared row in a step this forgot would go missing from the
+            # other deployments with nothing to catch it. The two
+            # operator-specific steps are empty in generic today, so those
+            # iterations assert nothing until one is not.
+            for field in BootstrapSpec.model_fields:
                 # Compared whole, not by name: a drifted `everyone` value or a
                 # changed redirect_uri is the divergence duplication produces.
                 carried = [item.model_dump() for item in getattr(spec, field)]

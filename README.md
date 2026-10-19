@@ -49,6 +49,11 @@ lehrer dev status      # show cluster / pod state
 lehrer dev db-collation  # audit MariaDB schema-collation drift (see below)
 ```
 
+`setup`, `start` and `check` each take `--deployment-config <dir>`, defaulting
+to `deployments/generic`. For `setup` it only selects the bootstrap spec whose
+superuser gets reported — the cluster and the Secret are shared — so pass
+`start` the same one.
+
 Use a deployment-specific config and MFE hot-reload:
 
 ```bash

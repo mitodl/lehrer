@@ -104,7 +104,14 @@ repos:
     # deployments/mit-ol/provision/ instead. The `deployments` alternatives the
     # hook above carries are dropped here: this path is itself under
     # deployments/, so they would match every self-reference.
-    entry: 'mit-ol|mitol|mitxonline|mitodl|github\.mit\.edu|verificient|proctortrack'
+    #
+    # The two namespace prefixes matter more than the spelled-out names: a
+    # provisioning row names backends, slugs and env vars, not prose, so
+    # `ol-oauth2` and `OL_OAUTH2_CLIENT_ID` are what an OL row actually looks
+    # like. `\bol[-_]` catches those without matching a word that merely ends
+    # in "ol" (protocol-, symbol_), and `\bmit\b` catches "MIT Open Learning"
+    # and `mit-ol` without matching "submit" or "permit".
+    entry: '(?i)\bol[-_]|\bmit\b|mitol|mitxonline|mitodl|verificient|proctortrack'
     files: ^deployments/generic/provision/
   - id: build-config-schema
     name: regenerate build_config JSON schema from the Pydantic models
