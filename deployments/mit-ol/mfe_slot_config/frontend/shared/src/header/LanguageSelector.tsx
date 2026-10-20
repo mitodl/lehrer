@@ -13,22 +13,25 @@ interface LearnerLanguageConfig {
 	languages: { code: string; name: string }[];
 }
 
-let learnerLanguageRequest: Promise<LearnerLanguageConfig> | null = null;
+const learnerLanguageRequests: Record<string, Promise<LearnerLanguageConfig>> = {};
 
 /**
  * Served by the ol-openedx-auto-select-language plugin. `enabled` mirrors its
- * learner-language flag, so the dropdown only shows when the learner's own
- * choice wins everywhere.
+ * learner-language flag for the course in the page URL (or its global value
+ * outside a course), so the dropdown only shows when the learner's own choice
+ * wins.
  */
 function fetchLearnerLanguageConfig(): Promise<LearnerLanguageConfig> {
-	if (!learnerLanguageRequest) {
-		const url = `${getSiteConfig().lmsBaseUrl}/auto-select-language/api/languages/`;
-		learnerLanguageRequest = getAuthenticatedHttpClient()
+	const courseId = window.location.pathname.match(/course-v1:[^/]+/)?.[0] ?? "";
+	if (!learnerLanguageRequests[courseId]) {
+		const query = courseId ? `?course_id=${encodeURIComponent(courseId)}` : "";
+		const url = `${getSiteConfig().lmsBaseUrl}/auto-select-language/api/languages/${query}`;
+		learnerLanguageRequests[courseId] = getAuthenticatedHttpClient()
 			.get(url)
 			.then(({ data }) => data as LearnerLanguageConfig)
 			.catch(() => ({ enabled: false, languages: [] }));
 	}
-	return learnerLanguageRequest;
+	return learnerLanguageRequests[courseId];
 }
 
 export const LanguageSelector: FC = () => {

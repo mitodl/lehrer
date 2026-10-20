@@ -181,18 +181,21 @@ async function saveLanguagePreference(baseURL, username, language) {
 }
 
 // This API is provided by the ol-openedx-auto-select-language plugin. `enabled`
-// mirrors its learner-language flag: when on, the learner's own choice wins
-// everywhere, so the dropdown shows and nothing forces a language.
-let learnerLanguageRequest = null;
+// mirrors its learner-language flag for the course in the page URL (or its
+// global value outside a course): when on, the learner's own choice wins, so
+// the dropdown shows and nothing forces a language.
+const learnerLanguageRequests = {};
 function fetchLearnerLanguageConfig() {
-  if (!learnerLanguageRequest) {
-    const url = `${getConfig().LMS_BASE_URL}/auto-select-language/api/languages/`;
-    learnerLanguageRequest = getAuthenticatedHttpClient()
+  const courseId = window.location.pathname.match(/course-v1:[^/]+/)?.[0] || "";
+  if (!learnerLanguageRequests[courseId]) {
+    const query = courseId ? `?course_id=${encodeURIComponent(courseId)}` : "";
+    const url = `${getConfig().LMS_BASE_URL}/auto-select-language/api/languages/${query}`;
+    learnerLanguageRequests[courseId] = getAuthenticatedHttpClient()
       .get(url)
       .then(({ data }) => data)
       .catch(() => ({ enabled: false, languages: [] }));
   }
-  return learnerLanguageRequest;
+  return learnerLanguageRequests[courseId];
 }
 
 export const LanguageSelector = () => {
