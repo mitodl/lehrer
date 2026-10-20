@@ -208,31 +208,48 @@
 // #303337 header background set at the top of this file that is a 1.06:1
 // contrast ratio, so the bell reads as invisible until hover -- hover paints a
 // light (#e1dddb) circle behind it, which is the only reason it appears at all.
-// Paint the resting bell white like the rest of the header chrome, and keep the
-// dark bell on hover/focus so it stays legible against that light circle.
+// Match the MIT Design System EDX nav: a Light Gray 2 (#DDE1E6) circle with a
+// Dark Gray 1 (#40464C) bell in every state, so the bell no longer depends on
+// hover to be seen.
 .learning-header, .site-header-desktop {
+  // Paragon's `.mx-1.5` puts 6px on each side of the bell; the design system
+  // asks for 16px between header elements. Below 992px, where the Dashboard
+  // button is hidden, the bell's right margin is dropped: the next item already
+  // provides 16px (the user menu's `.ml-3` in the learning header, the Dashboard
+  // wrapper's 16px right margin in the desktop header).
+  #notificationIcon {
+    margin: 0 16px !important;
+  }
+
   // Paragon sizes the `size="inline"` icon button in `em` (`padding: 1em`), so
   // the 14px font-size this file sets on the header at the top shrinks the bell
   // to 28x28 while an unstyled header renders it at 36x36. Pin the button back
   // to Paragon's 1.125rem base so it matches Studio and upstream. The glyph is
   // sized in `rem` and stays 24x24 either way.
-  #notificationIcon .notification-button {
+  //
+  // Paragon and the notifications plugin only paint a light circle on hover,
+  // focus, :active and via .btn-icon-light-active while the tray is open, and in
+  // their own greys. Pin the design system grey at rest and in all of those
+  // states.
+  #notificationIcon .notification-button,
+  #notificationIcon .notification-button:hover,
+  #notificationIcon .notification-button:focus,
+  #notificationIcon .notification-button:active,
+  #notificationIcon .notification-button.btn-icon-light-active {
     font-size: 1.125rem !important;
+    background-color: #DDE1E6 !important;
   }
 
   #notificationIcon .notification-button .pgn__icon {
-    color: #FFF !important;
+    color: #40464C !important;
   }
+}
 
-  // Whenever Paragon paints its light circle behind the bell -- on hover, on
-  // focus, and via .btn-icon-light-active for as long as the tray is open --
-  // put the dark bell back so it stays legible against that circle. Without the
-  // .btn-icon-light-active case the bell disappears again once the tray is open
-  // and the pointer moves away.
-  #notificationIcon .notification-button:hover .pgn__icon,
-  #notificationIcon .notification-button:focus .pgn__icon,
-  #notificationIcon .notification-button.btn-icon-light-active .pgn__icon {
-    color: var(--pgn-color-primary-500, #0a3055) !important;
+@media (max-width: 991px) {
+  .learning-header, .site-header-desktop {
+    #notificationIcon {
+      margin-right: 0 !important;
+    }
   }
 }
 
