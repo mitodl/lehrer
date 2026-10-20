@@ -223,7 +223,7 @@ export const LanguageSelector = () => {
   };
 
   return (
-    <Dropdown onSelect={onSelect} className="mr-3">
+    <Dropdown onSelect={onSelect} className="ol-language-selector mr-3">
       <Dropdown.Toggle variant="outline-primary" size="sm" id="ol-language-selector">
         {currentLanguage.name}
       </Dropdown.Toggle>
@@ -258,8 +258,9 @@ export const addLanguageSelectorSlots = (config) => {
     pluginSlots[slotId] = {
       ...existing,
       keepDefault: existing.keepDefault ?? true,
+      // First in the list so it renders before deployment widgets that set no
+      // priority (e.g. the MITx Online dashboard button).
       plugins: [
-        ...(existing.plugins || []),
         {
           op: PLUGIN_OPERATIONS.Insert,
           widget: {
@@ -269,6 +270,7 @@ export const addLanguageSelectorSlots = (config) => {
             RenderWidget: LanguageSelector,
           },
         },
+        ...(existing.plugins || []),
       ],
     };
   });
