@@ -13,7 +13,6 @@ import { Dropdown, Hyperlink, Image } from "@openedx/paragon";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { isLearnCourse, isMITxOnlineCourse } from "../utils/courseContext";
-import { LanguageSelector } from "./LanguageSelector";
 
 // ---------------------------------------------------------------------------
 // Shared slot IDs and widget IDs (from @openedx/frontend-base headerApp)
@@ -360,17 +359,8 @@ const MITxOnlineLogoutMenuItem: FC = () => {
 	return <Dropdown.Item href={logoutUrl}>Sign out</Dropdown.Item>;
 };
 
-/** Header language dropdown, shown only when the in-place translations flag is on. */
-const languageSelectorWidget: SlotOperation = {
-	slotId: SLOT.secondaryLinks,
-	id: "mitol.header.languageSelector",
-	op: WidgetOperationTypes.PREPEND,
-	component: LanguageSelector,
-};
-
 export function createMITxOnlineHeaderApp(): App {
 	const slots: SlotOperation[] = [
-		languageSelectorWidget,
 		// Keep the desktop-style header layout at all widths (no mobile hamburger).
 		{
 			slotId: SLOT.desktop,
@@ -515,7 +505,6 @@ const MITxLogoutMenuItem: FC = () => {
 
 export function createMITxHeaderApp(): App {
 	const slots: SlotOperation[] = [
-		languageSelectorWidget,
 		// Keep the desktop-style header layout at all widths (no mobile hamburger),
 		// matching the legacy MITx header. Narrow-width trimming is in mitx.scss.
 		{
@@ -609,7 +598,6 @@ const XProLogoutMenuItem: FC = () => {
 
 export function createXProHeaderApp(): App {
 	const slots: SlotOperation[] = [
-		languageSelectorWidget,
 		// Keep the desktop-style header layout at all widths (no mobile hamburger),
 		// matching the legacy xPRO header. Narrow-width trimming is in mitx.scss.
 		{

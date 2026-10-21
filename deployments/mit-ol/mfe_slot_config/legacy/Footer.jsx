@@ -198,25 +198,60 @@ function fetchLearnerLanguageConfig() {
   return learnerLanguageRequests[courseId];
 }
 
+// Staff MFEs are always English, so they never show the dropdown.
+const STAFF_APP_IDS = [
+  "admin-console",
+  "authoring",
+  "communications",
+  "gradebook",
+  "instructor-dashboard",
+  "ora-grading",
+];
+
+// The learner's saved language (the shared LMS cookie), which can differ from the
+// MFE's own UI locale when the MFE has no messages for that language.
+function savedLanguage() {
+  const name =
+    getConfig().LANGUAGE_PREFERENCE_COOKIE_NAME ||
+    process.env.LANGUAGE_PREFERENCE_COOKIE_NAME ||
+    `${process.env.ENVIRONMENT}-openedx-language-preference`;
+  const safeName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = document.cookie.match(new RegExp(`(?:^|; )${safeName}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]).toLowerCase() : getLocale();
+}
+
 export const LanguageSelector = () => {
   const { authenticatedUser } = useContext(AppContext);
+  const location = useLocation();
   const [languageConfig, setLanguageConfig] = useState(null);
   const username = authenticatedUser?.username;
 
+  // Refetch when client-side navigation moves to another course or page.
   useEffect(() => {
-    fetchLearnerLanguageConfig().then(setLanguageConfig);
-  }, []);
+    let cancelled = false;
+    setLanguageConfig(null);
+    fetchLearnerLanguageConfig().then((data) => {
+      if (!cancelled) setLanguageConfig(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname]);
 
-  if (!username || !languageConfig?.enabled || !languageConfig.languages.length) {
+  if (
+    STAFF_APP_IDS.includes(getConfig().APP_ID) ||
+    !username ||
+    !languageConfig?.enabled ||
+    !languageConfig.languages.length
+  ) {
     return null;
   }
   const { languages } = languageConfig;
-  const current = getLocale();
-  const currentLanguage =
-    languages.find((language) => language.code === current) || languages[0];
+  const current = savedLanguage();
+  const currentLanguage = languages.find((language) => language.code === current);
 
   const onSelect = async (code) => {
-    if (code === currentLanguage.code) return;
+    if (code === current) return;
     // The LMS writes the shared language cookie from pref-lang on this response.
     if (await saveLanguagePreference(getConfig().LMS_BASE_URL, username, code)) {
       window.location.reload();
@@ -226,14 +261,14 @@ export const LanguageSelector = () => {
   return (
     <Dropdown onSelect={onSelect} className="ol-language-selector mr-3">
       <Dropdown.Toggle variant="outline-primary" size="sm" id="ol-language-selector">
-        {currentLanguage.name}
+        {currentLanguage?.name ?? current}
       </Dropdown.Toggle>
       <Dropdown.Menu className="overflow-auto" style={{ maxHeight: "320px" }}>
         {languages.map((language) => (
           <Dropdown.Item
             key={language.code}
             eventKey={language.code}
-            active={language.code === currentLanguage.code}
+            active={language.code === current}
           >
             {language.name}
           </Dropdown.Item>
