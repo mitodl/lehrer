@@ -17,7 +17,7 @@ const learnerLanguageRequests: Record<string, Promise<LearnerLanguageConfig>> = 
 
 /**
  * Served by the ol-openedx-auto-select-language plugin. `enabled` mirrors its
- * learner-language flag for the course in the page URL (or its global value
+ * in-place translations flag for the course in the page URL (or its global value
  * outside a course), so the dropdown only shows when the learner's own choice
  * wins.
  */

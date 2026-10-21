@@ -360,7 +360,7 @@ const MITxOnlineLogoutMenuItem: FC = () => {
 	return <Dropdown.Item href={logoutUrl}>Sign out</Dropdown.Item>;
 };
 
-/** Header language dropdown, shown only when the learner-language flag is on. */
+/** Header language dropdown, shown only when the in-place translations flag is on. */
 const languageSelectorWidget: SlotOperation = {
 	slotId: SLOT.secondaryLinks,
 	id: "mitol.header.languageSelector",
