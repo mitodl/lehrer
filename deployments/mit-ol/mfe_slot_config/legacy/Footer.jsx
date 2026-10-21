@@ -181,7 +181,7 @@ async function saveLanguagePreference(baseURL, username, language) {
 }
 
 // This API is provided by the ol-openedx-auto-select-language plugin. `enabled`
-// mirrors its learner-language flag for the course in the page URL (or its
+// mirrors its in-place translations flag for the course in the page URL (or its
 // global value outside a course): when on, the learner's own choice wins, so
 // the dropdown shows and nothing forces a language.
 const learnerLanguageRequests = {};
@@ -217,10 +217,8 @@ export const LanguageSelector = () => {
 
   const onSelect = async (code) => {
     if (code === currentLanguage.code) return;
-    // The server writes the shared language cookie from pref-lang on this response.
-    const { APP_ID, LMS_BASE_URL, STUDIO_BASE_URL } = getConfig();
-    const baseURL = APP_ID === "authoring" ? STUDIO_BASE_URL : LMS_BASE_URL;
-    if (await saveLanguagePreference(baseURL, username, code)) {
+    // The LMS writes the shared language cookie from pref-lang on this response.
+    if (await saveLanguagePreference(getConfig().LMS_BASE_URL, username, code)) {
       window.location.reload();
     }
   };
@@ -245,13 +243,12 @@ export const LanguageSelector = () => {
   );
 };
 
-// Header slots the language dropdown goes into: learning MFE header, other MFE
-// headers, and the Studio header. A slot an MFE does not render is ignored, so
-// every deployment can apply all of them.
+// Header slots the language dropdown goes into: the learning MFE header and other
+// learner MFE headers. Studio is always English, so it gets no dropdown. A slot an
+// MFE does not render is ignored, so every deployment can apply all of them.
 const LANGUAGE_SELECTOR_SLOT_IDS = [
   "org.openedx.frontend.layout.header_learning_help.v1",
   "org.openedx.frontend.layout.header_desktop_secondary_menu.v1",
-  "org.openedx.frontend.layout.studio_header_actions.v1",
 ];
 
 export const addLanguageSelectorSlots = (config) => {
@@ -369,6 +366,11 @@ const AutoSelectLanguage = () => {
 
   useEffect(() => {
     if (!username) return;
+    // Studio is always English, whatever the in-place translations flag says.
+    if (process.env.APP_ID === AUTHORING_APP_ID) {
+      autoSelect();
+      return;
+    }
     let cancelled = false;
     fetchLearnerLanguageConfig().then(({ enabled }) => {
       if (!cancelled && !enabled) autoSelect();
@@ -378,8 +380,8 @@ const AutoSelectLanguage = () => {
     };
   }, [location.pathname, username]);
 
-  // The learner's own choice wins when the plugin's learner-language flag is on,
-  // so the course-language switch and the Studio English reset only run when off.
+  // The learner's own choice wins when the plugin's in-place translations flag is on
+  // for the course, so the course-language switch only runs when it is off.
   function autoSelect() {
     const cookieLang = getCookie(LANGUAGE_PREFERENCE_COOKIE_NAME);
     // Studio (Authoring App) logic
