@@ -64,6 +64,40 @@
       border: none !important;
     }
   }
+  // Header language dropdown: the toggle inherits the header's .dropdown-toggle
+  // look; the menu matches the user menu on the dark header.
+  .ol-language-selector {
+    margin-right: 12px !important;
+    // Same size as the user menu toggle next to it.
+    .dropdown-toggle {
+      height: 40px !important;
+      padding: 4px 12px !important;
+    }
+    // The header hides toggle carets for the user menu, which draws its own chevron.
+    .dropdown-toggle::after {
+      display: inline-block !important;
+    }
+    .dropdown-toggle, .dropdown-toggle:active, &.show .dropdown-toggle {
+      background-color: transparent !important;
+      box-shadow: none !important;
+    }
+    .dropdown-menu {
+      padding: 0 !important;
+      border-radius: 8px !important;
+      background: #FFF !important;
+      border: 1px solid #DDE1E6 !important;
+      box-shadow: 0 4px 16px 0 rgba(37,38,43,0.20), 0 2px 4px 0 rgba(37,38,43,0.10) !important;
+      min-width: 160px !important;
+      overflow: hidden;
+    }
+    .dropdown-item {
+      color: #212326 !important;
+      font-size: 14px !important;
+      padding: 10px 16px !important;
+      &:hover, &:focus { background-color: #F3F4F8 !important; color: #212326 !important; }
+      &.active, &:active { background-color: #DDE1E6 !important; color: #212326 !important; }
+    }
+  }
   .dashboard-btn{
     text-decoration: none;
     text-align: center;

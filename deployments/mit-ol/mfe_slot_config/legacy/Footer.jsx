@@ -1,13 +1,13 @@
-import React, { useContext, useEffect } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { Button, Dropdown, Collapsible, Hyperlink, Image } from "@openedx/paragon";
 import { ExpandLess, ExpandMore } from '@openedx/paragon/icons';
 import { getConfig } from '@edx/frontend-platform';
-import { PluginSlot } from '@openedx/frontend-plugin-framework';
+import { DIRECT_PLUGIN, PLUGIN_OPERATIONS, PluginSlot } from '@openedx/frontend-plugin-framework';
 import { getLoginRedirectUrl } from '@edx/frontend-platform/auth';
 import { AppContext } from '@edx/frontend-platform/react';
 import { useLocation } from 'react-router-dom';
 import { getAuthenticatedHttpClient } from '@edx/frontend-platform/auth';
-import { FormattedMessage } from '@edx/frontend-platform/i18n';
+import { FormattedMessage, getLocale } from '@edx/frontend-platform/i18n';
 
 function RevealLinks({ label, children }) {
 
@@ -162,6 +162,156 @@ const ForceLoginRedirect = () => {
   return null;
 };
 
+const DEVELOPMENT_ENVIRONMENT = "development";
+
+async function saveLanguagePreference(baseURL, username, language) {
+  try {
+    const response = await getAuthenticatedHttpClient().patch(
+      `${baseURL}/api/user/v1/preferences/${username}`,
+      { "pref-lang": language },
+      { headers: { "Content-Type": "application/merge-patch+json" } }
+    );
+    return response.status === 204;
+  } catch (error) {
+    if (process.env.NODE_ENV === DEVELOPMENT_ENVIRONMENT) {
+      console.error("Language update failed:", error);
+    }
+    return false;
+  }
+}
+
+// This API is provided by the ol-openedx-auto-select-language plugin. `enabled`
+// mirrors its in-place translations flag for the course in the page URL (or its
+// global value outside a course): when on, the learner's own choice wins, so
+// the dropdown shows and nothing forces a language.
+const learnerLanguageRequests = {};
+function fetchLearnerLanguageConfig() {
+  const courseId = window.location.pathname.match(/course-v1:[^/]+/)?.[0] || "";
+  if (!learnerLanguageRequests[courseId]) {
+    const query = courseId ? `?course_id=${encodeURIComponent(courseId)}` : "";
+    const url = `${getConfig().LMS_BASE_URL}/auto-select-language/api/languages/${query}`;
+    learnerLanguageRequests[courseId] = getAuthenticatedHttpClient()
+      .get(url)
+      .then(({ data }) => data)
+      .catch(() => ({ enabled: false, languages: [] }));
+  }
+  return learnerLanguageRequests[courseId];
+}
+
+// Staff MFEs are always English, so they never show the dropdown.
+const STAFF_APP_IDS = [
+  "admin-console",
+  "authoring",
+  "communications",
+  "gradebook",
+  "instructor-dashboard",
+  "ora-grading",
+];
+
+// The learner's saved language (the shared LMS cookie), which can differ from the
+// MFE's own UI locale when the MFE has no messages for that language.
+function savedLanguage() {
+  const name =
+    getConfig().LANGUAGE_PREFERENCE_COOKIE_NAME ||
+    process.env.LANGUAGE_PREFERENCE_COOKIE_NAME ||
+    `${process.env.ENVIRONMENT}-openedx-language-preference`;
+  const safeName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = document.cookie.match(new RegExp(`(?:^|; )${safeName}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]).toLowerCase() : getLocale();
+}
+
+export const LanguageSelector = () => {
+  const { authenticatedUser } = useContext(AppContext);
+  const location = useLocation();
+  const [languageConfig, setLanguageConfig] = useState(null);
+  const username = authenticatedUser?.username;
+
+  // Refetch when client-side navigation moves to another course or page.
+  useEffect(() => {
+    let cancelled = false;
+    setLanguageConfig(null);
+    fetchLearnerLanguageConfig().then((data) => {
+      if (!cancelled) setLanguageConfig(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname]);
+
+  if (
+    STAFF_APP_IDS.includes(getConfig().APP_ID) ||
+    !username ||
+    !languageConfig?.enabled ||
+    !languageConfig.languages.length
+  ) {
+    return null;
+  }
+  const { languages } = languageConfig;
+  const current = savedLanguage();
+  const currentLanguage = languages.find((language) => language.code === current);
+
+  const onSelect = async (code) => {
+    if (code === current) return;
+    // The LMS writes the shared language cookie from pref-lang on this response.
+    if (await saveLanguagePreference(getConfig().LMS_BASE_URL, username, code)) {
+      window.location.reload();
+    }
+  };
+
+  return (
+    <Dropdown onSelect={onSelect} className="ol-language-selector mr-3">
+      <Dropdown.Toggle variant="outline-primary" size="sm" id="ol-language-selector">
+        {currentLanguage?.name ?? current}
+      </Dropdown.Toggle>
+      <Dropdown.Menu className="overflow-auto" style={{ maxHeight: "320px" }}>
+        {languages.map((language) => (
+          <Dropdown.Item
+            key={language.code}
+            eventKey={language.code}
+            active={language.code === current}
+          >
+            {language.name}
+          </Dropdown.Item>
+        ))}
+      </Dropdown.Menu>
+    </Dropdown>
+  );
+};
+
+// Header slots the language dropdown goes into: the learning MFE header and other
+// learner MFE headers. Studio is always English, so it gets no dropdown. A slot an
+// MFE does not render is ignored, so every deployment can apply all of them.
+const LANGUAGE_SELECTOR_SLOT_IDS = [
+  "org.openedx.frontend.layout.header_learning_help.v1",
+  "org.openedx.frontend.layout.header_desktop_secondary_menu.v1",
+];
+
+export const addLanguageSelectorSlots = (config) => {
+  const pluginSlots = { ...config.pluginSlots };
+  LANGUAGE_SELECTOR_SLOT_IDS.forEach((slotId) => {
+    const existing = pluginSlots[slotId] || {};
+    pluginSlots[slotId] = {
+      ...existing,
+      keepDefault: existing.keepDefault ?? true,
+      // First in the list so it renders before deployment widgets that set no
+      // priority (e.g. the MITx Online dashboard button).
+      plugins: [
+        {
+          op: PLUGIN_OPERATIONS.Insert,
+          widget: {
+            id: "ol_language_selector",
+            type: DIRECT_PLUGIN,
+            priority: 10,
+            RenderWidget: LanguageSelector,
+          },
+        },
+        ...(existing.plugins || []),
+      ],
+    };
+  });
+  return { ...config, pluginSlots };
+};
+
 const AutoSelectLanguage = () => {
   const config = getConfig();
   const location = useLocation();
@@ -170,7 +320,6 @@ const AutoSelectLanguage = () => {
   const lmsBaseURL = config.LMS_BASE_URL;
   const studioBaseURL = config.STUDIO_BASE_URL;
   const username = authenticatedUser?.username;
-  const DEVELOPMENT_ENVIRONMENT = "development";
   const AUTHORING_APP_ID = "authoring";
   const ENGLISH_LANG_CODE = "en";
   const LANGUAGE_PREFERENCE_COOKIE_NAME =
@@ -233,21 +382,8 @@ const AutoSelectLanguage = () => {
     }
   };
 
-  async function setLanguage(baseURL, language) {
-    try {
-      const response = await getAuthenticatedHttpClient().patch(
-        `${baseURL}/api/user/v1/preferences/${username}`,
-        { "pref-lang": language },
-        { headers: { "Content-Type": "application/merge-patch+json" } }
-      );
-      return response.status === 204;
-    } catch (error) {
-      if (process.env.NODE_ENV === DEVELOPMENT_ENVIRONMENT) {
-        console.error("Language update failed:", error);
-      }
-      return false;
-    }
-  }
+  const setLanguage = (baseURL, language) =>
+    saveLanguagePreference(baseURL, username, language);
 
   // This API is provided by the ol-openedx-auto-select-language plugin https://github.com/mitodl/open-edx-plugins/tree/main/src/ol_openedx_auto_select_language
   async function fetchCourseLanguage(courseKey) {
@@ -265,7 +401,23 @@ const AutoSelectLanguage = () => {
 
   useEffect(() => {
     if (!username) return;
+    // Studio is always English, whatever the in-place translations flag says.
+    if (process.env.APP_ID === AUTHORING_APP_ID) {
+      autoSelect();
+      return;
+    }
+    let cancelled = false;
+    fetchLearnerLanguageConfig().then(({ enabled }) => {
+      if (!cancelled && !enabled) autoSelect();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, username]);
 
+  // The learner's own choice wins when the plugin's in-place translations flag is on
+  // for the course, so the course-language switch only runs when it is off.
+  function autoSelect() {
     const cookieLang = getCookie(LANGUAGE_PREFERENCE_COOKIE_NAME);
     // Studio (Authoring App) logic
     if (process.env.APP_ID === AUTHORING_APP_ID) {
@@ -308,8 +460,7 @@ const AutoSelectLanguage = () => {
         }
       }
     })();
-
-  }, [location.pathname, username]);
+  }
 
   return null;
 };

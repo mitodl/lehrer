@@ -7,7 +7,12 @@ import {
 import { getConfig } from "@edx/frontend-platform";
 import { FormattedMessage } from "@edx/frontend-platform/i18n";
 
-import Footer, { Logo, MenuLinks, CopyrightNotice } from "./Footer.jsx";
+import Footer, {
+	addLanguageSelectorSlots,
+	Logo,
+	MenuLinks,
+	CopyrightNotice,
+} from "./Footer.jsx";
 import "./mitxonline-styles.scss";
 
 const configData = getConfig();
@@ -668,5 +673,7 @@ config = addSecondaryMenuSlotOverride(config);
 config = addDesktopMainMenuSlotOverride(config);
 config = removeScheduleAndDetailsPageBannerDefaultContents(config);
 config = addEnvOverrides(config);
+
+config = addLanguageSelectorSlots(config);
 
 export default config;
