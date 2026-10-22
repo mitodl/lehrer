@@ -41,7 +41,7 @@ repos:
     - --exclude-lines
     - "(^encryptedkey:|^secure:|^secretsprovider:)"
     - --exclude-files
-    - deployments/mit-ol/settings/.*/models/aqueduct\.py
+    - deployments/[^/]+/settings/.*/models/aqueduct\.py
     - --exclude-files
     - deployments/mit-ol/settings/models/base\.py
 - repo: https://github.com/astral-sh/ruff-pre-commit

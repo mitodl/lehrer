@@ -18,7 +18,7 @@ def test_codegen_cmd_declares_the_services_plugin_entry_points(service: str) -> 
     # collects env values per *declared* field -- drops the pod's value instead
     # of parsing it (django-aqueduct >= 0.14.0).
     command = _aqueduct_codegen_cmd(service, f"{service}/envs/models/aqueduct.py")
-    assert f"--modules {service}.envs.common" in command
+    assert f"--modules openedx.envs.common,{service}.envs.common " in command
     assert f"--openedx-plugins {service}.djangoapp" in command
     assert f"--output {service}/envs/models/aqueduct.py --reset" in command
 

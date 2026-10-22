@@ -30,13 +30,18 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "CELERY_BROKER_VHOST",
         "CACHES",
         "CMS_BASE_URL",
+        "CORS_ALLOW_CREDENTIALS",
+        "CORS_ORIGIN_ALLOW_ALL",
+        "CORS_ORIGIN_WHITELIST",
+        "CELERY_TIMEZONE",
+        "LANGUAGES",
+        "TIME_ZONE",
         "AUTHORING_API_URL",
         "SPECTACULAR_SETTINGS",
         "LMS_BASE_URL",
         "LMS_ROOT_URL",
         "JWT_PRIVATE_SIGNING_JWK",
         "JWT_PUBLIC_SIGNING_JWK_SET",
-        "LEARNING_MICROFRONTEND_URL",
         "SESSION_COOKIE_NAME",
         "SOCIAL_AUTH_REDIRECT_IS_HTTPS",
         "SOCIAL_AUTH_EDX_OAUTH2_KEY",
@@ -312,23 +317,66 @@ class TestSpectacularServers:
         assert not hasattr(StudioSettingsMixin(), "SPECTACULAR_SETTINGS")
 
 
-class TestLearningMicrofrontendUrl:
-    def test_arrives_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # Regression: the setting is defined only in openedx/envs/common.py, which
-        # lms/envs/common.py star-imports, so codegen never generated a field and
-        # the env var was dropped -- settings.LEARNING_MICROFRONTEND_URL stayed
-        # None while the var sat in the pod's environment.
-        monkeypatch.setenv("LEARNING_MICROFRONTEND_URL", "https://lms.mit.dev/learn")
-        settings = ProductionSettingsMixin()
-        assert settings.LEARNING_MICROFRONTEND_URL == "https://lms.mit.dev/learn"
+class TestCorsSettings:
+    def test_the_whitelist_arrives_from_env_as_a_json_array(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(
+            "CORS_ORIGIN_WHITELIST",
+            '["https://studio.mit.test", "https://learn.mit.test"]',
+        )
+        assert ProductionSettingsMixin().CORS_ORIGIN_WHITELIST == [
+            "https://studio.mit.test",
+            "https://learn.mit.test",
+        ]
 
-    def test_defaults_to_none_when_unset(self) -> None:
-        assert ProductionSettingsMixin().LEARNING_MICROFRONTEND_URL is None
+    def test_a_false_flag_from_env_is_false(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("CORS_ORIGIN_ALLOW_ALL", "false")
+        assert ProductionSettingsMixin().CORS_ORIGIN_ALLOW_ALL is False
+
+    def test_credentials_default_to_a_bool(self) -> None:
+        # django-cors-headers' own default; None would fail its bool check.
+        assert ProductionSettingsMixin().CORS_ALLOW_CREDENTIALS is False
+
+
+class _WithGeneratedDefaults(ProductionSettingsMixin):
+    """The generated declarations the timezone and language validators read."""
+
+    CELERY_TIMEZONE: str = Field(default="UTC")
+    TIME_ZONE: str = Field(default="UTC")
+    LANGUAGES: list[Any] = Field(default_factory=lambda: [("en", "English")])
+    LANGUAGE_DICT: Any = Field(default=None)
+
+
+class TestTimezone:
+    def test_a_supplied_celery_timezone_sets_time_zone(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("CELERY_TIMEZONE", "America/New_York")
+        assert _WithGeneratedDefaults().TIME_ZONE == "America/New_York"
+
+    def test_the_celery_default_does_not_override_time_zone(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("TIME_ZONE", "America/New_York")
+        assert _WithGeneratedDefaults().TIME_ZONE == "America/New_York"
+
+
+class TestLanguageDict:
+    def test_follows_supplied_languages(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LANGUAGES", '[["fr", "French"]]')
+        assert _WithGeneratedDefaults().LANGUAGE_DICT == {"fr": "French"}
+
+    def test_is_left_to_the_base_while_languages_is_unset(self) -> None:
+        assert "LANGUAGE_DICT" not in _WithGeneratedDefaults().model_fields_set
 
 
 _DEPLOYMENTS = Path(__file__).parents[2] / "deployments"
 _MIT_OL_CMS_ENTRY = _DEPLOYMENTS / "mit-ol/settings/cms/aqueduct.py"
 _MIT_OL_LMS_MODEL = _DEPLOYMENTS / "mit-ol/settings/lms/models/aqueduct.py"
+_MIT_OL_CMS_MODEL = _DEPLOYMENTS / "mit-ol/settings/cms/models/aqueduct.py"
 
 
 def _declared_field(path: Path, name: str) -> tuple[str, dict[str, Any]]:
@@ -356,8 +404,22 @@ def _declared_field(path: Path, name: str) -> tuple[str, dict[str, Any]]:
     pytest.fail(f"{name} is not declared in {path}")
 
 
+@pytest.mark.parametrize(
+    ("model", "name"),
+    [
+        (_MIT_OL_CMS_MODEL, "COURSE_AUTHORING_MICROFRONTEND_URL"),
+        (_MIT_OL_LMS_MODEL, "LEARNING_MICROFRONTEND_URL"),
+    ],
+)
+def test_the_model_declares_settings_only_openedx_envs_common_assigns(
+    model: Path, name: str
+) -> None:
+    # Reached only through a star-import; see _aqueduct_codegen_cmd.
+    _declared_field(model, name)
+
+
 class TestDeclarationAdmitsTheEnvVar:
-    """The invariant every star-import/plugin declaration in this tree rests on.
+    """The invariant every hand-written or plugin declaration here rests on.
 
     pydantic-settings' env source collects values *per declared field*: it
     walks ``model_fields``, not ``os.environ``. So an undeclared name is not
