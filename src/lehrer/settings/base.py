@@ -83,16 +83,22 @@ module is also mypy-checked inside lehrer's own venv, which does not depend on
 from __future__ import annotations
 
 import ast
+import json
 import os
 import tempfile
 from collections.abc import Sequence
 from importlib.machinery import PathFinder, SourceFileLoader
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import quote
 
-from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettingsSource
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import (
+    BaseSettings,
+    NoDecode,
+    SettingsConfigDict,
+    YamlConfigSettingsSource,
+)
 
 
 class PathString(str):
@@ -417,6 +423,40 @@ class ProductionSettingsMixin(BaseSettings):
     # notice. Declaring it is what admits the variable at all.
     LEARNING_MICROFRONTEND_URL: str | None = Field(default=None)
 
+    # Base URL of the authoring MFE. On the master release Studio's /home/
+    # view redirects into it and the shared header template resolves it on
+    # every page (cms/djangoapps/contentstore/utils.py get_studio_home_url),
+    # raising ImproperlyConfigured while it is None -- so until an operator can
+    # set it, every Studio page is a bare 500, 500.html included. The same
+    # openedx/envs/common.py gap as LEARNING_MICROFRONTEND_URL.
+    COURSE_AUTHORING_MICROFRONTEND_URL: str | None = Field(default=None)
+
+    # What an MFE served on a different host from the LMS needs to log in
+    # through it: the JWT and user-info cookies set on a domain that host can
+    # read (openedx/core/djangoapps/user_authn/cookies.py domains them with
+    # SHARED_COOKIE_DOMAIN) and a credentialed cross-origin login_refresh.
+    # ENABLE_CORS_HEADERS, LOGIN_REDIRECT_WHITELIST and SHARED_COOKIE_DOMAIN
+    # are the same openedx/envs/common.py gap; the two CORS_* names are
+    # django-cors-headers settings that no common.py defines at all -- upstream's
+    # production.py, which aqueduct replaces, assigns them from its YAML -- so
+    # codegen has nothing to find. Each default reads the same as the setting
+    # being absent. A field common.py defines defers to it while unset:
+    # SHARED_COOKIE_DOMAIN there is Derived from SESSION_COOKIE_DOMAIN, and
+    # resolve_derived_settings resolves that sentinel unless a value arrives to
+    # replace it. The two CORS_* fields reach Django at their defaults instead,
+    # so those are django-cors-headers' own: a None CORS_ALLOW_CREDENTIALS
+    # looks equally absent but fails its corsheaders.E003 system check, which
+    # requires a bool. The lists are NoDecode so a flat ConfigMap can carry
+    # them comma-separated as well as a JSON array; _decode_list_fields parses
+    # them.
+    ENABLE_CORS_HEADERS: bool | None = Field(default=None)
+    CORS_ALLOW_CREDENTIALS: bool = Field(default=False)
+    CORS_ORIGIN_WHITELIST: Annotated[list[Any], NoDecode] = Field(default_factory=list)
+    LOGIN_REDIRECT_WHITELIST: Annotated[list[Any], NoDecode] = Field(
+        default_factory=list
+    )
+    SHARED_COOKIE_DOMAIN: str | None = Field(default=None)
+
     # ------------------------------------------------------------------
     # Source customisation
     # ------------------------------------------------------------------
@@ -458,6 +498,70 @@ class ProductionSettingsMixin(BaseSettings):
     # ------------------------------------------------------------------
     # Shared derived-setting validators
     # ------------------------------------------------------------------
+
+    @field_validator("CORS_ORIGIN_WHITELIST", "LOGIN_REDIRECT_WHITELIST", mode="before")
+    @classmethod
+    def _decode_list_fields(cls, value: object) -> object:
+        """Parse a list from a JSON, Python-literal or comma-separated env string.
+
+        ``NoDecode`` keeps pydantic-settings from JSON-decoding the env value
+        itself, which is what lets ``https://a.example,https://b.example``
+        through as well as ``["https://a.example", "https://b.example"]``. The
+        accepted forms are the ones the generated model's
+        ``_aqueduct_decode_list_fields`` accepts for the lists it declares; the
+        Python-literal pass matters because a comma split of
+        ``['https://a.example']`` would keep the quotes, and a quoted origin
+        never matches a browser's ``Origin``. Empty items from a stray comma
+        are dropped, since an empty origin fails django-cors-headers' system
+        check. A YAML source already yields a list, which passes through.
+        """
+        if not isinstance(value, str):
+            return value
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            try:
+                parsed = ast.literal_eval(value)
+            except (ValueError, SyntaxError):
+                parsed = None
+        if isinstance(parsed, list):
+            return parsed
+        stripped = value.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            stripped = stripped[1:-1].strip()
+        items = (item.strip() for item in stripped.split(","))
+        return [item for item in items if item]
+
+    @model_validator(mode="after")
+    def _derive_cors_allow_credentials(self) -> ProductionSettingsMixin:
+        """Turn CORS credentials on with CORS itself, as production.py does.
+
+        Upstream's ``lms/envs/production.py`` assigns
+        ``CORS_ALLOW_CREDENTIALS = True`` whenever ``ENABLE_CORS_HEADERS`` or
+        ``ENABLE_CROSS_DOMAIN_CSRF_COOKIE`` is on, so an operator who enables
+        CORS has never had to set the second flag. The same rule serves the
+        CMS here; upstream's ``cms/envs/production.py`` keys on
+        ``ENABLE_CORS_HEADERS`` alone, and the extra flag only ever enables a
+        header that django-cors-headers sends to allowed origins, of which an
+        unset ``CORS_ORIGIN_WHITELIST`` has none. Both flags are read from the
+        top level and from ``FEATURES``: upstream's ``FEATURES`` is a
+        ``FeaturesProxy`` over the module globals, so the two spellings are one
+        setting there, while here ``FEATURES`` is the YAML dict and the
+        flat-env field is a separate name. An explicit
+        ``CORS_ALLOW_CREDENTIALS``, either way, is left alone.
+        """
+        if "CORS_ALLOW_CREDENTIALS" in self.model_fields_set:
+            return self
+        features = getattr(self, "FEATURES", None)
+        if not isinstance(features, dict):
+            features = {}
+        if (
+            self.ENABLE_CORS_HEADERS
+            or features.get("ENABLE_CORS_HEADERS")
+            or features.get("ENABLE_CROSS_DOMAIN_CSRF_COOKIE")
+        ):
+            self.CORS_ALLOW_CREDENTIALS = True
+        return self
 
     @model_validator(mode="after")
     def _derive_celery_queue_names(self) -> ProductionSettingsMixin:

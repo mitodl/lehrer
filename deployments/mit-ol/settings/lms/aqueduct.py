@@ -162,17 +162,6 @@ class LMSProductionSettings(ProductionSettingsMixin, AqueductSettings):
         return self
 
     @model_validator(mode="after")
-    def _derive_cors_credentials(self) -> LMSProductionSettings:
-        """Enable CORS credentials when the relevant FEATURES flags are on."""
-        features = getattr(self, "FEATURES", None) or {}
-        if isinstance(features, dict) and (
-            features.get("ENABLE_CORS_HEADERS")
-            or features.get("ENABLE_CROSS_DOMAIN_CSRF_COOKIE")
-        ):
-            self.CORS_ALLOW_CREDENTIALS = True  # type: ignore[attr-defined]
-        return self
-
-    @model_validator(mode="after")
     def _derive_social_auth_clean_usernames(self) -> LMSProductionSettings:
         if getattr(self, "SOCIAL_AUTH_CLEAN_USERNAMES", None) is None:
             self.SOCIAL_AUTH_CLEAN_USERNAMES = False  # type: ignore[attr-defined]

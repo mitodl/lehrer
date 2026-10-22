@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import ast
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 from pydantic import Field
 
+from lehrer.settings import base
 from lehrer.settings.base import (
     ProductionSettingsMixin,
     StudioSettingsMixin,
@@ -30,6 +33,10 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "CELERY_BROKER_VHOST",
         "CACHES",
         "CMS_BASE_URL",
+        "CORS_ALLOW_CREDENTIALS",
+        "CORS_ORIGIN_WHITELIST",
+        "COURSE_AUTHORING_MICROFRONTEND_URL",
+        "ENABLE_CORS_HEADERS",
         "AUTHORING_API_URL",
         "SPECTACULAR_SETTINGS",
         "LMS_BASE_URL",
@@ -37,7 +44,9 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "JWT_PRIVATE_SIGNING_JWK",
         "JWT_PUBLIC_SIGNING_JWK_SET",
         "LEARNING_MICROFRONTEND_URL",
+        "LOGIN_REDIRECT_WHITELIST",
         "SESSION_COOKIE_NAME",
+        "SHARED_COOKIE_DOMAIN",
         "SOCIAL_AUTH_REDIRECT_IS_HTTPS",
         "SOCIAL_AUTH_EDX_OAUTH2_KEY",
         "SOCIAL_AUTH_EDX_OAUTH2_PUBLIC_URL_ROOT",
@@ -324,6 +333,124 @@ class TestLearningMicrofrontendUrl:
 
     def test_defaults_to_none_when_unset(self) -> None:
         assert ProductionSettingsMixin().LEARNING_MICROFRONTEND_URL is None
+
+
+@pytest.fixture
+def yaml_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Callable[[dict[str, Any]], None]:
+    """Write one file into the YAML tier the mixin reads below env."""
+    monkeypatch.setattr(base, "_SETTINGS_DIR", str(tmp_path))
+
+    def _write(values: dict[str, Any]) -> None:
+        (tmp_path / "50-test.yaml").write_text(yaml.safe_dump(values))
+
+    return _write
+
+
+class TestCourseAuthoringMicrofrontendUrl:
+    def test_arrives_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Same star-import gap as LEARNING_MICROFRONTEND_URL, but loud: Studio's
+        # header resolves it on every page and raises while it is None.
+        monkeypatch.setenv(
+            "COURSE_AUTHORING_MICROFRONTEND_URL", "https://studio.mit.test/authoring"
+        )
+        settings = ProductionSettingsMixin()
+        assert (
+            settings.COURSE_AUTHORING_MICROFRONTEND_URL
+            == "https://studio.mit.test/authoring"
+        )
+
+
+class TestCrossHostMfeSettings:
+    """The LMS settings an MFE on another host needs to log in through it."""
+
+    def test_cors_settings_arrive_from_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ENABLE_CORS_HEADERS", "true")
+        # Comma-separated: the form a flat ConfigMap value naturally takes.
+        monkeypatch.setenv(
+            "CORS_ORIGIN_WHITELIST", "https://studio.mit.test, https://learn.mit.test"
+        )
+        settings = ProductionSettingsMixin()
+        assert settings.ENABLE_CORS_HEADERS is True
+        assert settings.CORS_ORIGIN_WHITELIST == [
+            "https://studio.mit.test",
+            "https://learn.mit.test",
+        ]
+
+    def test_cookie_and_redirect_settings_arrive_from_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SHARED_COOKIE_DOMAIN", ".mit.test")
+        monkeypatch.setenv("LOGIN_REDIRECT_WHITELIST", '["studio.mit.test"]')
+        settings = ProductionSettingsMixin()
+        assert settings.SHARED_COOKIE_DOMAIN == ".mit.test"
+        assert settings.LOGIN_REDIRECT_WHITELIST == ["studio.mit.test"]
+
+    def test_a_python_literal_list_is_not_split_on_its_quotes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # repr(list), which a templated ConfigMap value can easily be.
+        monkeypatch.setenv("CORS_ORIGIN_WHITELIST", "['https://studio.mit.test']")
+        assert ProductionSettingsMixin().CORS_ORIGIN_WHITELIST == [
+            "https://studio.mit.test"
+        ]
+
+    def test_a_stray_comma_adds_no_empty_origin(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("CORS_ORIGIN_WHITELIST", "https://studio.mit.test,")
+        assert ProductionSettingsMixin().CORS_ORIGIN_WHITELIST == [
+            "https://studio.mit.test"
+        ]
+
+    def test_a_yaml_list_passes_through_untouched(
+        self, yaml_settings: Callable[[dict[str, Any]], None]
+    ) -> None:
+        # The deployed YAML can carry a None entry; list[Any] has to keep it.
+        yaml_settings({"LOGIN_REDIRECT_WHITELIST": ["studio.mit.test", None]})
+        assert ProductionSettingsMixin().LOGIN_REDIRECT_WHITELIST == [
+            "studio.mit.test",
+            None,
+        ]
+
+    def test_enabling_cors_turns_credentials_on(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ENABLE_CORS_HEADERS", "true")
+        settings = ProductionSettingsMixin()
+        assert settings.CORS_ALLOW_CREDENTIALS is True
+        # Assigned by a validator, so the overlay carries it into Django.
+        assert "CORS_ALLOW_CREDENTIALS" in settings.model_fields_set
+
+    def test_a_features_flag_turns_credentials_on_too(
+        self, yaml_settings: Callable[[dict[str, Any]], None]
+    ) -> None:
+        # The YAML path: deployed configs set this one inside FEATURES.
+        yaml_settings({"FEATURES": {"ENABLE_CROSS_DOMAIN_CSRF_COOKIE": True}})
+        assert ProductionSettingsMixin().CORS_ALLOW_CREDENTIALS is True
+
+    def test_an_explicit_credentials_value_wins(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ENABLE_CORS_HEADERS", "true")
+        monkeypatch.setenv("CORS_ALLOW_CREDENTIALS", "false")
+        assert ProductionSettingsMixin().CORS_ALLOW_CREDENTIALS is False
+
+    def test_credentials_stay_off_without_cors(self) -> None:
+        # django-cors-headers' own default; None would fail its bool check.
+        assert ProductionSettingsMixin().CORS_ALLOW_CREDENTIALS is False
+
+
+@pytest.mark.parametrize("name", ["CORS_ALLOW_CREDENTIALS", "SHARED_COOKIE_DOMAIN"])
+def test_a_star_import_gap_field_is_not_carried_while_unset(name: str) -> None:
+    # django-aqueduct overrides a base value only for a field in
+    # model_fields_set, so one left at its default still defers to common.py.
+    # These two are the ones a validator could plausibly assign unasked, and
+    # SHARED_COOKIE_DOMAIN is the Derived sentinel that must keep resolving.
+    assert name not in ProductionSettingsMixin().model_fields_set
 
 
 _DEPLOYMENTS = Path(__file__).parents[2] / "deployments"
