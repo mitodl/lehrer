@@ -302,7 +302,7 @@ class AqueductSettings(BaseSettings):
     CREDENTIALS_COURSE_COMPLETION_STATE: str | None = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
-    CREDENTIALS_GENERATION_ROUTING_KEY: str | None = Field(
+    CREDENTIALS_GENERATION_ROUTING_KEY: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     CREDIT_HELP_LINK_URL: str = Field(
@@ -418,7 +418,7 @@ class AqueductSettings(BaseSettings):
         default=1.5,
         description=".. setting_name: EDXNOTES_READ_TIMEOUT\n.. setting_default: 1.5\n.. setting_description: Set the number of seconds LMS will wait for a response from the\nedx_notes_api service internal endpoint.",  # noqa: E501
     )
-    EDX_API_KEY: str | None = Field(
+    EDX_API_KEY: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     ELASTICSEARCH_INDEX_PREFIX: str = Field(
@@ -464,7 +464,7 @@ class AqueductSettings(BaseSettings):
         default=False,
         description=".. toggle_name: ENABLE_AUTHN_REGISTER_HIBP_POLICY\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When enabled, this toggle prevents the use of known-vulnerable passwords in\nthe registration flow if their frequency exceeds a threshold.\nSee ENABLE_AUTHN_LOGIN_BLOCK_HIBP_POLICY for more details.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2022-03-25",  # noqa: E501
     )
-    ENABLE_AUTHN_RESET_PASSWORD_HIBP_POLICY: str | None = Field(
+    ENABLE_AUTHN_RESET_PASSWORD_HIBP_POLICY: bool | None = Field(
         default=None,
         description=".. toggle_name: ENABLE_AUTHN_RESET_PASSWORD_HIBP_POLICY\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When enabled, this toggle prevents the use of known-vulnerable passwords in\nthe password reset flow.\nSee ENABLE_AUTHN_LOGIN_BLOCK_HIBP_POLICY for more details.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2021-12-03",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
@@ -734,7 +734,7 @@ class AqueductSettings(BaseSettings):
     )
     FACEBOOK_API_VERSION: Any = Field(default=None)  # refine type
     FACEBOOK_APP_ID: Any = Field(default=None)  # refine type
-    FACEBOOK_APP_SECRET: str | None = Field(
+    FACEBOOK_APP_SECRET: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     FEATURES: Any = Field(
@@ -809,15 +809,15 @@ class AqueductSettings(BaseSettings):
         json_schema_extra={"aqueduct_unresolved": True},
         description="These keys are used for all of our asynchronous downloadable files, including\nthe ones that contain information other than grades.",  # noqa: E501
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
-    HIBP_LOGIN_BLOCK_PASSWORD_FREQUENCY_THRESHOLD: str | None = Field(
+    HIBP_LOGIN_BLOCK_PASSWORD_FREQUENCY_THRESHOLD: float | None = Field(
         default=None,
         description=".. setting_name: HIBP_LOGIN_BLOCK_PASSWORD_FREQUENCY_THRESHOLD\n.. setting_default: 5.0\n.. setting_description: Log10 threshold in effect for ENABLE_AUTHN_LOGIN_BLOCK_HIBP_POLICY.\nSee ENABLE_AUTHN_LOGIN_BLOCK_HIBP_POLICY for more details.",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
-    HIBP_LOGIN_NUDGE_PASSWORD_FREQUENCY_THRESHOLD: str | None = Field(
+    HIBP_LOGIN_NUDGE_PASSWORD_FREQUENCY_THRESHOLD: float | None = Field(
         default=None,
         description=".. setting_name: HIBP_LOGIN_NUDGE_PASSWORD_FREQUENCY_THRESHOLD\n.. setting_default: 3.0\n.. setting_description: Log10 threshold in effect for ENABLE_AUTHN_LOGIN_NUDGE_HIBP_POLICY.\nSee ENABLE_AUTHN_LOGIN_BLOCK_HIBP_POLICY for more details.",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
-    HIBP_REGISTRATION_PASSWORD_FREQUENCY_THRESHOLD: str | None = Field(
+    HIBP_REGISTRATION_PASSWORD_FREQUENCY_THRESHOLD: float | None = Field(
         default=None,
         description=".. setting_name: HIBP_REGISTRATION_PASSWORD_FREQUENCY_THRESHOLD\n.. setting_default: 3.0\n.. setting_description: Log10 threshold in effect for ENABLE_AUTHN_REGISTER_HIBP_POLICY.\nSee ENABLE_AUTHN_LOGIN_BLOCK_HIBP_POLICY for more details.",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
@@ -1277,7 +1277,7 @@ class AqueductSettings(BaseSettings):
     OAUTH_ENFORCE_SECURE: bool = Field(default=True)
     OAUTH_EXPIRE_CONFIDENTIAL_CLIENT_DAYS: int = Field(default=365)
     OAUTH_EXPIRE_PUBLIC_CLIENT_DAYS: int = Field(default=30)
-    OAUTH_ID_TOKEN_EXPIRATION: str | None = Field(
+    OAUTH_ID_TOKEN_EXPIRATION: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     OPENEDX_ROOT: Any = Field(
@@ -1521,7 +1521,7 @@ class AqueductSettings(BaseSettings):
         default="/dashboard",
         description="Where to send the user once social authentication is successful",
     )
-    SOCIAL_AUTH_OAUTH_SECRETS: str | None = Field(
+    SOCIAL_AUTH_OAUTH_SECRETS: Annotated[dict[str, Any] | None, NoDecode] = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     SOCIAL_AUTH_PIPELINE: Annotated[list[Any], NoDecode] = Field(
@@ -1764,7 +1764,7 @@ class AqueductSettings(BaseSettings):
     )  # refine type
     TECH_SUPPORT_EMAIL: str = Field(default="technical@example.com")
     TIME_ZONE_DISPLAYED_FOR_DEADLINES: str = Field(default="UTC")
-    TOKEN_SIGNING: str | None = Field(
+    TOKEN_SIGNING: Annotated[dict[str, Any] | None, NoDecode] = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     TPA_AUTOMATIC_LOGOUT_ENABLED: bool = Field(
@@ -1787,7 +1787,7 @@ class AqueductSettings(BaseSettings):
             "analytics-ios": "mobile",
         },
     )
-    TRACKING_SEGMENTIO_WEBHOOK_SECRET: str | None = Field(
+    TRACKING_SEGMENTIO_WEBHOOK_SECRET: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     TRANSLATORS_GUIDE: str = Field(
@@ -1852,7 +1852,7 @@ class AqueductSettings(BaseSettings):
     XMODULE_ROOT: Any = Field(
         default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
-    ZENDESK_API_KEY: str | None = Field(
+    ZENDESK_API_KEY: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     ZENDESK_USER: Any = Field(default=None)  # refine type
@@ -1953,10 +1953,10 @@ class AqueductSettings(BaseSettings):
         default="push_notification",
         json_schema_extra={"aqueduct_plugin": "openedx-platform"},
     )
-    ACE_CHANNEL_SAILTHRU_API_KEY: str | None = Field(
+    ACE_CHANNEL_SAILTHRU_API_KEY: Any = Field(
         default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )  # REDACTED: name looks secret-like — set via a source, not here
-    ACE_CHANNEL_SAILTHRU_API_SECRET: str | None = Field(
+    ACE_CHANNEL_SAILTHRU_API_SECRET: Any = Field(
         default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )  # REDACTED: name looks secret-like — set via a source, not here
     ACE_CHANNEL_SAILTHRU_DEBUG: bool = Field(
@@ -2046,10 +2046,10 @@ class AqueductSettings(BaseSettings):
             "aqueduct_plugin": "openedx-platform",
         },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
-    FIREBASE_CREDENTIALS: str | None = Field(
+    FIREBASE_CREDENTIALS: Any = Field(
         default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )  # REDACTED: name looks secret-like — set via a source, not here
-    FIREBASE_CREDENTIALS_PATH: str | None = Field(
+    FIREBASE_CREDENTIALS_PATH: Any = Field(
         default=None,
         json_schema_extra={"aqueduct_plugin": "openedx-platform"},
         description="Note: To local development with Firebase, you must set FIREBASE_CREDENTIALS_PATH\n(path to json file with FIREBASE_CREDENTIALS)\nor FIREBASE_CREDENTIALS dictionary.",  # noqa: E501
@@ -2064,7 +2064,7 @@ class AqueductSettings(BaseSettings):
         json_schema_extra={"aqueduct_plugin": "openedx-platform"},
         description='.. setting_name: MAX_ENROLLMENT_INSTR_BUTTONS\n.. setting_default: 200\n.. setting_description: Disable instructor dashboard buttons for downloading course data\nwhen enrollment exceeds this number. The number indicates the maximum allowed enrollments\nfor the course to be considered "small". Courses exceeding the upper limit of "small"\ncourses will have disabled buttons at the instructor dashboard.',  # noqa: E501
     )
-    PASSWORD_POLICY_COMPLIANCE_API_TIMEOUT: str | None = Field(
+    PASSWORD_POLICY_COMPLIANCE_API_TIMEOUT: int | None = Field(
         default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )  # REDACTED: name looks secret-like — set via a source, not here
     PUSH_NOTIFICATIONS_SETTINGS: Any = Field(
@@ -2305,7 +2305,7 @@ class AqueductSettings(BaseSettings):
     AUTH_DOCUMENTATION_URL: str = Field(
         default="https://course-catalog-api-guide.readthedocs.io/en/latest/authentication/index.html",  # noqa: E501
     )
-    AUTH_PASSWORD_VALIDATORS: str | None = Field(
+    AUTH_PASSWORD_VALIDATORS: Annotated[list[Any] | None, NoDecode] = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     AUTOMATIC_AUTH_FOR_TESTING: bool = Field(
@@ -2319,12 +2319,12 @@ class AqueductSettings(BaseSettings):
         default=4,
         description="String length for the configurable part of the auto-generated username",  # noqa: E501
     )
-    AWS_ACCESS_KEY_ID: str | None = Field(
+    AWS_ACCESS_KEY_ID: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     AWS_QUERYSTRING_AUTH: bool = Field(default=True)
     AWS_S3_CUSTOM_DOMAIN: str = Field(default="edxuploads.s3.amazonaws.com")
-    AWS_SECRET_ACCESS_KEY: str | None = Field(
+    AWS_SECRET_ACCESS_KEY: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     AWS_SES_REGION_ENDPOINT: str = Field(default="email.us-east-1.amazonaws.com")
@@ -2569,8 +2569,8 @@ class AqueductSettings(BaseSettings):
             "openedx.core.djangoapps.site_configuration.context_processors.configuration_context",  # noqa: E501
         ],
     )
-    CORS_ALLOW_CREDENTIALS: str | None = Field(
-        default=None
+    CORS_ALLOW_CREDENTIALS: bool | None = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # REDACTED: name looks secret-like — set via a source, not here
     CORS_ALLOW_INSECURE: Any = Field(
         default=None, json_schema_extra={"aqueduct_unresolved": True}
@@ -2690,7 +2690,7 @@ class AqueductSettings(BaseSettings):
         },
         description="The min_price key refers to the minimum price allowed for an instance\nof a particular type of course enrollment mode. This is not to be confused\nwith the min_price field of the CourseMode model, which refers to the actual\nprice of the CourseMode.",  # noqa: E501
     )  # refine type
-    COURSE_LIVE_GLOBAL_CREDENTIALS: str | None = Field(
+    COURSE_LIVE_GLOBAL_CREDENTIALS: Annotated[dict[str, Any] | None, NoDecode] = Field(
         default=None, description="keys for  big blue button live provider"
     )  # REDACTED: name looks secret-like — set via a source, not here
     COURSE_MODE_DEFAULTS: Any = Field(
@@ -2719,7 +2719,7 @@ class AqueductSettings(BaseSettings):
     CREDENTIALS_SERVICE_USERNAME: str | None = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
-    CREDIT_PROVIDER_SECRET_KEYS: str | None = Field(
+    CREDIT_PROVIDER_SECRET_KEYS: Annotated[dict[str, Any] | None, NoDecode] = Field(
         default=None,
         description="Secret keys shared with credit providers.\nUsed to digitally sign credit requests (us --> provider)\nand validate responses (provider --> us).\nEach key in the dictionary is a credit provider ID, and\nthe value is the 32-character key.",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
@@ -2926,7 +2926,7 @@ class AqueductSettings(BaseSettings):
         default=False,
         description="Move the student/course author to next page when a video finishes. Set to\nTrue to show an auto-advance button in videos. If False, videos never\nauto-advance.",  # noqa: E501
     )
-    ENABLE_CHANGE_USER_PASSWORD_ADMIN: str | None = Field(
+    ENABLE_CHANGE_USER_PASSWORD_ADMIN: bool | None = Field(
         default=None,
         description=".. toggle_name: ENABLE_CHANGE_USER_PASSWORD_ADMIN\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to enable changing a user password through django admin. This is disabled by\ndefault because enabling allows a method to bypass password policy.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2020-02-21\n.. toggle_tickets: 'https://github.com/openedx/edx-platform/pull/21616'",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
@@ -3000,7 +3000,7 @@ class AqueductSettings(BaseSettings):
         default=False,
         description='.. toggle_name: ENABLE_ORA_USER_STATE_UPLOAD_DATA\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: A "work-around" feature toggle meant to help in cases where some file uploads are not\ndiscoverable.  If enabled, will pull file metadata from StudentModule.state for display in staff assessments.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2020-03-03\n.. toggle_target_removal_date: None\n.. toggle_tickets: https://openedx.atlassian.net/browse/EDUCATOR-4951\n.. toggle_warning: This temporary feature toggle does not have a target removal date.',  # noqa: E501
     )
-    ENABLE_PASSWORD_RESET_FAILURE_EMAIL: str | None = Field(
+    ENABLE_PASSWORD_RESET_FAILURE_EMAIL: bool | None = Field(
         default=None,
         description=".. toggle_name: ENABLE_PASSWORD_RESET_FAILURE_EMAIL\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Whether to send an email for failed password reset attempts or not. This happens when a\nuser asks for a password reset but they don't have an account associated to their email. This is useful for\nnotifying users that they don't have an account associated with email addresses they believe they've registered\nwith. This setting can be overridden by a site-specific configuration.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2017-07-20\n.. toggle_tickets: https://openedx.atlassian.net/browse/OSPR-1832",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
@@ -3130,16 +3130,16 @@ class AqueductSettings(BaseSettings):
         default=("openedx.core.djangoapps.heartbeat.default_checks.check_celery",),
         description='Other checks to run by default in "extended"/heavy mode',
     )  # refine type
-    HELP_TOKENS_BOOKS: str | None = Field(
+    HELP_TOKENS_BOOKS: Annotated[dict[str, Any] | None, NoDecode] = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
-    HELP_TOKENS_INI_FILE: str | None = Field(
+    HELP_TOKENS_INI_FILE: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
-    HELP_TOKENS_LANGUAGE_CODE: str | None = Field(
+    HELP_TOKENS_LANGUAGE_CODE: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
-    HELP_TOKENS_VERSION: str | None = Field(
+    HELP_TOKENS_VERSION: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     HTTPS: str = Field(default="on")
@@ -3357,7 +3357,7 @@ class AqueductSettings(BaseSettings):
     NOTIFICATION_WEEKLY_DIGEST_DELIVERY_DAY: int = Field(default=0)
     NOTIFICATION_WEEKLY_DIGEST_DELIVERY_HOUR: int = Field(default=17)
     NOTIFICATION_WEEKLY_DIGEST_DELIVERY_MINUTE: int = Field(default=0)
-    NOTIFY_CREDENTIALS_FREQUENCY: str | None = Field(
+    NOTIFY_CREDENTIALS_FREQUENCY: int | None = Field(
         default=None, description="time between scheduled runs, in seconds"
     )  # REDACTED: name looks secret-like — set via a source, not here
     OAUTH2_PROVIDER_APPLICATION_MODEL: str = Field(
@@ -3433,7 +3433,9 @@ class AqueductSettings(BaseSettings):
         description=".. setting_name: PARENTAL_CONSENT_AGE_LIMIT\n.. setting_default: 13\n.. setting_description: The age at which a learner no longer requires parental consent,\nor ``None`` if parental consent is never required.",  # noqa: E501
     )
     PARTNER_SUPPORT_EMAIL: str = Field(default="")
-    PASSWORD_POLICY_COMPLIANCE_ROLLOUT_CONFIG: str | None = Field(
+    PASSWORD_POLICY_COMPLIANCE_ROLLOUT_CONFIG: Annotated[
+        dict[str, Any] | None, NoDecode
+    ] = Field(  # noqa: E501
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     PASSWORD_RESET_EMAIL_RATE: str | None = Field(
@@ -3442,7 +3444,7 @@ class AqueductSettings(BaseSettings):
     PASSWORD_RESET_IP_RATE: str | None = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
-    PASSWORD_RESET_SUPPORT_LINK: str | None = Field(
+    PASSWORD_RESET_SUPPORT_LINK: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     PAYMENT_SUPPORT_EMAIL: str = Field(
@@ -3713,8 +3715,10 @@ class AqueductSettings(BaseSettings):
     SOCIAL_AUTH_SAML_SP_PRIVATE_KEY: str | None = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
-    SOCIAL_AUTH_SAML_SP_PRIVATE_KEY_DICT: str | None = Field(
-        default=None
+    SOCIAL_AUTH_SAML_SP_PRIVATE_KEY_DICT: Annotated[dict[str, Any] | None, NoDecode] = (
+        Field(  # noqa: E501
+            default=None
+        )
     )  # REDACTED: name looks secret-like — set via a source, not here
     SOCIAL_AUTH_SAML_SP_PUBLIC_CERT: str = Field(default="")
     SOCIAL_AUTH_SAML_SP_PUBLIC_CERT_DICT: Annotated[dict[str, Any], NoDecode] = Field(
@@ -4010,6 +4014,7 @@ class AqueductSettings(BaseSettings):
         "ALLOWED_HOSTS",
         "ALL_LANGUAGES",
         "AUTHENTICATION_BACKENDS",
+        "AUTH_PASSWORD_VALIDATORS",
         "AVAILABLE_DISCUSSION_TOURS",
         "CELERY_EXTRA_IMPORTS",
         "CELERY_IMPORTS",
@@ -4091,6 +4096,8 @@ class AqueductSettings(BaseSettings):
         "CODE_JAIL",
         "CONTENT_TYPE_GATE_GROUP_IDS",
         "COURSE_LISTINGS",
+        "COURSE_LIVE_GLOBAL_CREDENTIALS",
+        "CREDIT_PROVIDER_SECRET_KEYS",
         "DATABASES",
         "DISCUSSION_SETTINGS",
         "DJFS",
@@ -4103,6 +4110,7 @@ class AqueductSettings(BaseSettings):
         "FRONTEND_SITE_CONFIG",
         "GENERAL_RECOMMENDATION",
         "GRADES_DOWNLOAD",
+        "HELP_TOKENS_BOOKS",
         "HOSTNAME_MODULESTORE_DEFAULT_MAPPINGS",
         "ICP_LICENSE_INFO",
         "INTEGRATED_CHANNELS_API_CHUNK_TRANSMISSION_LIMIT",
@@ -4116,6 +4124,7 @@ class AqueductSettings(BaseSettings):
         "NOTIFICATION_APPS_OVERRIDE",
         "NOTIFICATION_TYPES_OVERRIDE",
         "NOTIFICATION_TYPE_ICONS",
+        "PASSWORD_POLICY_COMPLIANCE_ROLLOUT_CONFIG",
         "PIPELINE",
         "PROCTORING_BACKENDS",
         "PROCTORING_SETTINGS",
@@ -4125,6 +4134,8 @@ class AqueductSettings(BaseSettings):
         "REQUIRE_JS_PATH_OVERRIDES",
         "REST_FRAMEWORK",
         "SOCIAL_AUTH_AZUREAD_OAUTH2_AUTH_EXTRA_ARGUMENTS",
+        "SOCIAL_AUTH_OAUTH_SECRETS",
+        "SOCIAL_AUTH_SAML_SP_PRIVATE_KEY_DICT",
         "SOCIAL_AUTH_SAML_SP_PUBLIC_CERT_DICT",
         "SOCIAL_MEDIA_FOOTER_ACE_URLS",
         "SOCIAL_MEDIA_LOGO_URLS",
@@ -4134,6 +4145,7 @@ class AqueductSettings(BaseSettings):
         "STATICFILES_STORAGE_KWARGS",
         "STORAGES",
         "SURVEY_REPORT_EXTRA_DATA",
+        "TOKEN_SIGNING",
         "TRACKING_BACKENDS",
         "TRACKING_SEGMENTIO_SOURCE_MAP",
         "VERIFICATION_EXPIRY_EMAIL",

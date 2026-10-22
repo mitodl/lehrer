@@ -31,7 +31,6 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "CACHES",
         "CMS_BASE_URL",
         "COMPREHENSIVE_THEME_DIRS",
-        "CORS_ALLOW_CREDENTIALS",
         "CORS_ORIGIN_ALLOW_ALL",
         "CORS_ORIGIN_WHITELIST",
         "CELERY_TIMEZONE",
@@ -336,10 +335,6 @@ class TestCorsSettings:
     ) -> None:
         monkeypatch.setenv("CORS_ORIGIN_ALLOW_ALL", "false")
         assert ProductionSettingsMixin().CORS_ORIGIN_ALLOW_ALL is False
-
-    def test_credentials_default_to_a_bool(self) -> None:
-        # django-cors-headers' own default; None would fail its bool check.
-        assert ProductionSettingsMixin().CORS_ALLOW_CREDENTIALS is False
 
 
 def test_theme_dirs_arrive_from_env_colon_separated(

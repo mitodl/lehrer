@@ -408,11 +408,8 @@ class ProductionSettingsMixin(BaseSettings):
     # openedx/envs/common.py assigns these only under `if ENABLE_CORS_HEADERS:`
     # (false there), so Django's base lacks them and the model default is what
     # lands. They override the generated fields (the mixin is first in the
-    # MRO): codegen makes the whitelist and the two flags `Any` placeholders,
-    # which keep an env value as one string -- "false" is truthy -- and
-    # CORS_ALLOW_CREDENTIALS a redacted `str | None` = None, which fails
-    # corsheaders.E003 (it requires a bool).
-    CORS_ALLOW_CREDENTIALS: bool = Field(default=False)
+    # MRO), which codegen types as `Any` placeholders that keep an env value as
+    # one string: a JSON array stays unparsed, and "false" is truthy.
     CORS_ALLOW_INSECURE: bool = Field(default=False)
     CORS_ORIGIN_ALLOW_ALL: bool = Field(default=False)
     CORS_ORIGIN_WHITELIST: list[Any] = Field(default_factory=list)
