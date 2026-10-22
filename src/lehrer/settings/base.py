@@ -88,11 +88,16 @@ import tempfile
 from collections.abc import Sequence
 from importlib.machinery import PathFinder, SourceFileLoader
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import quote
 
-from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettingsSource
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import (
+    BaseSettings,
+    NoDecode,
+    SettingsConfigDict,
+    YamlConfigSettingsSource,
+)
 
 
 class PathString(str):
@@ -412,6 +417,14 @@ class ProductionSettingsMixin(BaseSettings):
     CORS_ORIGIN_ALLOW_ALL: bool = Field(default=False)
     CORS_ORIGIN_WHITELIST: list[Any] = Field(default_factory=list)
 
+    # openedx/envs/common.py reads this from the environment as a
+    # colon-separated list of paths, its documented way to set it. Codegen
+    # renders it as `Any`, which would keep that env value as one string;
+    # _split_theme_dirs parses it the way common.py does.
+    COMPREHENSIVE_THEME_DIRS: Annotated[list[str], NoDecode] = Field(
+        default_factory=list
+    )
+
     # ------------------------------------------------------------------
     # Source customisation
     # ------------------------------------------------------------------
@@ -453,6 +466,13 @@ class ProductionSettingsMixin(BaseSettings):
     # ------------------------------------------------------------------
     # Shared derived-setting validators
     # ------------------------------------------------------------------
+
+    @field_validator("COMPREHENSIVE_THEME_DIRS", mode="before")
+    @classmethod
+    def _split_theme_dirs(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.split(":")
+        return value
 
     @model_validator(mode="after")
     def _derive_celery_queue_names(self) -> ProductionSettingsMixin:
