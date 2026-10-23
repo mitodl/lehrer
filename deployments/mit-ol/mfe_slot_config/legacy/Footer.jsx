@@ -330,6 +330,44 @@ const AppziScript = () => {
   return null;
 };
 
+const ContactUsLauncherScript = () => {
+  const { authenticatedUser } = useContext(AppContext);
+  const apiUrl = process.env.CONTACT_US_SUPPORT_API_URL;
+  const userEmail = authenticatedUser?.email;
+
+  useEffect(() => {
+    if (!apiUrl) {
+      return undefined;
+    }
+    let cancelled = false;
+    let launcher;
+    const script = document.createElement('script');
+    script.src = `${getConfig().LMS_BASE_URL}/learn/static/smoot-design/contactUsLauncher.umd.js`;
+    script.async = true;
+    script.onload = () => {
+      if (cancelled) {
+        return;
+      }
+      launcher = window.contactUsLauncher?.init({
+        settings: {
+          chat: {
+            apiUrl,
+            ...(userEmail ? { requestBody: { user_email: userEmail } } : {}),
+          },
+        },
+      });
+    };
+    document.head.appendChild(script);
+    return () => {
+      cancelled = true;
+      launcher?.unmount();
+      script.remove();
+    };
+  }, [apiUrl, userEmail]);
+
+  return null;
+};
+
 const Footer = () => {
 
   const {
@@ -343,6 +381,7 @@ const Footer = () => {
     <footer className="d-flex flex-column align-items-stretch">
       <ForceLoginRedirect />
       <AppziScript />
+      <ContactUsLauncherScript />
       {
           (process.env.ENABLE_AUTO_LANGUAGE_SELECTION === "true") ? <AutoSelectLanguage /> : null
       }
