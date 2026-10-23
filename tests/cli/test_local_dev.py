@@ -392,16 +392,21 @@ class TestProvisioningManifests:
             local_dev.setup(deployment_config=str(tmp_path))
 
     @pytest.mark.parametrize("deployment", _deployments(), ids=lambda d: d.name)
-    def test_the_spec_migrates_the_channel_apps_first(self, deployment: Path) -> None:
+    def test_the_spec_orders_the_broken_upstream_migrations_first(
+        self, deployment: Path
+    ) -> None:
         # edx-enterprise's blackboard.0025 and canvas.0041 ALTER these apps'
         # tables without depending on them, so on a fresh schema an unrestricted
         # migrate that reaches them first fails with "table doesn't exist".
+        # edx-submissions' 0006 cannot run on MariaDB at all, so it has to be
+        # recorded before the full LMS migrate reaches it.
         spec = load_bootstrap_spec(_paths.bootstrap_spec(deployment))
-        assert [(m.service, m.app_label) for m in spec.migrate[:4]] == [
-            ("lms", "blackboard_channel"),
-            ("lms", "canvas_channel"),
-            ("lms", None),
-            ("cms", None),
+        assert [(m.service, m.app_label, m.fake) for m in spec.migrate[:5]] == [
+            ("lms", "blackboard_channel", None),
+            ("lms", "canvas_channel", None),
+            ("lms", "submissions", "0006_mariadb_uuid_conversion"),
+            ("lms", None, None),
+            ("cms", None, None),
         ]
 
     @pytest.mark.parametrize("deployment", _deployments(), ids=lambda d: d.name)

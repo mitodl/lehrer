@@ -29,6 +29,17 @@ migrate:
   app_label: blackboard_channel
 - service: lms
   app_label: canvas_channel
+# edx-submissions' 0006_mariadb_uuid_conversion ALTERs a uuid column on
+# submissions_studentitem and submissions_score, which have none, so it fails
+# with "Unknown column 'uuid'" on any MariaDB, fresh or not
+# (https://github.com/openedx/edx-submissions/issues/335). What it is for,
+# turning char(32) UUID columns into MariaDB's native uuid, is already true of
+# a database created under Django 5, which creates them as uuid. It is
+# recorded as applied instead of run; drop this entry once every release
+# carries a fixed 0006.
+- service: lms
+  app_label: submissions
+  fake: 0006_mariadb_uuid_conversion
 - service: lms
 - service: cms
 # Routed to its own database (edxapp_csmh), which migrate never touches unless

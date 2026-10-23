@@ -56,6 +56,19 @@
           "description": "The DATABASES alias to migrate. migrate never touches another alias on its own, so an app routed to a separate database (e.g. coursewarehistoryextended on student_module_history) needs its own entry.",
           "title": "Database",
           "type": "string"
+        },
+        "fake": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Full name of one app_label migration (e.g. 0006_mariadb_uuid_conversion) to record as applied without running it, after applying the migrations it depends on. For a migration that cannot run as written; once it is recorded the entry does nothing.",
+          "title": "Fake"
         }
       },
       "required": [

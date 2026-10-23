@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 STEPS = (
     "migrate",
@@ -72,6 +72,23 @@ class Migration(BaseModel):
             "entry."
         ),
     )
+    fake: str | None = Field(
+        default=None,
+        description=(
+            "Full name of one app_label migration (e.g. "
+            "0006_mariadb_uuid_conversion) to record as applied without running "
+            "it, after applying the migrations it depends on. For a migration "
+            "that cannot run as written; once it is recorded the entry does "
+            "nothing."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _fake_names_its_app(self) -> Migration:
+        if self.fake and not self.app_label:
+            msg = f"fake: {self.fake} needs the app_label it belongs to"
+            raise ValueError(msg)
+        return self
 
 
 class DemoCourse(BaseModel):

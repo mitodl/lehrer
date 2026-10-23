@@ -11,10 +11,10 @@ Every step converges the database on the spec, so re-running it is safe. Each
 object applied prints one JSON line on stdout (``{"step", "target",
 "result"}``), which is what a Job's caller, and later an operator, reads to
 tell what changed. ``result`` is created/updated/unchanged for database
-objects, applied/unchanged for migrations and imported for the demo course.
-Everything else, including the output of the commands a step runs, goes to
-stderr. A failure raises and exits non-zero after the lines for everything
-already applied.
+objects, applied/faked/unchanged for migrations and imported for the demo
+course. Everything else, including the output of the commands a step runs,
+goes to stderr. A failure raises and exits non-zero after the lines for
+everything already applied.
 
 argparse rather than cyclopts: the image has no cyclopts, and this must not
 depend on anything the platform does not already install.
@@ -31,6 +31,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Literal
 
+from . import fake_migration
 from .spec import (
     STEPS,
     BootstrapSpec,
@@ -41,7 +42,7 @@ from .spec import (
     resolve,
 )
 
-Result = Literal["created", "updated", "unchanged", "applied", "imported"]
+Result = Literal["created", "updated", "unchanged", "applied", "faked", "imported"]
 
 
 def _report(step: str, target: str, result: Result) -> None:
@@ -60,37 +61,78 @@ def _manage(service: str, *args: str) -> list[str]:
     ``--settings`` wins over both, and takes the module name under
     ``<service>.envs``.
     """
-    settings_name = os.environ["DJANGO_SETTINGS_MODULE"].rpartition(".")[2]
     return [
         sys.executable,
         "manage.py",
         service,
         *args,
-        f"--settings={settings_name}",
+        f"--settings={_settings_name()}",
     ]
 
 
-def _run_migrate(command: list[str]) -> bool:
+def _settings_name() -> str:
+    """This run's settings module, without its ``<service>.envs.`` prefix."""
+    return os.environ["DJANGO_SETTINGS_MODULE"].rpartition(".")[2]
+
+
+def _run_migrate(
+    command: list[str],
+    unchanged_marker: str = "No migrations to apply.",
+    env: dict[str, str] | None = None,
+) -> bool:
     """Run a migrate command, echoing its output to stderr.
 
-    :returns: whether it applied anything. Counting "Applying ... OK" lines
-        would undercount: the platform logs to the same stream while a
-        migration runs, so the OK can land on a later line.
+    :returns: whether it changed anything, i.e. it never printed
+        ``unchanged_marker``. Counting "Applying ... OK" lines would
+        undercount: the platform logs to the same stream while a migration
+        runs, so the OK can land on a later line.
     """
     unchanged = False
     with subprocess.Popen(  # noqa: S603
-        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env
     ) as process:
         assert process.stdout is not None  # noqa: S101
         for line in process.stdout:
             sys.stderr.write(line)
-            unchanged = unchanged or line.strip() == "No migrations to apply."
+            unchanged = unchanged or line.strip() == unchanged_marker
     if process.returncode:
         raise subprocess.CalledProcessError(process.returncode, command)
     return not unchanged
 
 
+def _fake(migration: Migration) -> None:
+    assert migration.app_label and migration.fake  # noqa: S101
+    # A child under the service's settings, like the migrate runs: this
+    # process has not set Django up, and the CMS records its own migrations.
+    # manage.py does nothing else before handing over to Django, so setting
+    # DJANGO_SETTINGS_MODULE directly is equivalent to its --settings.
+    env = {
+        **os.environ,
+        "DJANGO_SETTINGS_MODULE": f"{migration.service}.envs.{_settings_name()}",
+    }
+    faked = _run_migrate(
+        [
+            sys.executable,
+            "-m",
+            f"{__package__}.fake_migration",
+            migration.app_label,
+            migration.fake,
+            migration.database,
+        ],
+        unchanged_marker=fake_migration.UNCHANGED,
+        env=env,
+    )
+    _report(
+        "migrate",
+        f"{migration.service} {migration.app_label}.{migration.fake}",
+        "faked" if faked else "unchanged",
+    )
+
+
 def _migrate(migration: Migration) -> None:
+    if migration.fake:
+        _fake(migration)
+        return
     target: str = migration.service
     if migration.app_label:
         target += f" {migration.app_label}"

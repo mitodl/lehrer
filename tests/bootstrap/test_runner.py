@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 from lehrer.bootstrap import __main__ as runner
+from lehrer.bootstrap import fake_migration
 from lehrer.bootstrap.spec import BootstrapSpec, Migration
 
 
@@ -75,6 +76,49 @@ def test_migrate_targets_one_app_on_one_alias(
             "result": "unchanged",
         }
     ]
+
+
+@pytest.mark.parametrize(("faked", "result"), [(True, "faked"), (False, "unchanged")])
+def test_fake_runs_a_child_under_the_service_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    faked: bool,  # noqa: FBT001
+    result: str,
+) -> None:
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "lms.envs.aqueduct")
+    calls = []
+
+    def run_migrate(command: list[str], **kwargs: Any) -> bool:
+        calls.append((command, kwargs))
+        return faked
+
+    monkeypatch.setattr(runner, "_run_migrate", run_migrate)
+    runner._migrate(Migration(service="cms", app_label="submissions", fake="0006_uuid"))
+    command, kwargs = calls[0]
+    # The module beside the runner, whichever name the package goes by: the
+    # image carries it as lehrer_bootstrap.
+    assert command[1:] == [
+        "-m",
+        "lehrer.bootstrap.fake_migration",
+        "submissions",
+        "0006_uuid",
+        "default",
+    ]
+    assert kwargs["env"]["DJANGO_SETTINGS_MODULE"] == "cms.envs.aqueduct"
+    assert kwargs["unchanged_marker"] == fake_migration.UNCHANGED
+    assert _lines(capsys) == [
+        {"step": "migrate", "target": "cms submissions.0006_uuid", "result": result}
+    ]
+
+
+def test_run_migrate_takes_the_childs_unchanged_marker() -> None:
+    noop = f"print({fake_migration.UNCHANGED!r})"
+    assert not runner._run_migrate(
+        [sys.executable, "-c", noop], unchanged_marker=fake_migration.UNCHANGED
+    )
+    assert runner._run_migrate(
+        [sys.executable, "-c", "pass"], unchanged_marker=fake_migration.UNCHANGED
+    )
 
 
 def test_demo_course_branch_is_the_first_that_exists(
