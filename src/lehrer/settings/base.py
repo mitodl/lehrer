@@ -414,6 +414,11 @@ class ProductionSettingsMixin(BaseSettings):
     CORS_ORIGIN_ALLOW_ALL: bool = Field(default=False)
     CORS_ORIGIN_WHITELIST: list[Any] = Field(default_factory=list)
 
+    # openedx/envs/common.py documents `None` as "parental consent is never
+    # required" but assigns 13, and codegen types the field from that literal,
+    # so the generated `int` rejects a YAML `null` at startup.
+    PARENTAL_CONSENT_AGE_LIMIT: int | None = Field(default=13)
+
     # openedx/envs/common.py reads this from the environment as a
     # colon-separated list of paths, its documented way to set it. Codegen
     # renders it as `Any`, which would keep that env value as one string;

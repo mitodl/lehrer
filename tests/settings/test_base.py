@@ -7,7 +7,9 @@ from typing import Any
 
 import pytest
 from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from lehrer.settings import base
 from lehrer.settings.base import (
     ProductionSettingsMixin,
     StudioSettingsMixin,
@@ -345,6 +347,28 @@ def test_theme_dirs_arrive_from_env_colon_separated(
         "/openedx/themes",
         "/extra/themes",
     ]
+
+
+class _GeneratedConsentAge(BaseSettings):
+    """The generated model's declaration, typed from the literal 13."""
+
+    model_config = SettingsConfigDict(env_prefix="", extra="allow")
+
+    PARENTAL_CONSENT_AGE_LIMIT: int = Field(default=13)
+
+
+# The deployments' composed models carry the same conflicting base annotations;
+# they sit under deployments/, which mypy does not check.
+class _ComposedWithConsentAge(ProductionSettingsMixin, _GeneratedConsentAge):  # type: ignore[misc]
+    pass
+
+
+def test_parental_consent_age_limit_accepts_a_yaml_null(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(base, "_SETTINGS_DIR", str(tmp_path))
+    (tmp_path / "50-test.yaml").write_text("PARENTAL_CONSENT_AGE_LIMIT: null\n")
+    assert _ComposedWithConsentAge().PARENTAL_CONSENT_AGE_LIMIT is None
 
 
 class _WithGeneratedDefaults(ProductionSettingsMixin):
