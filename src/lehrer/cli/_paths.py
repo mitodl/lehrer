@@ -83,7 +83,7 @@ def namespace_manifest() -> Path:
 
 
 def bootstrap_spec(deployment_config: Path) -> Path:
-    """Return the bootstrap spec the edxapp-provision Job applies.
+    """Return the bootstrap spec the local-dev edxapp Jobs apply.
 
     Scoped to a deployment, like every other config directory one carries, so
     operator-specific provisioning does not ship on the generic path. Required
