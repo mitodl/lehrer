@@ -67,3 +67,6 @@ exclude = ["*.md"]
 #                                E402 (module-level import not at top) is intentional.
 "deployments/mit-ol/settings/**" = ["E402", "F401", "F403", "F405"]
 "deployments/generic/settings/**" = ["E402", "F401", "F403", "F405"]
+
+[tool.uv]
+constraint-dependencies = ["certifi>=2026.10.19"]  # eMudhra CA compromise: never resolve a certifi that trusts the compromised CAs
