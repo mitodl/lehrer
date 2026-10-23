@@ -1,7 +1,7 @@
 ---
 # Imports the Open edX demo course so a fresh stack has something to browse:
-# the demo_course step of local-dev/provision/bootstrap.yaml, which picks the
-# course branch matching the platform's release.
+# the demo_course step of the deployment's provision/bootstrap.yaml, which
+# picks the course branch matching the platform's release.
 #
 # Kept out of edxapp-provision and wired as a manual Tilt trigger
 # (lehrer-core.star) because it clones ~70MB over the network, which is not

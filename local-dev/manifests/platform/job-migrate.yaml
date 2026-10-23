@@ -4,8 +4,8 @@
 # and user are created by the MariaDB CR, but nothing creates the schema — so
 # without this Job /heartbeat returns 500 (no tables).
 #
-# What it migrates, and in what order, is the migrate step of
-# local-dev/provision/bootstrap.yaml; lehrer_bootstrap runs it.
+# What it migrates, and in what order, is the migrate step of the
+# deployment's provision/bootstrap.yaml; lehrer_bootstrap runs it.
 apiVersion: batch/v1
 kind: Job
 metadata:
