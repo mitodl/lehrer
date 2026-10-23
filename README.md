@@ -191,16 +191,28 @@ starts; after that they wait for a trigger (see
 Trigger `edxapp-migrate` after a change that brings new migrations, such as a
 `build_manifest.yaml` bump.
 
-`edxapp-provision` applies the selected deployment's
-`provision/bootstrap.yaml` — `deployments/generic/provision/bootstrap.yaml`
-unless `--deployment-config` names another. It declares the `edx` / `edx`
-superuser (override the password with `PROVISION_SUPERUSER_PASSWORD` before
-`lehrer dev setup`), the DOT OAuth Application that LMS↔notes SSO signs its
-tokens with, the `cms-sso` Application Studio logs in through, and the waffle
-flags. Add users, OAuth clients or flags there; `bootstrap.schema.json`
-describes the format, and secrets are named by the `openedx-secrets` key that
-holds them, never inlined. The Job re-runs whenever that file changes. Every
-step is idempotent, so re-running is always safe.
+All three edxapp Jobs apply a slice of the selected deployment's
+`provision/bootstrap.yaml` (`deployments/generic/provision/bootstrap.yaml`
+unless `--deployment-config` names another), picked with `--steps`:
+
+- `edxapp-migrate` runs its `migrate` step: LMS and CMS migrations, and the
+  csmh database, which `migrate` never touches unless asked by alias. Two
+  enterprise-integrated-channels apps are migrated first, because two
+  edx-enterprise migrations alter their tables without depending on them (see
+  the comment in the spec).
+- `edxapp-provision` runs `users`, `oauth_applications`,
+  `third_party_auth_providers`, `service_access_tokens` and `waffle_flags`: the
+  `edx` / `edx` superuser (override the password with
+  `PROVISION_SUPERUSER_PASSWORD` before `lehrer dev setup`), the DOT OAuth
+  Application that LMS↔notes SSO signs its tokens with, the `cms-sso`
+  Application Studio logs in through, and the waffle flags. It re-runs whenever
+  the spec changes.
+- `edxapp-demo-course` runs `demo_course`.
+
+Add users, OAuth clients, flags or migrations to the spec;
+`bootstrap.schema.json` describes the format, and secrets are named by the
+`openedx-secrets` key that holds them, never inlined. Every step is idempotent,
+so re-running is always safe.
 
 Each deployment carries its own spec, so provisioning an operator's identity
 provider or service account does not land on the generic path. A deployment's
@@ -210,13 +222,16 @@ spec has to be made in each of the others too.
 
 The runner is `src/lehrer/bootstrap`, which the platform image carries as
 `lehrer_bootstrap`, so a deployed environment can apply its own spec the same
-way:
+way, from the edx-platform checkout:
 
 ```bash
-DJANGO_SETTINGS_MODULE=lms.envs.aqueduct python -m lehrer_bootstrap bootstrap.yaml
+DJANGO_SETTINGS_MODULE=lms.envs.aqueduct python -m lehrer_bootstrap bootstrap.yaml \
+    --steps migrate,users,oauth_applications,waffle_flags
 ```
 
-It prints one JSON line per object applied (`{"step", "target", "result"}`).
+It prints one JSON line per object applied (`{"step", "target", "result"}`) on
+stdout, and everything else, including the output of `manage.py migrate`, on
+stderr.
 
 `notes-migrate` creates the tables in the `notes` database (the MariaDB CR
 creates the database and the grant, but nothing creates the schema) and the
@@ -225,9 +240,9 @@ OpenSearch index. Both are required: edx-notes-api indexes on every save via
 just search. The Job fails rather than leave a notes service running that
 cannot be written to.
 
-`edxapp-demo-course` resolves the demo course branch matching the release the
-stack was built from, so a named-release stack does not import master content.
-Set `DEMO_COURSE_GIT_BRANCH` in the Job to pin a branch instead. It is left off
+`edxapp-demo-course` resolves the demo course branch from the platform's own
+`RELEASE_LINE`, so a named-release stack does not import master content. Set
+`demo_course.branch` in the spec to pin a branch instead. It is left off
 the critical path because it clones the course repo over the network. Trigger
 it from the Tilt UI, or:
 
@@ -256,9 +271,9 @@ restarted, so the synced files stay.
 Everything else the platform build reads still runs the full Dagger build.
 `assets.py`, `i18n.py`, the `*.env.yml` files and `build_manifest.yaml` feed
 collectstatic, compilemessages or dependency resolution, which a file copy
-cannot redo. `set_waffle_flags.py` is run by the `edxapp-provision` Job from
-the image, so an edit to it has to reach the image before you re-trigger the
-Job.
+cannot redo. The edxapp Jobs run `lehrer_bootstrap` (`src/lehrer/bootstrap`)
+from the image, so an edit to it has to reach the image before you re-trigger
+them.
 
 | Edit | Full rebuild (before) | Live update (after) |
 |---|---|---|
