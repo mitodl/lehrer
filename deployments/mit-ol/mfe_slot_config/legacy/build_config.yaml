@@ -49,5 +49,8 @@ mfes:
       by_release:
         verawood: useFeedbackEnrichment.verawood.js
         default: useFeedbackEnrichment.js
+    # Also the only copy of contactUsLauncher.umd.js: Footer.jsx loads it from
+    # /learn/ for every MFE, so this bundle has to be >= 6.39.0, where it first
+    # shipped.
     extra_npm_bundles:
-    - "@mitodl/smoot-design@^6.38.1|public/static/smoot-design"
+    - "@mitodl/smoot-design@^6.39.0|public/static/smoot-design"

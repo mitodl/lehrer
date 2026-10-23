@@ -330,6 +330,60 @@ const AppziScript = () => {
   return null;
 };
 
+const ContactUsLauncherScript = () => {
+  const { authenticatedUser } = useContext(AppContext);
+  const apiUrl = process.env.CONTACT_US_SUPPORT_API_URL;
+  const userEmail = authenticatedUser?.email;
+
+  useEffect(() => {
+    if (!apiUrl) {
+      return undefined;
+    }
+    // Only the learning MFE ships this bundle; the others load that copy. Absolute
+    // because authoring is on a different origin, and a classic script needs no CORS.
+    const bundlePath = process.env.CONTACT_US_BUNDLE_PATH
+      || `${getConfig().LMS_BASE_URL}/learn/static/smoot-design/contactUsLauncher.umd.js`;
+    let cancelled = false;
+    let launcher;
+    const script = document.createElement('script');
+    script.src = bundlePath;
+    script.async = true;
+    script.onerror = () => {
+      console.error(`ContactUsLauncherScript: failed to load bundle from ${bundlePath}`);
+    };
+    script.onload = () => {
+      if (cancelled) {
+        return;
+      }
+      if (!window.contactUsLauncher?.init) {
+        // A 404 rewritten to index.html can fire `load`, not `error`.
+        console.error(`ContactUsLauncherScript: bundle at ${bundlePath} has no init()`);
+        return;
+      }
+      launcher = window.contactUsLauncher.init({
+        settings: {
+          chat: {
+            apiUrl,
+            ...(userEmail ? { requestBody: { user_email: userEmail } } : {}),
+          },
+        },
+      });
+    };
+    document.head.appendChild(script);
+    return () => {
+      cancelled = true;
+      if (launcher?.unmount) {
+        try {
+          launcher.unmount();
+        } catch (error) { /* unmount handles its own errors */ }
+      }
+      script.remove();
+    };
+  }, [apiUrl, userEmail]);
+
+  return null;
+};
+
 const Footer = () => {
 
   const {
@@ -343,6 +397,7 @@ const Footer = () => {
     <footer className="d-flex flex-column align-items-stretch">
       <ForceLoginRedirect />
       <AppziScript />
+      <ContactUsLauncherScript />
       {
           (process.env.ENABLE_AUTO_LANGUAGE_SELECTION === "true") ? <AutoSelectLanguage /> : null
       }
