@@ -372,7 +372,11 @@ const ContactUsLauncherScript = () => {
     document.head.appendChild(script);
     return () => {
       cancelled = true;
-      launcher?.unmount();
+      if (launcher?.unmount) {
+        try {
+          launcher.unmount();
+        } catch (error) { /* unmount handles its own errors */ }
+      }
       script.remove();
     };
   }, [apiUrl, userEmail]);
