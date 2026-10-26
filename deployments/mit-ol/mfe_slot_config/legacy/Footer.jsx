@@ -334,6 +334,8 @@ const ContactUsLauncherScript = () => {
   const { authenticatedUser } = useContext(AppContext);
   const apiUrl = process.env.CONTACT_US_SUPPORT_API_URL;
   const userEmail = authenticatedUser?.email;
+  const userName = authenticatedUser?.name;
+  const userUsername = authenticatedUser?.username;
 
   useEffect(() => {
     if (!apiUrl) {
@@ -360,12 +362,16 @@ const ContactUsLauncherScript = () => {
         console.error(`ContactUsLauncherScript: bundle at ${bundlePath} has no init()`);
         return;
       }
+      // learn-ai gets no session on this cross-origin POST, so the ticket's
+      // requester fields are whatever we send here or nothing.
+      const requestBody = {
+        ...(userEmail ? { user_email: userEmail } : {}),
+        ...(userName ? { user_name: userName } : {}),
+        ...(userUsername ? { user_username: userUsername } : {}),
+      };
       launcher = window.contactUsLauncher.init({
         settings: {
-          chat: {
-            apiUrl,
-            ...(userEmail ? { requestBody: { user_email: userEmail } } : {}),
-          },
+          chat: { apiUrl, requestBody },
         },
       });
     };
@@ -379,7 +385,7 @@ const ContactUsLauncherScript = () => {
       }
       script.remove();
     };
-  }, [apiUrl, userEmail]);
+  }, [apiUrl, userEmail, userName, userUsername]);
 
   return null;
 };
