@@ -88,11 +88,16 @@ import tempfile
 from collections.abc import Sequence
 from importlib.machinery import PathFinder, SourceFileLoader
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import quote
 
-from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettingsSource
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import (
+    BaseSettings,
+    NoDecode,
+    SettingsConfigDict,
+    YamlConfigSettingsSource,
+)
 
 
 class PathString(str):
@@ -377,10 +382,6 @@ class ProductionSettingsMixin(BaseSettings):
     DB_PASSWORD: str = Field(default="")
 
     # Celery broker scalars — consumed by _derive_broker_url and _derive_caches.
-    # openedx/envs/common.py defines them (as ""), but lms/cms common.py only
-    # star-import them, which codegen's static pass does not follow, so the
-    # generated model never declares them. Until they are declared here the env
-    # source drops them and BROKER_URL is built with an empty host.
     CELERY_BROKER_TRANSPORT: str = Field(default="")
     CELERY_BROKER_HOSTNAME: str = Field(default="")
     CELERY_BROKER_USER: str = Field(default="")
@@ -404,18 +405,27 @@ class ProductionSettingsMixin(BaseSettings):
     LMS_BASE_URL: str = Field(default="")
     CMS_BASE_URL: str = Field(default="")
 
-    # Base URL of the learning MFE, read by course_experience/url_helpers.py to
-    # build courseware links. Same codegen gap as CELERY_BROKER_* above: it is
-    # defined only in openedx/envs/common.py, which lms/envs/common.py reaches
-    # by star-import, so codegen's AST pass over lms/envs/common.py never sees
-    # the assignment and generates no field. Without a field the env source has
-    # nothing to bind to -- pydantic-settings collects values per *declared*
-    # field, so the var sits in the pod's environment and is dropped, not
-    # mis-parsed. The setting stays at the base None and the LMS silently keeps
-    # linking at the legacy /courses/<id>/course/ pages, which is why this
-    # survived a whole MFE rollout: it fails quietly, with no bad value to
-    # notice. Declaring it is what admits the variable at all.
-    LEARNING_MICROFRONTEND_URL: str | None = Field(default=None)
+    # openedx/envs/common.py assigns these only under `if ENABLE_CORS_HEADERS:`
+    # (false there), so Django's base lacks them and the model default is what
+    # lands. They override the generated fields (the mixin is first in the
+    # MRO), which codegen types as `Any` placeholders that keep an env value as
+    # one string: a JSON array stays unparsed, and "false" is truthy.
+    CORS_ALLOW_INSECURE: bool = Field(default=False)
+    CORS_ORIGIN_ALLOW_ALL: bool = Field(default=False)
+    CORS_ORIGIN_WHITELIST: list[Any] = Field(default_factory=list)
+
+    # openedx/envs/common.py documents `None` as "parental consent is never
+    # required" but assigns 13, and codegen types the field from that literal,
+    # so the generated `int` rejects a YAML `null` at startup.
+    PARENTAL_CONSENT_AGE_LIMIT: int | None = Field(default=13)
+
+    # openedx/envs/common.py reads this from the environment as a
+    # colon-separated list of paths, its documented way to set it. Codegen
+    # renders it as `Any`, which would keep that env value as one string;
+    # _split_theme_dirs parses it the way common.py does.
+    COMPREHENSIVE_THEME_DIRS: Annotated[list[str], NoDecode] = Field(
+        default_factory=list
+    )
 
     # ------------------------------------------------------------------
     # Source customisation
@@ -458,6 +468,13 @@ class ProductionSettingsMixin(BaseSettings):
     # ------------------------------------------------------------------
     # Shared derived-setting validators
     # ------------------------------------------------------------------
+
+    @field_validator("COMPREHENSIVE_THEME_DIRS", mode="before")
+    @classmethod
+    def _split_theme_dirs(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.split(":")
+        return value
 
     @model_validator(mode="after")
     def _derive_celery_queue_names(self) -> ProductionSettingsMixin:
@@ -536,12 +553,17 @@ class ProductionSettingsMixin(BaseSettings):
 
     @model_validator(mode="after")
     def _derive_language_settings(self) -> ProductionSettingsMixin:
-        """Populate LANGUAGE_COOKIE_NAME (from YAML alias) and LANGUAGE_DICT."""
+        """Populate LANGUAGE_COOKIE_NAME (from YAML alias) and LANGUAGE_DICT.
+
+        LANGUAGE_DICT follows LANGUAGES only when a source supplied LANGUAGES.
+        The generated model gives LANGUAGES a default, and copying that would
+        override an explicitly set LANGUAGE_DICT; left alone, Django's base
+        already derives LANGUAGE_DICT from its own LANGUAGES.
+        """
         if self.LANGUAGE_COOKIE:
             self.LANGUAGE_COOKIE_NAME = self.LANGUAGE_COOKIE  # type: ignore[attr-defined]
-        languages = getattr(self, "LANGUAGES", None)
-        if languages:
-            self.LANGUAGE_DICT = dict(languages)  # type: ignore[attr-defined]
+        if "LANGUAGES" in self.model_fields_set:
+            self.LANGUAGE_DICT = dict(self.LANGUAGES)  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")
@@ -787,10 +809,16 @@ class ProductionSettingsMixin(BaseSettings):
 
     @model_validator(mode="after")
     def _derive_timezone(self) -> ProductionSettingsMixin:
-        """Align Django TIME_ZONE with Celery's timezone."""
-        celery_timezone = getattr(self, "CELERY_TIMEZONE", None)
-        if celery_timezone:
-            self.TIME_ZONE = celery_timezone  # type: ignore[attr-defined]
+        """Align Django TIME_ZONE with a supplied CELERY_TIMEZONE.
+
+        Only a CELERY_TIMEZONE some source set counts. The generated model
+        gives it a default of "UTC", and copying that would override an
+        operator's TIME_ZONE with a value nobody chose. Upstream's
+        production.py assigns ``TIME_ZONE = CELERY_TIMEZONE`` unconditionally,
+        so there a YAML TIME_ZONE alone is ignored; here it is honoured.
+        """
+        if "CELERY_TIMEZONE" in self.model_fields_set:
+            self.TIME_ZONE = self.CELERY_TIMEZONE  # type: ignore[attr-defined]
         return self
 
     @model_validator(mode="after")

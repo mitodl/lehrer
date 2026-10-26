@@ -351,11 +351,18 @@ def _aqueduct_codegen_cmd(service: str, output: str) -> str:
     renders the model the *same* way regeneration does.  A flag added to one
     call site and not the other turns every drift run red with a diff that
     re-running the documented command cannot fix.
+
+    ``openedx.envs.common`` is listed ahead of ``<service>.envs.common``
+    because codegen reads assignments statically and skips star-imports, and
+    both services' ``common.py`` take several hundred shared settings through
+    ``from openedx.envs.common import *``.  Without it those settings get no
+    field, and pydantic-settings drops a pod's env value for them.  Later
+    modules override earlier ones, so the service's own assignment wins.
     """
     return (
         f"DJANGO_SETTINGS_MODULE={_GEN_SETTINGS_MODULE} "
         "python -m django generate_aqueduct_settings "
-        f"--modules {service}.envs.common "
+        f"--modules openedx.envs.common,{service}.envs.common "
         f"--openedx-plugins {service}.djangoapp "
         f"--output {output} --reset"
     )
