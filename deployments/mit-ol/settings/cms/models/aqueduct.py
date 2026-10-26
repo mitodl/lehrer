@@ -803,6 +803,7 @@ class AqueductSettings(BaseSettings):
                 "drf_spectacular.hooks.postprocess_schema_enums",
                 "cms.lib.spectacular.cms_mark_superseded_paths",
                 "cms.lib.spectacular.cms_mark_migrated_paths",
+                "openedx.core.apidocs.untag_deprecated_operations",
             ],
             "SCHEMA_PATH_PREFIX": "/api/(contentstore|authoring)",
         },

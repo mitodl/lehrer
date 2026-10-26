@@ -1680,6 +1680,7 @@ class AqueductSettings(BaseSettings):
             "POSTPROCESSING_HOOKS": [
                 "drf_spectacular.hooks.postprocess_schema_enums",
                 "lms.lib.spectacular.lms_mark_legacy_paths_deprecated",
+                "openedx.core.apidocs.untag_deprecated_operations",
             ],
             "SCHEMA_PATH_PREFIX": "/api/enrollment",
             "SWAGGER_UI_DIST": "SIDECAR",
