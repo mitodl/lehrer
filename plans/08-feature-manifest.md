@@ -453,14 +453,26 @@ emit it. Lists concatenate, and entries are compared by identity:
 | `waffle_flags` | `name` |
 
 Two entries with the same identity and equal `model_dump()` collapse into one. Two that
-differ are a conflict, and a conflict is a hard error (§4.4.7). Two cross-list clashes
-are conflicts too, because the runner would otherwise rewrite one entry with the
-other: a `service_access_tokens.application_name` equal to an `oauth_applications.name`
-(the token's application is upserted by name), and a `service_access_tokens.username`
-equal to a `users.username`. `BootstrapSpec` enforces all of this in a validator, so a
-single hand-written file and a merged set fail the same way. Names containing
-`{SETTING}` placeholders are compared unresolved; the runner's existing name-clash check
-covers what remains after resolution.
+differ are a conflict, and a conflict is a hard error (§4.4.7). Three more clashes are
+conflicts, because the runner would otherwise rewrite one entry with another:
+
+- a `service_access_tokens.application_name` equal to an `oauth_applications.name` (the
+  token's application is upserted by name);
+- two `service_access_tokens` entries with different `username`s and the same
+  `application_name` (the second upsert reassigns the application's owner);
+- a `service_access_tokens.username` equal to a `users.username`.
+
+`BootstrapSpec` enforces all of this in a validator, so a single hand-written file and a
+merged set fail the same way.
+
+The validator compares names as written, and two collisions only appear after
+resolution: an OAuth `name` placeholder that resolves to another application's name,
+and two different `client_id_env` vars holding the same client ID (the second
+`update_or_create(client_id=…)` overwrites the first application). The runner's
+existing guard catches neither, since it only rejects a name already held under a
+different client ID. So before any step writes, the runner resolves every OAuth `name`
+and reads every `client_id_env`, then refuses to apply if two entries share a resolved
+name (OAuth names and token `application_name`s together) or a client ID.
 
 The merge function lives in `lehrer.bootstrap.spec`, which may import only pydantic,
 PyYAML and the standard library (it runs in the platform image), so compile and the
@@ -471,10 +483,15 @@ merges them by these rules, and refuses to apply anything on a conflict.
 substituted into a `*_env` field must match `^[A-Z_][A-Z0-9_]*$`, and a parameter
 substituted into any other bootstrap field must not contain `{` or `}`: the runner
 resolves `{SETTING}` with `str.format_map` at apply time, so a brace in a compiled value
-would be looked up as a Django setting. Literals in a definition's fragment may use
-only bare `{IDENT}` placeholders, not indexed ones: `{DATABASES[default][PASSWORD]}`
-would resolve through `format_map` and the runner prints resolved names in its report
-(`src/lehrer/bootstrap/__main__.py:129`).
+would be looked up as a Django setting. Placeholders are limited to an allowlist of
+non-secret settings held in `lehrer.bootstrap.spec` (initially `LMS_ROOT_URL`,
+`CMS_ROOT_URL` and `EDXNOTES_CLIENT_NAME`; the shipped base specs use the last two), and
+must be bare `{IDENT}`s. Restricting the syntax alone is not enough: `{SECRET_KEY}`
+is a bare identifier, the runner prints each resolved OAuth name in its report
+(`src/lehrer/bootstrap/__main__.py:129`), and resolved redirect URIs are stored where
+any Django admin can read them. The allowlist is enforced by the `BootstrapSpec`
+validator, so it binds base specs as well as fragments; widening it is a reviewed
+change to lehrer.
 
 **Privilege.** A feature fragment may not set `superuser` or `password_env` on a user;
 those belong to the operator's base spec. Other privilege a fragment can grant is made
@@ -557,7 +574,7 @@ The MFE runtime config API serves LMS settings: `FRONTEND_SITE_CONFIG` (frontend
 Site Projects, `/api/frontend_site_config/v1/`) and `MFE_CONFIG` / `MFE_CONFIG_OVERRIDES`
 (legacy MFEs, `/api/mfe_config/v1`). Most of their content is topology (URLs, cookie
 names, logo, theme), which belongs to the operator. Upstream already draws that line
-(checked on master only; verawood's copy still needs reading):
+(checked on master `03698e2` and `release/verawood` `0b0289b`):
 `mfe_config_api/views.py` promotes the keys in `SITE_CONFIG_TRANSLATION_MAP` (and
 `PARAGON_THEME_URLS`) to site level and puts every other key under `commonAppConfig`.
 
@@ -573,10 +590,14 @@ write, and each may write only the paths shown:
 Any other path fails compile, as does any key upstream promotes to site level, in every
 target. `FRONTEND_SITE_CONFIG.apps` is not writable: it is a list, and the settings
 YAML merge replaces lists whole, so a feature writing it would erase the operator's
-apps. App-scoped values go through `mfe_config_overrides`. The same four settings
-(and `ENABLE_MFE_CONFIG_API`) may not be written through `operations.settings`, which
-would bypass these rules; `site_config` leaves are part of the LMS key space for
-conflict detection (§4.4.7).
+apps. App-scoped values go through `mfe_config_overrides`. The same three settings
+(and `ENABLE_MFE_CONFIG_API`) are reserved to `site_config`: neither
+`operations.settings` nor `operations.features` may write them, in a definition or in
+an adoption override. `operations.features` counts because §4.6 promotes an inventoried
+key to a top-level setting, so `features.lms.FRONTEND_SITE_CONFIG: {apps: [...]}` would
+otherwise replace the operator's apps. The check runs after canonicalising each key to
+the name pydantic-settings reads (§4.6), so an alias cannot route around it.
+`site_config` leaves are part of the LMS key space for conflict detection (§4.4.7).
 
 These are LMS settings, so compile emits them into `settings/lms.yaml`, where they
 deep-merge with the operator's own values; there is no separate `site_config.yaml`.
@@ -680,6 +701,17 @@ little enough to run on every commit.
      `features.lms.K` and `settings.lms.K` are one target (see the emitter rule in
      §4.6);
    - mapping leaves, compared individually, and lists, compared whole;
+   - the runtime config API's effective destinations, since different settings can
+     land on one key the browser reads. The API merges in a fixed order (`views.py` on
+     master and verawood): on the Site Project endpoint, a non-promoted
+     `MFE_CONFIG.K` becomes `commonAppConfig.K` and `FRONTEND_SITE_CONFIG.commonAppConfig.K`
+     then overwrites it; on the legacy endpoint, `MFE_CONFIG_OVERRIDES.<mfe>.K`
+     overwrites `MFE_CONFIG.K` for that MFE (and becomes that app's `config.K` on the
+     Site Project endpoint). Compile maps every `site_config` leaf to its destination
+     on each endpoint and compares there as well, so
+     `mfe_config.CHAT_ENABLED: true` from one feature and
+     `frontend_site_config.commonAppConfig.CHAT_ENABLED: false` from another is a
+     conflict rather than a silent win for the second;
    - MFE build vars per MFE, including against explicit `--env-vars` passed to the
      same build (which stay the channel for values no feature owns, such as domains
      and logos);
@@ -706,9 +738,23 @@ little enough to run on every commit.
    set exists. The earlier draft deferred this to the settings-verify CI tier, but that
    tier does not check it: `verify_settings` (`src/lehrer/core/platform.py:3108`) runs
    the boot self-test with no `OL_SETTINGS_DIR`, `manage.py check` and the drift check,
-   and never loads a settings fragment. Checking FEATURES keys means extending it to
-   boot with each scope's compiled `settings/` fragment. That is Phase 3 work (§8);
-   until then FEATURES keys get shape checks only.
+   and never loads a settings fragment. Booting with a fragment is not enough on its
+   own either: `FEATURES` accepts any key, and the shared settings model keeps fields a
+   given release never reads, so a typo or a key retired upstream boots cleanly.
+
+   The check is therefore explicit, and runs in the cell's platform image. Its
+   reference set is the module-level names of the release's own `lms.envs.common` /
+   `cms.envs.common` before the aqueduct overlay (on master and verawood `FEATURES` is
+   `FeaturesProxy(globals())`, so these are also the `FEATURES` keys; on a release
+   where `FEATURES` is a literal dict, its keys are added), plus the settings the
+   cell's installed plugins define (the `aqueduct_plugin` origin, §4.4.1). Every
+   emitted top-level key and `FEATURES` key must be in that set, or be a lehrer adapter
+   field: one declared on the deployment's hand-written settings class
+   (`deployments/<group>/settings/lms/aqueduct.py`, e.g. `SEGMENT_KEY`,
+   `THIRD_PARTY_AUTH_BACKENDS`) and consumed by its validators rather than by the
+   platform. Anything else fails, naming the key, the feature and the release.
+   Building this into settings-verify is Phase 3 work (§8); until then FEATURES keys
+   get shape checks only.
 9. **Bootstrap fragments.** Each fragment validates as a `BootstrapSpec`, with the
    parameter restrictions in §4.3.3. `features check --base-spec <file>` additionally
    merges each scope's fragment with the operator's base spec and reports conflicts.
@@ -762,13 +808,22 @@ every validator see the default while `model_dump()` still exports the value. Th
 settings models use no `env_prefix` and no nested delimiter, so a nested value as an
 env var is one JSON string; YAML avoids that, which is why YAML is the contract.
 
-`operations.features.<svc>.K` is emitted as the top-level setting `K` when `K` is in
-the inventory, and as `FEATURES: {K: ...}` otherwise. Under aqueduct the two are
-separate storage: a YAML `FEATURES` dict replaces the upstream `FeaturesProxy`, and
-the compat mirror (`deployments/mit-ol/settings/lms/aqueduct.py:137`) copies only
-top-level settings into `FEATURES`, never the reverse. Writing an inventoried key into
-`FEATURES` would leave the top-level setting, which is what code reads on current
-releases, at its default.
+`operations.features.<svc>.K` is emitted as both the top-level setting `K` and
+`FEATURES: {K: ...}` when `K` is in the inventory, and as `FEATURES: {K: ...}` alone
+otherwise. Under aqueduct the two are separate storage: a YAML `FEATURES` dict replaces
+the upstream `FeaturesProxy`, and the compat mirror
+(`deployments/mit-ol/settings/lms/aqueduct.py:137`) copies only the keys in
+`FEATURES_COMPAT_KEYS` from top level into `FEATURES`, never the reverse. Neither
+single representation reaches every reader. Writing only `FEATURES` leaves the
+top-level setting, which master reads, at its default. Writing only top level misses a
+release that still reads the dict for a key outside the compat list:
+`ENABLE_COURSE_SORTING_BY_START_DATE` is inventoried and not a compat key, master's
+`get_legacy_config` reads `settings.ENABLE_COURSE_SORTING_BY_START_DATE`, and verawood's
+reads `settings.FEATURES["ENABLE_COURSE_SORTING_BY_START_DATE"]`. Emitting both is
+correct on every release without a per-release inventory of `FEATURES` readers, which
+lehrer does not have. The two copies come from one `operations.features` entry, so
+they are one conflict target (§4.4.7) and the `FEATURES` copy is checked as its
+top-level key (§4.4.8).
 
 **No secret values in compiled artifacts.** The compiled tree may be baked into an
 image or committed (§7), and `site_config` is served to browsers by the runtime config
@@ -953,8 +1008,9 @@ created / updated / unchanged per object, so running it on every deploy is safe.
   django-aqueduct (mit-ol's ulmo/xpro today) have nothing to read a settings fragment,
   and compile rejects settings operations for them (§4.4.1).
 - **Phase 3** — migrate remaining features; add `features check` to CI; extend
-  settings-verify to boot with each scope's compiled `settings/` fragment, which is what
-  finally checks FEATURES keys and per-release `site_config` targets (§4.4.8).
+  settings-verify to boot with each scope's compiled `settings/` fragment and then run
+  the explicit key check against the release's own settings modules (§4.4.8). The boot
+  alone checks neither FEATURES keys nor unread top-level keys.
 
 Every phase is independently revertable, and Phase 0 changes no behaviour at all.
 
