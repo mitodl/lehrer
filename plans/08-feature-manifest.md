@@ -225,7 +225,9 @@ block (§4.3.1) may be keyed by a scope or a set. A scope takes each feature fro
 block if it has one, otherwise from the one set containing it that adopts that feature;
 two sets containing the same scope that both adopt a feature fail compile. A scope
 block replaces the set block for that feature parameter by parameter, and there is no
-deeper precedence. This is the same one-level shape as `build_manifest.yaml`'s
+deeper precedence. `enabled: false` in a scope block turns off a set's adoption for
+that scope. `operations` overrides apply in order (definition, then set block, then
+scope block), each merged over the last by the rules in §4.3.2. This is the same one-level shape as `build_manifest.yaml`'s
 `defaults` block under a cell (`Cell.resolved`, `build_manifest.py:105`), which is the
 only layering precedent lehrer has.
 
@@ -266,6 +268,7 @@ requires:
   services: []                    # e.g. [notes], [codejail]
   frontends: [learning]           # resolved against the scope's frontends (§4.3.4)
   features: []                    # other features that must be adopted in the same scope
+  secret_settings: [CHAT_API_KEY] # secret-valued settings the operator supplies (§4.6)
 
 operations:                       # the complete fan-out
   settings:
@@ -468,7 +471,18 @@ merges them by these rules, and refuses to apply anything on a conflict.
 substituted into a `*_env` field must match `^[A-Z_][A-Z0-9_]*$`, and a parameter
 substituted into any other bootstrap field must not contain `{` or `}`: the runner
 resolves `{SETTING}` with `str.format_map` at apply time, so a brace in a compiled value
-would be looked up as a Django setting.
+would be looked up as a Django setting. Literals in a definition's fragment may use
+only bare `{IDENT}` placeholders, not indexed ones: `{DATABASES[default][PASSWORD]}`
+would resolve through `format_map` and the runner prints resolved names in its report
+(`src/lehrer/bootstrap/__main__.py:129`).
+
+**Privilege.** A feature fragment may not set `superuser` or `password_env` on a user;
+those belong to the operator's base spec. Other privilege a fragment can grant is made
+visible rather than forbidden: `ServiceAccessToken` defaults to `staff: true` with a
+3650-day token, and `apply_users` writes a declared user's flags onto an existing
+account of the same name (a fragment naming an existing admin would clear its
+`is_superuser`). `explain` lists every account, staff flag and token a
+feature creates, so a one-line adoption cannot grant staff unnoticed.
 
 **No silent skips for feature entries.** Today the runner skips a third-party auth
 provider or service token whose env vars are unset. For a base spec that is the right
@@ -547,26 +561,46 @@ names, logo, theme), which belongs to the operator. Upstream already draws that 
 `mfe_config_api/views.py` promotes the keys in `SITE_CONFIG_TRANSLATION_MAP` (and
 `PARAGON_THEME_URLS`) to site level and puts every other key under `commonAppConfig`.
 
-`site_config` follows the same line. It may write only:
+`site_config` follows the same line. Its top-level keys name the LMS setting they
+write, and each may write only the paths shown:
 
-- `frontend_site_config.commonAppConfig.*`
-- `mfe_config.*`
-- `mfe_config_overrides.<mfe>.*`
+| `site_config` key | LMS setting | Writable paths |
+|---|---|---|
+| `frontend_site_config` | `FRONTEND_SITE_CONFIG` | `commonAppConfig.*` |
+| `mfe_config` | `MFE_CONFIG` | any key |
+| `mfe_config_overrides` | `MFE_CONFIG_OVERRIDES` | `<mfe>.*` |
 
 Any other path fails compile, as does any key upstream promotes to site level, in every
 target. `FRONTEND_SITE_CONFIG.apps` is not writable: it is a list, and the settings
 YAML merge replaces lists whole, so a feature writing it would erase the operator's
-apps. App-scoped values go through `mfe_config_overrides`.
+apps. App-scoped values go through `mfe_config_overrides`. The same four settings
+(and `ENABLE_MFE_CONFIG_API`) may not be written through `operations.settings`, which
+would bypass these rules; `site_config` leaves are part of the LMS key space for
+conflict detection (§4.4.7).
 
 These are LMS settings, so compile emits them into `settings/lms.yaml`, where they
 deep-merge with the operator's own values; there is no separate `site_config.yaml`.
 The settings differ by release (master no longer has the `ENABLE_MFE_CONFIG_API`
 toggle; verawood has it alongside `MFE_CONFIG` and `FRONTEND_SITE_CONFIG`; ulmo lacks
 `FRONTEND_SITE_CONFIG`), and lehrer's single settings model per group cannot tell a
-cell's release apart (§4.4.1), so `site_config` accepts `by_release` and a definition
-targets each release explicitly. Like every operation that lands in `settings/`, it is
-rejected for cells without django-aqueduct (§4.4.1). Mistakes surface in the extended boot check (§4.4.8), not at
-compile.
+cell's release apart (§4.4.1), so a definition targets each release explicitly. A
+`site_config` top-level key may be replaced by a `by_release` mapping whose values are
+the per-release blocks, with `default` covering releases not named:
+
+```yaml
+site_config:
+  by_release:
+    ulmo:
+      mfe_config: {COURSE_CHAT_ENABLED: true}
+    default:
+      frontend_site_config:
+        commonAppConfig: {courseChat: {enabled: true}}
+```
+
+A release that resolves to nothing writes nothing. Like every operation that lands in
+`settings/`, `site_config` is rejected for cells without django-aqueduct (§4.4.1).
+Targeting a setting a release does not have surfaces in the extended boot check
+(§4.4.8), not at compile.
 
 Features never set `ENABLE_MFE_CONFIG_API`. Upstream removed that toggle on master
 (edx-platform `2694cb83b`, 2026-08-26) and both endpoints now answer unconditionally;
@@ -623,11 +657,13 @@ little enough to run on every commit.
    `build_manifest.yaml`. This is not a literal subset test: `Cell.packages` holds
    verbatim requirement lines (`ol-openedx-chat==0.5.9`) while `requires.plugins`
    names bare distributions, so both sides are canonicalised to PEP 503 normalised
-   project names first. `plugin_imports._distribution_name` already implements exactly
-   this and should be reused rather than reimplemented. One caveat to state plainly:
-   it returns `None` for VCS and direct-reference lines, so a plugin satisfied only by
-   a `git+https://…` override is invisible to the check. Such a requirement must fail
-   loudly as unverifiable rather than silently pass.
+   project names first. `plugin_imports.declares_distribution` already implements this
+   and is reused with the arguments `Cell.uses_aqueduct` passes
+   (`build_manifest.py:98`): `packages` plus `overrides`, minus `packages_to_remove`.
+   The mitxonline master cell uses both. One caveat to state plainly: the underlying
+   `_distribution_name` returns `None` for VCS and direct-reference lines, so a plugin
+   satisfied only by a `git+https://…` override is invisible to the check. Such a
+   requirement must fail loudly as unverifiable rather than silently pass.
 4. **MFE names and build paths.** Every MFE in `requires.frontends` must appear in the
    adopting scope's `frontends`, with a path the definition's `frontend_paths`
    supports (§4.3.4). `build_config.yaml`'s `mfes` map is not used for this: it lists
@@ -639,9 +675,10 @@ little enough to run on every commit.
 7. **Conflicts.** A conflict is two features adopted in one scope that resolve one
    target to unequal values. Equal values are not a conflict, and `explain` lists both
    owners. The targets are:
-   - one key space per service, in which `features.<svc>.K` and `settings.<svc>.K` are
-     the same target (upstream defines `FEATURES = FeaturesProxy(globals())` on ulmo,
-     verawood and master, so the two spellings name one setting);
+   - one key space per service, in which `features.<svc>.K`, `settings.<svc>.K` and
+     (for LMS) the `site_config` settings are targets of the same namespace, so
+     `features.lms.K` and `settings.lms.K` are one target (see the emitter rule in
+     §4.6);
    - mapping leaves, compared individually, and lists, compared whole;
    - MFE build vars per MFE, including against explicit `--env-vars` passed to the
      same build (which stay the channel for values no feature owns, such as domains
@@ -706,7 +743,8 @@ pre-commit hook forbids a `deployments/` path or import under `src/lehrer/core/`
 ```
 <out>/
   manifest.json            # {contract_version: 1, group, scope, generated_from, frontends,
-                           #  build_digest: {<mfe>: ...}, bootstrap_env: [...]}
+                           #  build_digest: {<mfe>: ...}, bootstrap_env: [...],
+                           #  secret_settings: [...]}
   settings/lms.yaml        # OL_SETTINGS_DIR-shaped fragment, including site_config (§4.3.5)
   settings/cms.yaml
   bootstrap.yaml           # BootstrapSpec holding feature-contributed entries only
@@ -715,13 +753,30 @@ pre-commit hook forbids a `deployments/` path or import under `src/lehrer/core/`
   checklist.yaml           # required services, plugins, commands, runtime config API
 ```
 
-Settings fragments are keyed by field name. A consumer that materialises them as
-environment variables instead uses the field's `validation_alias` where one is set
-(three fields today, e.g. `ENABLE_AUTHN_MICROFRONTEND` ← `EDXAPP_ENABLE_AUTHN_MFE`),
-because pydantic-settings reads only the alias from the environment and silently drops
-the field name. The settings models use no `env_prefix` and no nested delimiter, so a
-nested value as an env var is one JSON string. Emitting YAML avoids both issues, which
-is why YAML is the contract.
+Settings fragments are keyed by the name pydantic-settings actually reads: the field's
+`validation_alias` where one is set (three fields today, e.g.
+`ENABLE_AUTHN_MICROFRONTEND` ← `EDXAPP_ENABLE_AUTHN_MFE`), otherwise the field name.
+That applies to YAML as much as to the environment. Under `extra="allow"` a YAML key
+spelled with an aliased field's name lands in `__pydantic_extra__`: the typed field and
+every validator see the default while `model_dump()` still exports the value. The
+settings models use no `env_prefix` and no nested delimiter, so a nested value as an
+env var is one JSON string; YAML avoids that, which is why YAML is the contract.
+
+`operations.features.<svc>.K` is emitted as the top-level setting `K` when `K` is in
+the inventory, and as `FEATURES: {K: ...}` otherwise. Under aqueduct the two are
+separate storage: a YAML `FEATURES` dict replaces the upstream `FeaturesProxy`, and
+the compat mirror (`deployments/mit-ol/settings/lms/aqueduct.py:137`) copies only
+top-level settings into `FEATURES`, never the reverse. Writing an inventoried key into
+`FEATURES` would leave the top-level setting, which is what code reads on current
+releases, at its default.
+
+**No secret values in compiled artifacts.** The compiled tree may be baked into an
+image or committed (§7), and `site_config` is served to browsers by the runtime config
+API. `operations.settings`, `operations.features` and `site_config` therefore hold no
+secret values. A setting whose value is a secret is listed by name under
+`requires.secret_settings`; the operator supplies it through their secret channel, and
+`manifest.json` lists those names next to `bootstrap_env` so both are checkable before
+deploy.
 
 `mfe_assets/<mfe>.yaml` holds the *resolved* result — `by_release` already collapsed
 to concrete filenames for the scope's cell, merge order already applied — so a
