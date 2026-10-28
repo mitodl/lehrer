@@ -1,4 +1,4 @@
-import React, { useContext, useEffect } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { Button, Dropdown, Collapsible, Hyperlink, Image } from "@openedx/paragon";
 import { ExpandLess, ExpandMore } from '@openedx/paragon/icons';
 import { getConfig } from '@edx/frontend-platform';
@@ -330,15 +330,74 @@ const AppziScript = () => {
   return null;
 };
 
+const CONTACT_US_RECHECK_MS = 60000;
+// Matches both the learning MFE's /course/course-v1:ORG+NUM+RUN and Studio's
+// /container/block-v1:ORG+NUM+RUN+type@...; the first three segments are the
+// course triple in either form.
+const COURSE_TRIPLE_REGEX = /(?:course-v1|block-v1):([^/+]+\+[^/+]+\+[^/+?#]+)/;
+
 const ContactUsLauncherScript = () => {
   const { authenticatedUser } = useContext(AppContext);
+  const location = useLocation();
   const apiUrl = process.env.CONTACT_US_SUPPORT_API_URL;
   const userEmail = authenticatedUser?.email;
   const userName = authenticatedUser?.name;
   const userUsername = authenticatedUser?.username;
 
+  const match = location.pathname.match(COURSE_TRIPLE_REGEX);
+  const courseKey = match ? `course-v1:${match[1]}` : '';
+
+  // null = not yet known. Anything but an explicit true keeps the launcher off.
+  const [enabled, setEnabled] = useState(null);
+
   useEffect(() => {
     if (!apiUrl) {
+      return undefined;
+    }
+    const controller = new AbortController();
+    let lastCheck = 0;
+    // isInitial distinguishes "we don't know yet" from "we knew, and this one
+    // check failed". On first load anything but an explicit true must hide the
+    // launcher. On a later re-check only an explicit false may remove it: a blip
+    // is not a kill signal, and tearing down a launcher the learner is typing
+    // into loses their message.
+    const check = (isInitial) => {
+      lastCheck = Date.now();
+      fetch(
+        `${getConfig().LMS_BASE_URL}/ol-openedx-chat/api/contact-us-enabled/${courseKey}`,
+        { credentials: 'omit', signal: controller.signal },
+      )
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          if (data?.enabled === true) {
+            setEnabled(true);
+          } else if (isInitial || data?.enabled === false) {
+            setEnabled(false);
+          }
+        })
+        .catch(() => {
+          if (isInitial && !controller.signal.aborted) {
+            setEnabled(false);
+          }
+        });
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible'
+          && Date.now() - lastCheck > CONTACT_US_RECHECK_MS) {
+        check(false);
+      }
+    };
+    setEnabled(null);
+    check(true);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      controller.abort();
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [apiUrl, courseKey]);
+
+  useEffect(() => {
+    if (!apiUrl || enabled !== true) {
       return undefined;
     }
     // Only the learning MFE ships this bundle; the others load that copy. Absolute
@@ -385,7 +444,7 @@ const ContactUsLauncherScript = () => {
       }
       script.remove();
     };
-  }, [apiUrl, userEmail, userName, userUsername]);
+  }, [apiUrl, enabled, userEmail, userName, userUsername]);
 
   return null;
 };
