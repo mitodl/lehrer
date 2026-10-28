@@ -333,8 +333,21 @@ const AppziScript = () => {
 const CONTACT_US_RECHECK_MS = 60000;
 // Matches both the learning MFE's /course/course-v1:ORG+NUM+RUN and Studio's
 // /container/block-v1:ORG+NUM+RUN+type@...; the first three segments are the
-// course triple in either form.
-const COURSE_TRIPLE_REGEX = /(?:course-v1|block-v1):([^/+]+\+[^/+]+\+[^/+?#]+)/;
+// course triple in either form. Anchored to a path boundary so ccx-block-v1:,
+// which contains block-v1:, does not resolve to its parent course.
+const COURSE_TRIPLE_REGEX = /(?:^|\/)(?:course-v1|block-v1):([^/+]+\+[^/+]+\+[^/+?#]+)/;
+
+// React Router reports the pathname still percent-encoded, and the MFE's
+// DecodePageRoute only redirects to the decoded URL after a first render. Match
+// the decoded form so the first render already resolves the course key.
+const decodePathname = (pathname) => {
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    // A stray % is not valid encoding; the raw path is the best we have.
+    return pathname;
+  }
+};
 
 const ContactUsLauncherScript = () => {
   const { authenticatedUser } = useContext(AppContext);
@@ -344,7 +357,7 @@ const ContactUsLauncherScript = () => {
   const userName = authenticatedUser?.name;
   const userUsername = authenticatedUser?.username;
 
-  const match = location.pathname.match(COURSE_TRIPLE_REGEX);
+  const match = decodePathname(location.pathname).match(COURSE_TRIPLE_REGEX);
   const courseKey = match ? `course-v1:${match[1]}` : '';
 
   // null = not yet known. Anything but an explicit true keeps the launcher off.
@@ -369,6 +382,10 @@ const ContactUsLauncherScript = () => {
       )
         .then((response) => (response.ok ? response.json() : null))
         .then((data) => {
+          // A superseded course's answer must not overwrite the new course's.
+          if (controller.signal.aborted) {
+            return;
+          }
           if (data?.enabled === true) {
             setEnabled(true);
           } else if (isInitial || data?.enabled === false) {
