@@ -369,12 +369,17 @@ const ContactUsLauncherScript = () => {
     }
     const controller = new AbortController();
     let lastCheck = 0;
+    // A slow re-check can still be in flight when the next one starts. Without
+    // this, its older answer lands last and can undo a kill switch.
+    let seq = 0;
     // isInitial distinguishes "we don't know yet" from "we knew, and this one
     // check failed". On first load anything but an explicit true must hide the
     // launcher. On a later re-check only an explicit false may remove it: a blip
     // is not a kill signal, and tearing down a launcher the learner is typing
     // into loses their message.
     const check = (isInitial) => {
+      seq += 1;
+      const mySeq = seq;
       lastCheck = Date.now();
       fetch(
         `${getConfig().LMS_BASE_URL}/ol-openedx-chat/api/contact-us-enabled/${courseKey}`,
@@ -383,7 +388,7 @@ const ContactUsLauncherScript = () => {
         .then((response) => (response.ok ? response.json() : null))
         .then((data) => {
           // A superseded course's answer must not overwrite the new course's.
-          if (controller.signal.aborted) {
+          if (controller.signal.aborted || mySeq !== seq) {
             return;
           }
           if (data?.enabled === true) {
@@ -393,7 +398,7 @@ const ContactUsLauncherScript = () => {
           }
         })
         .catch(() => {
-          if (isInitial && !controller.signal.aborted) {
+          if (isInitial && !controller.signal.aborted && mySeq === seq) {
             setEnabled(false);
           }
         });
