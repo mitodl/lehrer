@@ -331,11 +331,12 @@ const AppziScript = () => {
 };
 
 // Kept outside the component because the learning MFE renders FooterSlot inside
-// each tab's TabPage, so switching tabs remounts the footer. Unmounting the
-// launcher there would close an open card, lose the conversation, and make the
-// next message start a new thread, which files a second ticket. The card sits
-// on document.body, outside React, so it survives on its own. One per page
-// load, as hq#14033 asks for.
+// TabPage, and the outline and courseware are separate routes, so opening a
+// subsection or clicking the "Course" breadcrumb remounts the footer without a
+// page load. Unmounting the launcher there would close an open card, lose the
+// conversation, and make the next message start a new thread, which files a
+// second ticket. The card sits on document.body, outside React, so it survives
+// on its own. One per page load, as hq#14033 asks for.
 let contactUsLauncherMount = null;
 
 const mountContactUsLauncher = ({ apiUrl, userEmail, userName, userUsername }) => {
@@ -380,8 +381,10 @@ const mountContactUsLauncher = ({ apiUrl, userEmail, userName, userUsername }) =
     };
     document.head.appendChild(script);
   });
-  // Cache the rejection too, so a bad bundle is reported once instead of
-  // refetched on every tab change. It 404s until the learning MFE is promoted.
+  // feedbackBundle.js nulls its promise on failure so the next click retries.
+  // This one keeps the rejection: it loads on remount rather than on a click,
+  // and it 404s until the learning MFE is promoted, so retrying would refetch
+  // and re-log on every navigation for a failure that will not fix itself.
   contactUsLauncherMount.catch((error) => {
     // Pass the error itself, not its message: init() can throw a non-Error, and
     // the stack is the only clue when the throw comes from inside the bundle.
