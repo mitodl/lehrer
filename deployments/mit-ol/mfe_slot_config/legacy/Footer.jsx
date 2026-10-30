@@ -363,6 +363,10 @@ const decodePathname = (pathname) => {
 let bundleLoad = null;
 // The mounted launcher, or null when it is down.
 let launcher = null;
+// Tracked apart from the handle above, because a bundle that mounts onto the
+// body and returns nothing is an ordinary UMD shape. Needing the handle to know
+// a card is up would let a remount add a second one.
+let launcherMounted = false;
 // The desired state. Mounting waits on the bundle, so a flag flip that lands
 // mid-load has to be recorded where that load's callback will see it.
 let launcherWanted = false;
@@ -409,13 +413,13 @@ const loadContactUsBundle = () => {
 
 const mountContactUsLauncher = () => {
   launcherWanted = true;
-  if (launcher) {
+  if (launcherMounted) {
     return;
   }
   loadContactUsBundle()
     .then((bundle) => {
       // The flag can go off, or another caller can win, while the bundle loads.
-      if (!launcherWanted || launcher) {
+      if (!launcherWanted || launcherMounted) {
         return;
       }
       const {
@@ -434,6 +438,7 @@ const mountContactUsLauncher = () => {
             chat: { apiUrl, requestBody },
           },
         });
+        launcherMounted = true;
       } catch (error) {
         // Without this the throw is swallowed by the promise and nothing says
         // why there is no launcher.
@@ -447,13 +452,24 @@ const mountContactUsLauncher = () => {
 
 const unmountContactUsLauncher = () => {
   launcherWanted = false;
-  if (!launcher) {
+  if (!launcherMounted) {
     return;
   }
   try {
-    launcher.unmount();
+    launcher?.unmount();
   } catch (error) { /* unmount handles its own errors */ }
   launcher = null;
+  launcherMounted = false;
+};
+
+// A mount that is still waiting on the bundle was wanted for the course we are
+// leaving, so it must not land on the next one. A card already up is left alone:
+// the point is to not create something for a course we have not cleared, not to
+// take away something the learner can see.
+const cancelPendingMount = () => {
+  if (!launcherMounted) {
+    launcherWanted = false;
+  }
 };
 
 // The gate answer is cached per course so a footer remount reuses it instead of
@@ -472,11 +488,16 @@ const applyContactUsGate = (enabled) => {
   }
 };
 
-// isInitial separates "we have no answer yet" from "we had one and this check
-// failed". With no answer, anything but an explicit true keeps the launcher off.
-// On a re-check only an explicit false may remove it: a blip is not a kill
-// signal, and tearing down a launcher mid-conversation loses the message.
-const checkContactUsGate = (courseKey, isInitial) => {
+// `gateEnabled === null` means we have no answer for the current course, and
+// then anything but an explicit true keeps the launcher off. Once we do have
+// one, only an explicit false may remove it: a blip is not a kill signal, and
+// tearing down a launcher mid-conversation loses the message.
+//
+// That is read when the answer lands, not when the request goes out, because a
+// re-check can supersede a first check that is still in flight. Deciding at call
+// time would let the superseding check skip the fail-closed path and leave the
+// previous course's launcher up for a course that never answered.
+const checkContactUsGate = (courseKey) => {
   gateSeq += 1;
   const mySeq = gateSeq;
   gateLastCheck = Date.now();
@@ -492,12 +513,12 @@ const checkContactUsGate = (courseKey, isInitial) => {
       }
       if (data?.enabled === true) {
         applyContactUsGate(true);
-      } else if (isInitial || data?.enabled === false) {
+      } else if (gateEnabled === null || data?.enabled === false) {
         applyContactUsGate(false);
       }
     })
     .catch(() => {
-      if (isInitial && mySeq === gateSeq) {
+      if (mySeq === gateSeq && gateEnabled === null) {
         applyContactUsGate(false);
       }
     });
@@ -522,23 +543,29 @@ const ContactUsLauncherScript = () => {
       apiUrl, userEmail, userName, userUsername,
     };
 
-    if (courseKey !== gateCourseKey) {
+    // Off a course page there is no flag to read, so an empty key is "no
+    // information" rather than "off": we neither ask nor disturb a card that is
+    // already up. The account and dashboard MFEs render this footer too, and
+    // nothing ever mounts there because no answer ever says true.
+    if (courseKey && courseKey !== gateCourseKey) {
       // A different course can have a different answer, so the old one does not
       // carry over. The launcher stays up until the new answer lands rather than
       // flickering off and back on.
+      cancelPendingMount();
       gateCourseKey = courseKey;
       gateEnabled = null;
-      checkContactUsGate(courseKey, true);
-    } else if (gateEnabled !== null) {
+      checkContactUsGate(courseKey);
+    } else if (courseKey && gateEnabled !== null) {
       // Same course, so reuse the answer instead of asking again. A check that
       // is still in flight will apply itself when it lands.
       applyContactUsGate(gateEnabled);
     }
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible'
+      if (gateCourseKey
+          && document.visibilityState === 'visible'
           && Date.now() - gateLastCheck > CONTACT_US_RECHECK_MS) {
-        checkContactUsGate(gateCourseKey, false);
+        checkContactUsGate(gateCourseKey);
       }
     };
     document.addEventListener('visibilitychange', onVisible);
