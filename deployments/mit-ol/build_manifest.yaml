@@ -36,27 +36,27 @@ cells:
   - granian==2.8.4
   - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.10.0
-  - edx-sysadmin==0.5.0
+  - edx-sysadmin==0.5.1
   - edx-username-changer==0.6.0
   - openedx-companion-auth==1.3.0
   - nodeenv>=1.7.0
-  - ol-openedx-checkout-external==0.3.0
-  - ol-openedx-course-export==0.4.3
-  - ol-openedx-course-outline-api==0.2.0
-  - ol-openedx-course-structure-api==0.3.0
+  - ol-openedx-checkout-external==0.3.1
+  - ol-openedx-course-export==0.4.4
+  - ol-openedx-course-outline-api==0.2.1
+  - ol-openedx-course-structure-api==0.3.1
   - ol-openedx-logging==0.4.0
-  - ol-openedx-sentry==0.6.0
+  - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
-  - ol-social-auth==0.3.0
+  - ol-social-auth==0.3.1
   - pydantic-settings[yaml]==2.15.0
   - django-aqueduct==0.15.1
   - ol-openedx-chat==0.6.1
   - ol-openedx-chat-xblock==0.5.0
   - ol-openedx-feedback==0.3.1
-  - ol-openedx-lti-utilities==0.2.0
-  - ol-openedx-events-handler==0.6.0
+  - ol-openedx-lti-utilities==0.2.1
+  - ol-openedx-events-handler==0.6.1
   - ol-openedx-course-sync
-  - ol-openedx-uai-content-customization==0.5.1
+  - ol-openedx-uai-content-customization==0.5.2
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
   - opentelemetry-instrumentation-django
@@ -66,8 +66,8 @@ cells:
   - setuptools==81.0.0
   - edx-sga==0.29.0
   - invideoquiz-xblock==2.0.0
-  - ol-openedx-canvas-integration==0.9.0
-  - ol-openedx-rapid-response-reports==0.6.0
+  - ol-openedx-canvas-integration==0.9.1
+  - ol-openedx-rapid-response-reports==0.6.1
   - rapid-response-xblock==0.12.0
   overrides:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
@@ -164,17 +164,17 @@ cells:
   - granian==2.8.4
   - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.10.0
-  - edx-sysadmin==0.5.0
+  - edx-sysadmin==0.5.1
   - edx-username-changer==0.6.0
   - git+https://github.com/mitodl/ubcpi.git@master#egg=ubcpi-xblock
   - openedx-companion-auth==1.3.0
   - nodeenv>=1.7.0
-  - ol-openedx-checkout-external==0.3.0
-  - ol-openedx-course-export==0.4.3
-  - ol-openedx-course-structure-api==0.3.0
+  - ol-openedx-checkout-external==0.3.1
+  - ol-openedx-course-export==0.4.4
+  - ol-openedx-course-structure-api==0.3.1
   - ol-openedx-logging==0.4.0
-  - ol-openedx-sentry==0.6.0
-  - ol-social-auth==0.3.0
+  - ol-openedx-sentry==0.6.1
+  - ol-social-auth==0.3.1
   - openedx-scorm-xblock==19.0.5
   - pydantic-settings[yaml]==2.15.0
   - ol-openedx-chat==0.6.1
@@ -203,15 +203,15 @@ cells:
   - granian==2.8.4
   - django-redis==7.0.0
   - ol-openedx-git-auto-export==0.10.0
-  - edx-sysadmin==0.5.0
+  - edx-sysadmin==0.5.1
   - invideoquiz-xblock==2.0.0
   - nodeenv>=1.7.0
-  - ol-openedx-canvas-integration==0.9.0
-  - ol-openedx-course-export==0.4.3
-  - ol-openedx-course-structure-api==0.3.0
+  - ol-openedx-canvas-integration==0.9.1
+  - ol-openedx-course-export==0.4.4
+  - ol-openedx-course-structure-api==0.3.1
   - ol-openedx-logging==0.4.0
-  - ol-openedx-rapid-response-reports==0.6.0
-  - ol-openedx-sentry==0.6.0
+  - ol-openedx-rapid-response-reports==0.6.1
+  - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
   - pip==26.2
   - pydantic-settings[yaml]==2.15.0
@@ -249,16 +249,16 @@ cells:
   packages:
   - granian==2.8.4
   - django-redis==7.0.0
-  - edx-sysadmin==0.5.0
+  - edx-sysadmin==0.5.1
   - invideoquiz-xblock==2.0.0
   - nodeenv>=1.7.0
-  - ol-openedx-canvas-integration==0.9.0
-  - ol-openedx-course-export==0.4.3
-  - ol-openedx-course-structure-api==0.3.0
+  - ol-openedx-canvas-integration==0.9.1
+  - ol-openedx-course-export==0.4.4
+  - ol-openedx-course-structure-api==0.3.1
   - ol-openedx-git-auto-export==0.10.0
   - ol-openedx-logging==0.4.0
-  - ol-openedx-rapid-response-reports==0.6.0
-  - ol-openedx-sentry==0.6.0
+  - ol-openedx-rapid-response-reports==0.6.1
+  - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
   - pip==26.2
   - pydantic-settings[yaml]==2.15.0
