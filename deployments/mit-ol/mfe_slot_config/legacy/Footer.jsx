@@ -330,6 +330,78 @@ const AppziScript = () => {
   return null;
 };
 
+// Module scope, not component state: route changes remount the footer, and
+// unmounting the launcher loses the open chat and files a second ticket.
+let contactUsLauncherMount = null;
+
+const mountContactUsLauncher = ({ apiUrl, userEmail, userName, userUsername }) => {
+  if (contactUsLauncherMount) {
+    return contactUsLauncherMount;
+  }
+  // Only the learning MFE ships this bundle, so the URL is absolute. A classic
+  // script needs no CORS.
+  const bundlePath = process.env.CONTACT_US_BUNDLE_PATH
+    || `${getConfig().LMS_BASE_URL}/learn/static/smoot-design/contactUsLauncher.umd.js`;
+  contactUsLauncherMount = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = bundlePath;
+    script.async = true;
+    script.onerror = () => {
+      reject(new Error(`failed to load bundle from ${bundlePath}`));
+    };
+    script.onload = () => {
+      if (!window.contactUsLauncher?.init) {
+        // A 404 rewritten to index.html can fire `load`, not `error`.
+        reject(new Error(`bundle at ${bundlePath} has no init()`));
+        return;
+      }
+      // learn-ai has no session on this cross-origin POST, so these are the
+      // ticket's only requester fields.
+      const requestBody = {
+        ...(userEmail ? { user_email: userEmail } : {}),
+        ...(userName ? { user_name: userName } : {}),
+        ...(userUsername ? { user_username: userUsername } : {}),
+      };
+      try {
+        resolve(window.contactUsLauncher.init({
+          settings: {
+            chat: { apiUrl, requestBody },
+          },
+        }));
+      } catch (error) {
+        // A throw would escape the load handler and leave the promise pending.
+        reject(error);
+      }
+    };
+    document.head.appendChild(script);
+  });
+  // The rejection is cached too, unlike feedbackBundle.js: this loads on every
+  // remount, so retrying would re-log a failure that will not fix itself.
+  contactUsLauncherMount.catch((error) => {
+    // The error itself, not its message: init() can throw a non-Error.
+    console.error('ContactUsLauncherScript:', error);
+  });
+  return contactUsLauncherMount;
+};
+
+const ContactUsLauncherScript = () => {
+  const { authenticatedUser } = useContext(AppContext);
+  const apiUrl = process.env.CONTACT_US_SUPPORT_API_URL;
+  const userEmail = authenticatedUser?.email;
+  const userName = authenticatedUser?.name;
+  const userUsername = authenticatedUser?.username;
+
+  useEffect(() => {
+    if (!apiUrl) {
+      return;
+    }
+    // Re-runs are no-ops; the first call wins and its launcher stays put.
+    mountContactUsLauncher({ apiUrl, userEmail, userName, userUsername });
+  }, [apiUrl, userEmail, userName, userUsername]);
+
+  return null;
+};
+
 const Footer = () => {
 
   const {
@@ -343,6 +415,7 @@ const Footer = () => {
     <footer className="d-flex flex-column align-items-stretch">
       <ForceLoginRedirect />
       <AppziScript />
+      <ContactUsLauncherScript />
       {
           (process.env.ENABLE_AUTO_LANGUAGE_SELECTION === "true") ? <AutoSelectLanguage /> : null
       }
