@@ -337,49 +337,36 @@ const CONTACT_US_RECHECK_MS = 60000;
 // which contains block-v1:, does not resolve to its parent course.
 const COURSE_TRIPLE_REGEX = /(?:^|\/)(?:course-v1|block-v1):([^/+]+\+[^/+]+\+[^/+?#]+)/;
 
-// React Router reports the pathname still percent-encoded, and the MFE's
-// DecodePageRoute only redirects to the decoded URL after a first render. Match
-// the decoded form so the first render already resolves the course key.
+// The pathname arrives percent-encoded; the MFE only redirects to the decoded
+// URL after a first render, so decode here to resolve the key on render one.
 const decodePathname = (pathname) => {
   try {
     return decodeURIComponent(pathname);
   } catch {
-    // A stray % is not valid encoding; the raw path is the best we have.
+    // A stray % is not valid encoding.
     return pathname;
   }
 };
 
-// Everything below is module scope rather than component state because the
-// learning MFE renders FooterSlot inside TabPage, and the outline and courseware
-// are separate routes, so opening a subsection or clicking the "Course"
-// breadcrumb remounts the footer without a page load. Holding the launcher or
-// the gate answer in the component would tear the launcher down there, closing
-// an open card, losing the conversation, and making the next message start a new
-// thread, which files a second ticket. One launcher per page load, as hq#14033
-// asks for.
+// Module scope, not component state: route changes remount the footer, and
+// unmounting the launcher loses the open chat and files a second ticket.
 
-// The UMD bundle is fetched at most once per page, separately from the launcher,
-// so flipping the flag off and back on remounts without refetching it.
+// Fetched once per page, apart from the launcher, so a re-enable need not refetch.
 let bundleLoad = null;
-// The mounted launcher, or null when it is down.
 let launcher = null;
-// Tracked apart from the handle above, because a bundle that mounts onto the
-// body and returns nothing is an ordinary UMD shape. Needing the handle to know
-// a card is up would let a remount add a second one.
+// A bundle may return no handle, so track mounted-ness separately.
 let launcherMounted = false;
-// The desired state. Mounting waits on the bundle, so a flag flip that lands
-// mid-load has to be recorded where that load's callback will see it.
+// Desired state: a flag flip mid-load must be visible to the load's callback.
 let launcherWanted = false;
-// Set from the component so the async mount reads current values rather than
-// whichever render's closure happened to start the load.
+// Written by the component so the async mount reads current values.
 let launcherOptions = null;
 
 const loadContactUsBundle = () => {
   if (bundleLoad) {
     return bundleLoad;
   }
-  // Only the learning MFE ships this bundle; the others load that copy. Absolute
-  // because authoring is on a different origin, and a classic script needs no CORS.
+  // Only the learning MFE ships this bundle. Absolute URL because authoring is a
+  // different origin, and a classic script needs no CORS.
   const bundlePath = process.env.CONTACT_US_BUNDLE_PATH
     || `${getConfig().LMS_BASE_URL}/learn/static/smoot-design/contactUsLauncher.umd.js`;
   bundleLoad = new Promise((resolve, reject) => {
@@ -399,13 +386,10 @@ const loadContactUsBundle = () => {
     };
     document.head.appendChild(script);
   });
-  // feedbackBundle.js nulls its promise on failure so the next click retries.
-  // This one keeps the rejection: it loads when the gate opens rather than on a
-  // click, and it 404s until the learning MFE is promoted, so retrying would
-  // refetch and re-log on every navigation for a failure that will not fix itself.
+  // Keep the rejection, unlike feedbackBundle.js: that retries on a click, this
+  // would refetch on every remount for a failure that will not fix itself.
   bundleLoad.catch((error) => {
-    // Pass the error itself, not its message: the bundle can throw a non-Error,
-    // and the stack is the only clue when the throw comes from inside it.
+    // Pass the error, not its message: the bundle can throw a non-Error.
     console.error('ContactUsLauncherScript:', error);
   });
   return bundleLoad;
@@ -426,8 +410,8 @@ const mountContactUsLauncher = () => {
         const {
           apiUrl, userEmail, userName, userUsername,
         } = launcherOptions;
-        // learn-ai gets no session on this cross-origin POST, so the ticket's
-        // requester fields are whatever we send here or nothing.
+        // learn-ai has no session on this cross-origin POST, so these are the
+        // ticket's only requester fields.
         const requestBody = {
           ...(userEmail ? { user_email: userEmail } : {}),
           ...(userName ? { user_name: userName } : {}),
@@ -440,8 +424,7 @@ const mountContactUsLauncher = () => {
         });
         launcherMounted = true;
       } catch (error) {
-        // Without this the throw is swallowed by the promise and nothing says
-        // why there is no launcher.
+        // Otherwise the promise swallows it and nothing says why.
         console.error('ContactUsLauncherScript:', error);
       }
     })
@@ -462,18 +445,15 @@ const unmountContactUsLauncher = () => {
   launcherMounted = false;
 };
 
-// A mount that is still waiting on the bundle was wanted for the course we are
-// leaving, so it must not land on the next one. A card already up is left alone:
-// the point is to not create something for a course we have not cleared, not to
-// take away something the learner can see.
+// Drop a mount still waiting on the bundle: it was wanted for the course we are
+// leaving. A card already up stays, so the learner does not lose it.
 const cancelPendingMount = () => {
   if (!launcherMounted) {
     launcherWanted = false;
   }
 };
 
-// The gate answer is cached per course so a footer remount reuses it instead of
-// hiding the launcher and asking again. null means not yet answered for this key.
+// Cached per course so a remount reuses the answer. null means not yet answered.
 let gateCourseKey = null;
 let gateEnabled = null;
 let gateLastCheck = 0;
@@ -488,15 +468,9 @@ const applyContactUsGate = (enabled) => {
   }
 };
 
-// `gateEnabled === null` means we have no answer for the current course, and
-// then anything but an explicit true keeps the launcher off. Once we do have
-// one, only an explicit false may remove it: a blip is not a kill signal, and
-// tearing down a launcher mid-conversation loses the message.
-//
-// That is read when the answer lands, not when the request goes out, because a
-// re-check can supersede a first check that is still in flight. Deciding at call
-// time would let the superseding check skip the fail-closed path and leave the
-// previous course's launcher up for a course that never answered.
+// No answer yet (null) means fail closed. With an answer, only an explicit false
+// removes the launcher, so a blip cannot kill a live chat. Read when the answer
+// lands: a re-check can supersede a first check that never answered.
 const checkContactUsGate = (courseKey) => {
   gateSeq += 1;
   const mySeq = gateSeq;
@@ -543,27 +517,22 @@ const ContactUsLauncherScript = () => {
       apiUrl, userEmail, userName, userUsername,
     };
 
-    // Off a course page there is no flag to read, so an empty key is "no
-    // information" rather than "off": we neither ask nor disturb a card that is
-    // already up. Studio routes course pages and keyless ones through one
-    // router, so this is reachable without a page load.
+    // An empty key means no information, not "off": do not ask, and do not
+    // disturb a card already up.
     if (courseKey && courseKey !== gateCourseKey) {
-      // A different course can have a different answer, so the old one does not
-      // carry over. The launcher stays up until the new answer lands rather than
-      // flickering off and back on.
+      // A new course needs its own answer. The launcher stays up until it
+      // lands, to avoid a flicker.
       cancelPendingMount();
       gateCourseKey = courseKey;
       gateEnabled = null;
       checkContactUsGate(courseKey);
     } else if (courseKey && gateEnabled !== null) {
-      // Same course, so reuse the answer instead of asking again. A check that
-      // is still in flight will apply itself when it lands.
+      // Same course: reuse the answer. A check in flight applies itself.
       applyContactUsGate(gateEnabled);
     }
 
-    // Re-check the course this render is on, not the one the module remembers.
-    // They differ once a keyless route is in between, and asking about the
-    // remembered one would mount its launcher onto a page we never gated.
+    // Re-check the course this render is on, not the one the module remembers:
+    // they differ across a keyless route.
     const onVisible = () => {
       if (courseKey && courseKey === gateCourseKey
           && document.visibilityState === 'visible'
