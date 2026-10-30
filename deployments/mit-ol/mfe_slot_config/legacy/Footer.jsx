@@ -422,17 +422,17 @@ const mountContactUsLauncher = () => {
       if (!launcherWanted || launcherMounted) {
         return;
       }
-      const {
-        apiUrl, userEmail, userName, userUsername,
-      } = launcherOptions;
-      // learn-ai gets no session on this cross-origin POST, so the ticket's
-      // requester fields are whatever we send here or nothing.
-      const requestBody = {
-        ...(userEmail ? { user_email: userEmail } : {}),
-        ...(userName ? { user_name: userName } : {}),
-        ...(userUsername ? { user_username: userUsername } : {}),
-      };
       try {
+        const {
+          apiUrl, userEmail, userName, userUsername,
+        } = launcherOptions;
+        // learn-ai gets no session on this cross-origin POST, so the ticket's
+        // requester fields are whatever we send here or nothing.
+        const requestBody = {
+          ...(userEmail ? { user_email: userEmail } : {}),
+          ...(userName ? { user_name: userName } : {}),
+          ...(userUsername ? { user_username: userUsername } : {}),
+        };
         launcher = bundle.init({
           settings: {
             chat: { apiUrl, requestBody },
@@ -545,8 +545,8 @@ const ContactUsLauncherScript = () => {
 
     // Off a course page there is no flag to read, so an empty key is "no
     // information" rather than "off": we neither ask nor disturb a card that is
-    // already up. The account and dashboard MFEs render this footer too, and
-    // nothing ever mounts there because no answer ever says true.
+    // already up. Studio routes course pages and keyless ones through one
+    // router, so this is reachable without a page load.
     if (courseKey && courseKey !== gateCourseKey) {
       // A different course can have a different answer, so the old one does not
       // carry over. The launcher stays up until the new answer lands rather than
@@ -561,11 +561,14 @@ const ContactUsLauncherScript = () => {
       applyContactUsGate(gateEnabled);
     }
 
+    // Re-check the course this render is on, not the one the module remembers.
+    // They differ once a keyless route is in between, and asking about the
+    // remembered one would mount its launcher onto a page we never gated.
     const onVisible = () => {
-      if (gateCourseKey
+      if (courseKey && courseKey === gateCourseKey
           && document.visibilityState === 'visible'
           && Date.now() - gateLastCheck > CONTACT_US_RECHECK_MS) {
-        checkContactUsGate(gateCourseKey);
+        checkContactUsGate(courseKey);
       }
     };
     document.addEventListener('visibilitychange', onVisible);
