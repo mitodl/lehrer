@@ -383,7 +383,9 @@ const mountContactUsLauncher = ({ apiUrl, userEmail, userName, userUsername }) =
   // Cache the rejection too, so a bad bundle is reported once instead of
   // refetched on every tab change. It 404s until the learning MFE is promoted.
   contactUsLauncherMount.catch((error) => {
-    console.error(`ContactUsLauncherScript: ${error.message}`);
+    // Pass the error itself, not its message: init() can throw a non-Error, and
+    // the stack is the only clue when the throw comes from inside the bundle.
+    console.error('ContactUsLauncherScript:', error);
   });
   return contactUsLauncherMount;
 };
