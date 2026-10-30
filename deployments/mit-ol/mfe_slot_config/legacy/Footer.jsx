@@ -330,36 +330,33 @@ const AppziScript = () => {
   return null;
 };
 
-const ContactUsLauncherScript = () => {
-  const { authenticatedUser } = useContext(AppContext);
-  const apiUrl = process.env.CONTACT_US_SUPPORT_API_URL;
-  const userEmail = authenticatedUser?.email;
-  const userName = authenticatedUser?.name;
-  const userUsername = authenticatedUser?.username;
+// Kept outside the component because the learning MFE renders FooterSlot inside
+// each tab's TabPage, so switching tabs remounts the footer. Unmounting the
+// launcher there would close an open card, lose the conversation, and make the
+// next message start a new thread, which files a second ticket. The card sits
+// on document.body, outside React, so it survives on its own. One per page
+// load, as hq#14033 asks for.
+let contactUsLauncherMount = null;
 
-  useEffect(() => {
-    if (!apiUrl) {
-      return undefined;
-    }
-    // Only the learning MFE ships this bundle; the others load that copy. Absolute
-    // because authoring is on a different origin, and a classic script needs no CORS.
-    const bundlePath = process.env.CONTACT_US_BUNDLE_PATH
-      || `${getConfig().LMS_BASE_URL}/learn/static/smoot-design/contactUsLauncher.umd.js`;
-    let cancelled = false;
-    let launcher;
+const mountContactUsLauncher = ({ apiUrl, userEmail, userName, userUsername }) => {
+  if (contactUsLauncherMount) {
+    return contactUsLauncherMount;
+  }
+  // Only the learning MFE ships this bundle; the others load that copy. Absolute
+  // because authoring is on a different origin, and a classic script needs no CORS.
+  const bundlePath = process.env.CONTACT_US_BUNDLE_PATH
+    || `${getConfig().LMS_BASE_URL}/learn/static/smoot-design/contactUsLauncher.umd.js`;
+  contactUsLauncherMount = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = bundlePath;
     script.async = true;
     script.onerror = () => {
-      console.error(`ContactUsLauncherScript: failed to load bundle from ${bundlePath}`);
+      reject(new Error(`failed to load bundle from ${bundlePath}`));
     };
     script.onload = () => {
-      if (cancelled) {
-        return;
-      }
       if (!window.contactUsLauncher?.init) {
         // A 404 rewritten to index.html can fire `load`, not `error`.
-        console.error(`ContactUsLauncherScript: bundle at ${bundlePath} has no init()`);
+        reject(new Error(`bundle at ${bundlePath} has no init()`));
         return;
       }
       // learn-ai gets no session on this cross-origin POST, so the ticket's
@@ -369,22 +366,41 @@ const ContactUsLauncherScript = () => {
         ...(userName ? { user_name: userName } : {}),
         ...(userUsername ? { user_username: userUsername } : {}),
       };
-      launcher = window.contactUsLauncher.init({
-        settings: {
-          chat: { apiUrl, requestBody },
-        },
-      });
+      try {
+        resolve(window.contactUsLauncher.init({
+          settings: {
+            chat: { apiUrl, requestBody },
+          },
+        }));
+      } catch (error) {
+        // A throw here would otherwise escape the load handler and leave the
+        // promise pending, so nothing would ever say why there is no launcher.
+        reject(error);
+      }
     };
     document.head.appendChild(script);
-    return () => {
-      cancelled = true;
-      if (launcher?.unmount) {
-        try {
-          launcher.unmount();
-        } catch (error) { /* unmount handles its own errors */ }
-      }
-      script.remove();
-    };
+  });
+  // Cache the rejection too, so a bad bundle is reported once instead of
+  // refetched on every tab change. It 404s until the learning MFE is promoted.
+  contactUsLauncherMount.catch((error) => {
+    console.error(`ContactUsLauncherScript: ${error.message}`);
+  });
+  return contactUsLauncherMount;
+};
+
+const ContactUsLauncherScript = () => {
+  const { authenticatedUser } = useContext(AppContext);
+  const apiUrl = process.env.CONTACT_US_SUPPORT_API_URL;
+  const userEmail = authenticatedUser?.email;
+  const userName = authenticatedUser?.name;
+  const userUsername = authenticatedUser?.username;
+
+  useEffect(() => {
+    if (!apiUrl) {
+      return;
+    }
+    // Re-runs are no-ops; the first call wins and its launcher stays put.
+    mountContactUsLauncher({ apiUrl, userEmail, userName, userUsername });
   }, [apiUrl, userEmail, userName, userUsername]);
 
   return null;
