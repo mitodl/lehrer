@@ -13,13 +13,13 @@ requires = ["uv_build>=0.12.1,<0.13.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
-prek = ["prek==0.5.5"]
+prek = ["prek==0.5.7"]
 dev = [
   "mypy==2.4.0",
   { include-group = "prek" },
   "pydantic-settings[yaml]",
   "pytest>=8",
-  "ruff==0.16.10",
+  "ruff==0.17.0",
   "types-PyYAML",
   "types-requests",
 ]
@@ -67,3 +67,6 @@ exclude = ["*.md"]
 #                                E402 (module-level import not at top) is intentional.
 "deployments/mit-ol/settings/**" = ["E402", "F401", "F403", "F405"]
 "deployments/generic/settings/**" = ["E402", "F401", "F403", "F405"]
+
+[tool.uv]
+constraint-dependencies = ["certifi>=2026.10.19"]  # eMudhra CA compromise: never resolve a certifi that trusts the compromised CAs
