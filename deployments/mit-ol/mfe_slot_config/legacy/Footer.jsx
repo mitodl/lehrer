@@ -330,21 +330,16 @@ const AppziScript = () => {
   return null;
 };
 
-// Kept outside the component because the learning MFE renders FooterSlot inside
-// TabPage, and the outline and courseware are separate routes, so opening a
-// subsection or clicking the "Course" breadcrumb remounts the footer without a
-// page load. Unmounting the launcher there would close an open card, lose the
-// conversation, and make the next message start a new thread, which files a
-// second ticket. The card sits on document.body, outside React, so it survives
-// on its own. One per page load, as hq#14033 asks for.
+// Module scope, not component state: route changes remount the footer, and
+// unmounting the launcher loses the open chat and files a second ticket.
 let contactUsLauncherMount = null;
 
 const mountContactUsLauncher = ({ apiUrl, userEmail, userName, userUsername }) => {
   if (contactUsLauncherMount) {
     return contactUsLauncherMount;
   }
-  // Only the learning MFE ships this bundle; the others load that copy. Absolute
-  // because authoring is on a different origin, and a classic script needs no CORS.
+  // Only the learning MFE ships this bundle, so the URL is absolute. A classic
+  // script needs no CORS.
   const bundlePath = process.env.CONTACT_US_BUNDLE_PATH
     || `${getConfig().LMS_BASE_URL}/learn/static/smoot-design/contactUsLauncher.umd.js`;
   contactUsLauncherMount = new Promise((resolve, reject) => {
@@ -360,8 +355,8 @@ const mountContactUsLauncher = ({ apiUrl, userEmail, userName, userUsername }) =
         reject(new Error(`bundle at ${bundlePath} has no init()`));
         return;
       }
-      // learn-ai gets no session on this cross-origin POST, so the ticket's
-      // requester fields are whatever we send here or nothing.
+      // learn-ai has no session on this cross-origin POST, so these are the
+      // ticket's only requester fields.
       const requestBody = {
         ...(userEmail ? { user_email: userEmail } : {}),
         ...(userName ? { user_name: userName } : {}),
@@ -374,20 +369,16 @@ const mountContactUsLauncher = ({ apiUrl, userEmail, userName, userUsername }) =
           },
         }));
       } catch (error) {
-        // A throw here would otherwise escape the load handler and leave the
-        // promise pending, so nothing would ever say why there is no launcher.
+        // A throw would escape the load handler and leave the promise pending.
         reject(error);
       }
     };
     document.head.appendChild(script);
   });
-  // feedbackBundle.js nulls its promise on failure so the next click retries.
-  // This one keeps the rejection: it loads on remount rather than on a click,
-  // and it 404s until the learning MFE is promoted, so retrying would refetch
-  // and re-log on every navigation for a failure that will not fix itself.
+  // The rejection is cached too, unlike feedbackBundle.js: this loads on every
+  // remount, so retrying would re-log a failure that will not fix itself.
   contactUsLauncherMount.catch((error) => {
-    // Pass the error itself, not its message: init() can throw a non-Error, and
-    // the stack is the only clue when the throw comes from inside the bundle.
+    // The error itself, not its message: init() can throw a non-Error.
     console.error('ContactUsLauncherScript:', error);
   });
   return contactUsLauncherMount;
