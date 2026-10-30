@@ -12,6 +12,7 @@ from __future__ import annotations
 import ast
 import datetime
 import json
+import os
 from datetime import timedelta
 from typing import Annotated, Any
 
@@ -49,7 +50,7 @@ class AqueductSettings(BaseSettings):
     )
     ALTERNATE_WORKER_QUEUES: str = Field(default="lms")
     AUTHORING_API_URL: str = Field(default="", description="Misc")
-    AWS_SECURITY_TOKEN: str | None = Field(
+    AWS_SECURITY_TOKEN: Any = Field(
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     BRANCH_IO_KEY: str = Field(default="")
@@ -727,7 +728,7 @@ class AqueductSettings(BaseSettings):
         ],
     )
     MODULESTORE_BRANCH: str = Field(default="draft-preferred")
-    OAUTH_ID_TOKEN_EXPIRATION: str | None = Field(
+    OAUTH_ID_TOKEN_EXPIRATION: Any = Field(
         default=None,
         description="5 minute expiration time for JWT id tokens issued for external API requests.",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
@@ -803,6 +804,7 @@ class AqueductSettings(BaseSettings):
                 "drf_spectacular.hooks.postprocess_schema_enums",
                 "cms.lib.spectacular.cms_mark_superseded_paths",
                 "cms.lib.spectacular.cms_mark_migrated_paths",
+                "openedx.core.apidocs.untag_deprecated_operations",
             ],
             "SCHEMA_PATH_PREFIX": "/api/(contentstore|authoring)",
         },
@@ -887,13 +889,8 @@ class AqueductSettings(BaseSettings):
         default=None
     )  # REDACTED: name looks secret-like — set via a source, not here
     ZENDESK_USER: str = Field(default="")
-    # ===== edx-proctoring =====
-    PROCTORING_BACKENDS: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {"DEFAULT": "null", "null": {}},
-        json_schema_extra={"aqueduct_plugin": "edx-proctoring"},
-    )
     # ===== ol-openedx-canvas-integration =====
-    CANVAS_ACCESS_TOKEN: str | None = Field(
+    CANVAS_ACCESS_TOKEN: Any = Field(
         default=None,
         json_schema_extra={"aqueduct_plugin": "ol-openedx-canvas-integration"},
     )  # REDACTED: name looks secret-like — set via a source, not here
@@ -931,7 +928,7 @@ class AqueductSettings(BaseSettings):
         },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     # ===== ol-openedx-chat-xblock =====
-    MIT_LEARN_AI_XBLOCK_CHAT_API_TOKEN: str | None = Field(
+    MIT_LEARN_AI_XBLOCK_CHAT_API_TOKEN: Any = Field(
         default=None, json_schema_extra={"aqueduct_plugin": "ol-openedx-chat-xblock"}
     )  # REDACTED: name looks secret-like — set via a source, not here
     MIT_LEARN_AI_XBLOCK_CHAT_API_URL: Any = Field(
@@ -972,7 +969,7 @@ class AqueductSettings(BaseSettings):
         description='.. setting_name: OL_OPENEDX_COURSE_SYNC_SERVICE_WORKER_USERNAME\n.. setting_default: ""\n.. setting_description: The username of the service worker that\nwill be used to sync courses.',  # noqa: E501
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     # ===== ol-openedx-git-auto-export =====
-    GITHUB_ACCESS_TOKEN: str | None = Field(
+    GITHUB_ACCESS_TOKEN: Any = Field(
         default=None,
         json_schema_extra={"aqueduct_plugin": "ol-openedx-git-auto-export"},
     )  # REDACTED: name looks secret-like — set via a source, not here
@@ -1054,10 +1051,10 @@ class AqueductSettings(BaseSettings):
         default="push_notification",
         json_schema_extra={"aqueduct_plugin": "openedx-platform"},
     )
-    ACE_CHANNEL_SAILTHRU_API_KEY: str | None = Field(
+    ACE_CHANNEL_SAILTHRU_API_KEY: Any = Field(
         default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )  # REDACTED: name looks secret-like — set via a source, not here
-    ACE_CHANNEL_SAILTHRU_API_SECRET: str | None = Field(
+    ACE_CHANNEL_SAILTHRU_API_SECRET: Any = Field(
         default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )  # REDACTED: name looks secret-like — set via a source, not here
     ACE_CHANNEL_SAILTHRU_DEBUG: bool = Field(
@@ -1109,21 +1106,16 @@ class AqueductSettings(BaseSettings):
             "aqueduct_plugin": "openedx-platform",
         },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
-    FIREBASE_CREDENTIALS: str | None = Field(
+    FIREBASE_CREDENTIALS: Any = Field(
         default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
     )  # REDACTED: name looks secret-like — set via a source, not here
-    FIREBASE_CREDENTIALS_PATH: str | None = Field(
+    FIREBASE_CREDENTIALS_PATH: Any = Field(
         default=None,
         json_schema_extra={"aqueduct_plugin": "openedx-platform"},
         description="Note: To local development with Firebase, you must set FIREBASE_CREDENTIALS_PATH\n(path to json file with FIREBASE_CREDENTIALS)\nor FIREBASE_CREDENTIALS dictionary.",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
-    PASSWORD_POLICY_COMPLIANCE_API_TIMEOUT: str | None = Field(
+    PASSWORD_POLICY_COMPLIANCE_API_TIMEOUT: int | None = Field(
         default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
-    )  # REDACTED: name looks secret-like — set via a source, not here
-    PASSWORD_POLICY_COMPLIANCE_ROLLOUT_CONFIG: str | None = Field(
-        default=None,
-        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
-        description="Settings for managing the rollout of password policy compliance enforcement.",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
     PUSH_NOTIFICATIONS_SETTINGS: Any = Field(
         default=None,
@@ -1132,12 +1124,1878 @@ class AqueductSettings(BaseSettings):
             "aqueduct_plugin": "openedx-platform",
         },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
-    ZENDESK_OAUTH_ACCESS_TOKEN: str | None = Field(
-        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
-    )  # REDACTED: name looks secret-like — set via a source, not here
-    ZENDESK_URL: Any = Field(
-        default=None, json_schema_extra={"aqueduct_plugin": "openedx-platform"}
+    # ===== openedx.envs.common =====
+    ACCOUNT_MICROFRONTEND_URL: Any = Field(
+        default=None,
+        description=".. setting_name: ACCOUNT_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based account settings page.\n.. setting_warning: Also set site's ENABLE_ACCOUNT_MICROFRONTEND and\naccount.redirect_to_microfrontend waffle flag",  # noqa: E501
     )  # refine type
+    ACTIVATION_EMAIL_SUPPORT_LINK: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    ADMINS: Annotated[list[Any], NoDecode] = Field(default_factory=list)
+    ADMIN_CONSOLE_MICROFRONTEND_URL: Any = Field(
+        default=None,
+        description=".. setting_name: ADMIN_CONSOLE_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based admin console page.",  # noqa: E501
+    )  # refine type
+    AFFILIATE_COOKIE_NAME: str = Field(
+        default="dev_affiliate_id", description="Affiliate cookie tracking"
+    )
+    AI_TRANSLATIONS_API_URL: str = Field(default="http://localhost:18760/api/v1")
+    ALLOWED_HOSTS: Annotated[list[Any], NoDecode] = Field(default_factory=lambda: ["*"])
+    ALLOW_PUBLIC_ACCOUNT_CREATION: bool = Field(
+        default=True,
+        description=".. toggle_name: ALLOW_PUBLIC_ACCOUNT_CREATION\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: Allow public account creation. If this is disabled, users will no longer have access to\nthe signup page.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2017-04-12\n.. toggle_tickets: https://openedx.atlassian.net/browse/YONK-513",  # noqa: E501
+    )
+    ALL_LANGUAGES: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: [
+            ["aa", "Afar"],
+            ["ab", "Abkhazian"],
+            ["af", "Afrikaans"],
+            ["ak", "Akan"],
+            ["sq", "Albanian"],
+            ["am", "Amharic"],
+            ["ar", "Arabic"],
+            ["an", "Aragonese"],
+            ["hy", "Armenian"],
+            ["as", "Assamese"],
+            ["av", "Avaric"],
+            ["ae", "Avestan"],
+            ["ay", "Aymara"],
+            ["az", "Azerbaijani"],
+            ["ba", "Bashkir"],
+            ["bm", "Bambara"],
+            ["eu", "Basque"],
+            ["be", "Belarusian"],
+            ["bn", "Bengali"],
+            ["bh", "Bihari languages"],
+            ["bi", "Bislama"],
+            ["bs", "Bosnian"],
+            ["br", "Breton"],
+            ["bg", "Bulgarian"],
+            ["my", "Burmese"],
+            ["ca", "Catalan"],
+            ["ch", "Chamorro"],
+            ["ce", "Chechen"],
+            ["zh", "Chinese"],
+            ["zh_HANS", "Simplified Chinese"],
+            ["zh_HANT", "Traditional Chinese"],
+            ["cu", "Church Slavic"],
+            ["cv", "Chuvash"],
+            ["kw", "Cornish"],
+            ["co", "Corsican"],
+            ["cr", "Cree"],
+            ["cs", "Czech"],
+            ["da", "Danish"],
+            ["dv", "Divehi"],
+            ["nl", "Dutch"],
+            ["dz", "Dzongkha"],
+            ["en", "English"],
+            ["eo", "Esperanto"],
+            ["et", "Estonian"],
+            ["ee", "Ewe"],
+            ["fo", "Faroese"],
+            ["fj", "Fijian"],
+            ["fi", "Finnish"],
+            ["fr", "French"],
+            ["fy", "Western Frisian"],
+            ["ff", "Fulah"],
+            ["ka", "Georgian"],
+            ["de", "German"],
+            ["gd", "Gaelic"],
+            ["ga", "Irish"],
+            ["gl", "Galician"],
+            ["gv", "Manx"],
+            ["el", "Greek"],
+            ["gn", "Guarani"],
+            ["gu", "Gujarati"],
+            ["ht", "Haitian"],
+            ["ha", "Hausa"],
+            ["he", "Hebrew"],
+            ["hz", "Herero"],
+            ["hi", "Hindi"],
+            ["ho", "Hiri Motu"],
+            ["hr", "Croatian"],
+            ["hu", "Hungarian"],
+            ["ig", "Igbo"],
+            ["is", "Icelandic"],
+            ["io", "Ido"],
+            ["ii", "Sichuan Yi"],
+            ["iu", "Inuktitut"],
+            ["ie", "Interlingue"],
+            ["ia", "Interlingua"],
+            ["id", "Indonesian"],
+            ["ik", "Inupiaq"],
+            ["it", "Italian"],
+            ["jv", "Javanese"],
+            ["ja", "Japanese"],
+            ["kl", "Kalaallisut"],
+            ["kn", "Kannada"],
+            ["ks", "Kashmiri"],
+            ["kr", "Kanuri"],
+            ["kk", "Kazakh"],
+            ["km", "Central Khmer"],
+            ["ki", "Kikuyu"],
+            ["rw", "Kinyarwanda"],
+            ["ky", "Kirghiz"],
+            ["kv", "Komi"],
+            ["kg", "Kongo"],
+            ["ko", "Korean"],
+            ["kj", "Kuanyama"],
+            ["ku", "Kurdish"],
+            ["lo", "Lao"],
+            ["la", "Latin"],
+            ["lv", "Latvian"],
+            ["li", "Limburgan"],
+            ["ln", "Lingala"],
+            ["lt", "Lithuanian"],
+            ["lb", "Luxembourgish"],
+            ["lu", "Luba-Katanga"],
+            ["lg", "Ganda"],
+            ["mk", "Macedonian"],
+            ["mh", "Marshallese"],
+            ["ml", "Malayalam"],
+            ["mi", "Maori"],
+            ["mr", "Marathi"],
+            ["ms", "Malay"],
+            ["mg", "Malagasy"],
+            ["mt", "Maltese"],
+            ["mn", "Mongolian"],
+            ["na", "Nauru"],
+            ["nv", "Navajo"],
+            ["nr", "Ndebele, South"],
+            ["nd", "Ndebele, North"],
+            ["ng", "Ndonga"],
+            ["ne", "Nepali"],
+            ["nn", "Norwegian Nynorsk"],
+            ["nb", "Bokmål, Norwegian"],
+            ["no", "Norwegian"],
+            ["ny", "Chichewa"],
+            ["oc", "Occitan"],
+            ["oj", "Ojibwa"],
+            ["or", "Oriya"],
+            ["om", "Oromo"],
+            ["os", "Ossetian"],
+            ["pa", "Panjabi"],
+            ["fa", "Persian"],
+            ["pi", "Pali"],
+            ["pl", "Polish"],
+            ["pt", "Portuguese"],
+            ["ps", "Pushto"],
+            ["qu", "Quechua"],
+            ["rm", "Romansh"],
+            ["ro", "Romanian"],
+            ["rn", "Rundi"],
+            ["ru", "Russian"],
+            ["sg", "Sango"],
+            ["sa", "Sanskrit"],
+            ["si", "Sinhala"],
+            ["sk", "Slovak"],
+            ["sl", "Slovenian"],
+            ["se", "Northern Sami"],
+            ["sm", "Samoan"],
+            ["sn", "Shona"],
+            ["sd", "Sindhi"],
+            ["so", "Somali"],
+            ["st", "Sotho, Southern"],
+            ["es", "Spanish"],
+            ["sc", "Sardinian"],
+            ["sr", "Serbian"],
+            ["ss", "Swati"],
+            ["su", "Sundanese"],
+            ["sw", "Swahili"],
+            ["sv", "Swedish"],
+            ["ty", "Tahitian"],
+            ["ta", "Tamil"],
+            ["tt", "Tatar"],
+            ["te", "Telugu"],
+            ["tg", "Tajik"],
+            ["tl", "Tagalog"],
+            ["th", "Thai"],
+            ["bo", "Tibetan"],
+            ["ti", "Tigrinya"],
+            ["to", "Tonga (Tonga Islands)"],
+            ["tn", "Tswana"],
+            ["ts", "Tsonga"],
+            ["tk", "Turkmen"],
+            ["tr", "Turkish"],
+            ["tw", "Twi"],
+            ["ug", "Uighur"],
+            ["uk", "Ukrainian"],
+            ["ur", "Urdu"],
+            ["uz", "Uzbek"],
+            ["ve", "Venda"],
+            ["vi", "Vietnamese"],
+            ["vo", "Volapük"],
+            ["cy", "Welsh"],
+            ["wa", "Walloon"],
+            ["wo", "Wolof"],
+            ["xh", "Xhosa"],
+            ["yi", "Yiddish"],
+            ["yo", "Yoruba"],
+            ["za", "Zhuang"],
+            ["zu", "Zulu"],
+        ],
+        description="Source:\nhttp://loc.gov/standards/iso639-2/ISO-639-2_utf-8.txt according to http://en.wikipedia.org/wiki/ISO_639-1\nNote that this is used as the set of choices to the `code` field of the `LanguageProficiency` model.",  # noqa: E501
+    )
+    ANALYTICS_DASHBOARD_NAME: str = Field(default="Your Platform Name Here Insights")
+    ANALYTICS_DASHBOARD_URL: str = Field(default="http://localhost:18110/courses")
+    API_ACCESS_FROM_EMAIL: str = Field(default="api-requests@example.com")
+    API_ACCESS_MANAGER_EMAIL: str = Field(default="api-access@example.com")
+    API_DOCUMENTATION_URL: str = Field(
+        default="https://course-catalog-api-guide.readthedocs.io/en/latest/"
+    )
+    ASSET_IGNORE_REGEX: str = Field(default="(^\\._.*$)|(^\\.DS_Store$)|(^.*~$)")
+    AUTHENTICATION_BACKENDS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: [
+            "rules.permissions.ObjectPermissionBackend",
+            "django.contrib.auth.backends.AllowAllUsersModelBackend",
+            "bridgekeeper.backends.RulePermissionBackend",
+        ],
+    )
+    AUTH_DOCUMENTATION_URL: str = Field(
+        default="https://course-catalog-api-guide.readthedocs.io/en/latest/authentication/index.html",  # noqa: E501
+    )
+    AUTH_PASSWORD_VALIDATORS: Annotated[list[Any] | None, NoDecode] = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    AUTOMATIC_AUTH_FOR_TESTING: bool = Field(
+        default=False,
+        description=".. toggle_name: AUTOMATIC_AUTH_FOR_TESTING\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to perform acceptance and load test. Auto auth view is responsible for load\ntesting and is controlled by this feature flag. Session verification (of CacheBackedAuthenticationMiddleware)\nis a security feature, but it can be turned off by enabling this feature flag.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2013-07-25\n.. toggle_warning: If this has been set to True then the account activation email will be skipped.\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/417",  # noqa: E501
+    )
+    AUTOPLAY_VIDEOS: bool = Field(
+        default=False, description="Don't autoplay videos for students/course authors"
+    )
+    AUTO_GENERATED_USERNAME_RANDOM_STRING_LENGTH: int = Field(
+        default=4,
+        description="String length for the configurable part of the auto-generated username",  # noqa: E501
+    )
+    AWS_ACCESS_KEY_ID: Any = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    AWS_QUERYSTRING_AUTH: bool = Field(default=True)
+    AWS_S3_CUSTOM_DOMAIN: str = Field(default="edxuploads.s3.amazonaws.com")
+    AWS_SECRET_ACCESS_KEY: Any = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    AWS_SES_REGION_ENDPOINT: str = Field(default="email.us-east-1.amazonaws.com")
+    AWS_SES_REGION_NAME: str = Field(default="us-east-1")
+    AWS_STORAGE_BUCKET_NAME: str = Field(default="edxuploads")
+    BADGES_ENABLED: bool = Field(
+        default=False,
+        description=".. toggle_name: BADGES_ENABLED\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to enable badges functionality.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2024-04-02\n.. toggle_target_removal_date: None",  # noqa: E501
+    )
+    BASE_COOKIE_DOMAIN: str = Field(default="localhost")
+    BEAMER_PRODUCT_ID: str = Field(default="")
+    BLOCK_STRUCTURES_SETTINGS: Any = Field(
+        default_factory=lambda: dict(
+            # .. setting_name: BLOCK_STRUCTURES_SETTINGS['COURSE_PUBLISH_TASK_DELAY']
+            # .. setting_default: 30
+            # .. setting_description: Delay, in seconds, after a new edit of a course is published before  # noqa: E501
+            #   updating the block structures cache. This is needed for a better chance at getting  # noqa: E501
+            #   the latest changes when there are secondary reads in sharded mongoDB clusters.
+            #   For more information, check https://github.com/openedx/edx-platform/pull/13388 and  # noqa: E501
+            #   https://github.com/openedx/edx-platform/pull/14571.
+            COURSE_PUBLISH_TASK_DELAY=30,
+            # .. setting_name: BLOCK_STRUCTURES_SETTINGS['TASK_DEFAULT_RETRY_DELAY']
+            # .. setting_default: 30
+            # .. setting_description: Delay, in seconds, between retry attempts if a block structure task  # noqa: E501
+            #   fails. For more information, check https://github.com/openedx/edx-platform/pull/13388 and  # noqa: E501
+            #   https://github.com/openedx/edx-platform/pull/14571.
+            TASK_DEFAULT_RETRY_DELAY=30,
+            # .. setting_name: BLOCK_STRUCTURES_SETTINGS['TASK_MAX_RETRIES']
+            # .. setting_default: 5
+            # .. setting_description: Maximum number of retries per block structure task.
+            #   If the maximum number of retries is exceeded, then you can attempt to either manually run  # noqa: E501
+            #   the celery task, or wait for it to be triggered again.
+            #   For more information, check https://github.com/openedx/edx-platform/pull/13388 and  # noqa: E501
+            #   https://github.com/openedx/edx-platform/pull/14571.
+            TASK_MAX_RETRIES=5,
+        ),
+        description=".. setting_name: BLOCK_STRUCTURES_SETTINGS\n.. setting_default: dict of settings\n.. setting_description: Stores all the settings used by block structures and block structure\nrelated tasks. See BLOCK_STRUCTURES_SETTINGS[XXX] documentation for details of each setting.\nFor more information, check https://github.com/openedx/edx-platform/pull/13388.",  # noqa: E501
+    )  # refine type
+    BROKER_HEARTBEAT: float = Field(default=60.0)
+    BROKER_HEARTBEAT_CHECKRATE: int = Field(default=2)
+    CACHES: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "course_structure_cache": {
+                "KEY_PREFIX": "course_structure",
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "TIMEOUT": "604800",
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+            "celery": {
+                "KEY_PREFIX": "celery",
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "TIMEOUT": "7200",
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+            "mongo_metadata_inheritance": {
+                "KEY_PREFIX": "mongo_metadata_inheritance",
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "TIMEOUT": 300,
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+            "staticfiles": {
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "KEY_PREFIX": "staticfiles_general",
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+            "default": {
+                "VERSION": "1",
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "KEY_PREFIX": "default",
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+            "configuration": {
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "KEY_PREFIX": "configuration",
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+            "general": {
+                "KEY_FUNCTION": "common.djangoapps.util.memcache.safe_key",
+                "LOCATION": ["localhost:11211"],
+                "KEY_PREFIX": "general",
+                "BACKEND": "django.core.cache.backends.memcached.PyMemcacheCache",
+                "OPTIONS": {
+                    "no_delay": True,
+                    "ignore_exc": True,
+                    "use_pooling": True,
+                    "connect_timeout": 0.5,
+                },
+            },
+        },
+    )
+    CALCULATOR_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/exercise_tools/add_calculator.html",  # noqa: E501
+    )
+    CELERY_BROKER_HOSTNAME: str = Field(default="")
+    CELERY_BROKER_PASSWORD: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    CELERY_BROKER_TRANSPORT: str = Field(default="")
+    CELERY_BROKER_USER: str = Field(default="")
+    CELERY_BROKER_USE_SSL: bool = Field(default=False)
+    CELERY_BROKER_VHOST: str = Field(default="")
+    CELERY_CREATE_MISSING_QUEUES: bool = Field(default=True)
+    CELERY_DEFAULT_EXCHANGE: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    CELERY_DEFAULT_EXCHANGE_TYPE: str = Field(
+        default="direct", description="Exchange configuration"
+    )
+    CELERY_DEFAULT_QUEUE: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    CELERY_DEFAULT_ROUTING_KEY: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    CELERY_EVENT_QUEUE_TTL: Any = Field(default=None)  # refine type
+    CELERY_IGNORE_RESULT: bool = Field(
+        default=False, description="Results configuration"
+    )
+    CELERY_MESSAGE_COMPRESSION: str = Field(
+        default="gzip", description="Message configuration"
+    )
+    CELERY_QUEUE_HA_POLICY: str = Field(
+        default="all", description="Queues configuration"
+    )
+    CELERY_RESULT_BACKEND: str = Field(default="django-cache")
+    CELERY_RESULT_SERIALIZER: str = Field(default="json")
+    CELERY_SEND_EVENTS: bool = Field(default=True)
+    CELERY_SEND_TASK_SENT_EVENT: bool = Field(default=True)
+    CELERY_STORE_ERRORS_EVEN_IF_IGNORED: bool = Field(default=True)
+    CELERY_TASK_SERIALIZER: str = Field(default="json")
+    CELERY_TIMEZONE: str = Field(
+        default="UTC", description="Locale/Internationalization"
+    )
+    CELERY_TRACK_STARTED: bool = Field(default=True, description="Events configuration")
+    CERTIFICATES_HTML_VIEW: bool = Field(
+        default=False,
+        description=".. toggle_name: CERTIFICATES_HTML_VIEW\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to enable course certificates on your instance of Open edX.\n.. toggle_warning: You must enable this feature flag in both Studio and the LMS and complete the configuration tasks\ndescribed here:\nhttps://docs.openedx.org/en/latest/site_ops/install_configure_run_guide/configuration/enable_certificates.html  pylint: disable=line-too-long,useless-suppression\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-03-13\n.. toggle_target_removal_date: None\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/7113",  # noqa: E501
+    )
+    CERTIFICATE_TEMPLATE_LANGUAGES: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {"en": "English", "es": "Español"},
+        description="Languages supported for custom course certificate templates",
+    )
+    CHAT_COMPLETION_API: str = Field(default="")
+    CHAT_COMPLETION_API_KEY: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    CODE_JAIL: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "python_bin": "/edx/app/edxapp/venvs/edxapp-sandbox/bin/python",
+            "user": "sandbox",
+            "limits": {"CPU": 1, "VMEM": 536870912, "REALTIME": 3, "PROXY": 0},
+            "limit_overrides": {},
+        },
+    )
+    CODE_JAIL_REST_SERVICE_CONNECT_TIMEOUT: float = Field(
+        default=0.5,
+        description=".. setting_name: CODE_JAIL_REST_SERVICE_CONNECT_TIMEOUT\n.. setting_default: 0.5\n.. setting_description: Set the number of seconds LMS will wait to establish an internal\nconnection to the codejail remote service.",  # noqa: E501
+    )
+    CODE_JAIL_REST_SERVICE_HOST: str = Field(
+        default="http://127.0.0.1:8550",
+        description=".. setting_name: CODE_JAIL_REST_SERVICE_HOST\n.. setting_default: 'http://127.0.0.1:8550'\n.. setting_description: Set the codejail remote service host",  # noqa: E501
+    )
+    CODE_JAIL_REST_SERVICE_READ_TIMEOUT: float = Field(
+        default=3.5,
+        description=".. setting_name: CODE_JAIL_REST_SERVICE_READ_TIMEOUT\n.. setting_default: 3.5\n.. setting_description: Set the number of seconds LMS/CMS will wait for a response from the\ncodejail remote service endpoint.",  # noqa: E501
+    )
+    CODE_JAIL_REST_SERVICE_REMOTE_EXEC: str = Field(
+        default="xmodule.capa.safe_exec.remote_exec.send_safe_exec_request_v0",
+        description=".. setting_name: CODE_JAIL_REST_SERVICE_REMOTE_EXEC\n.. setting_default: 'xmodule.capa.safe_exec.remote_exec.send_safe_exec_request_v0'\n.. setting_description: Set the python package.module.function that is reponsible of\ncalling the remote service in charge of jailed code execution",  # noqa: E501
+    )
+    COMPLETION_VIDEO_COMPLETE_PERCENTAGE: float = Field(
+        default=0.95,
+        description="Once a user has watched this percentage of a video, mark it as complete:\n(0.0 = 0%, 1.0 = 100%)",  # noqa: E501
+    )
+    COMPREHENSIVE_THEME_DIRS: Any = Field(
+        default_factory=lambda: os.environ.get("COMPREHENSIVE_THEME_DIRS", "").split(
+            ":"
+        ),  # noqa: E501
+        description=".. setting_name: COMPREHENSIVE_THEME_DIRS\n.. setting_default: []\n.. setting_description: A list of paths to directories, each of which will\nbe searched for comprehensive themes. Do not override this Django setting directly.\nInstead, set the COMPREHENSIVE_THEME_DIRS environment variable, using colons (:) to\nseparate paths.",  # noqa: E501
+    )  # refine type
+    COMPREHENSIVE_THEME_LOCALE_PATHS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=list,
+        description='.. setting_name: COMPREHENSIVE_THEME_LOCALE_PATHS\n.. setting_default: []\n.. setting_description: A list of the paths to themes locale directories e.g.\n"COMPREHENSIVE_THEME_LOCALE_PATHS" : ["/edx/src/edx-themes/conf/locale"].',  # noqa: E501
+    )
+    CONTENTSTORE: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    CONTENT_TYPE_GATE_GROUP_IDS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {"limited_access": 1, "full_access": 2}
+    )
+    CONTEXT_PROCESSORS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: [
+            "django.template.context_processors.request",
+            "django.template.context_processors.static",
+            "django.contrib.messages.context_processors.messages",
+            "django.template.context_processors.i18n",
+            "django.contrib.auth.context_processors.auth",
+            "django.template.context_processors.csrf",
+            "help_tokens.context_processor",
+            "openedx.core.djangoapps.site_configuration.context_processors.configuration_context",  # noqa: E501
+        ],
+    )
+    CORS_ALLOW_CREDENTIALS: bool | None = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    CORS_ALLOW_INSECURE: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    CORS_ORIGIN_ALLOW_ALL: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    CORS_ORIGIN_WHITELIST: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    COURSES_WITH_UNSAFE_CODE: Annotated[list[Any], NoDecode] = Field(
+        default_factory=list,
+        description='Some courses are allowed to run unsafe code. This is a list of regexes, one\nof them must match the course id for that course to run unsafe code.\nFor example:\nCOURSES_WITH_UNSAFE_CODE = [\nr"Harvard/XY123.1/.*"',  # noqa: E501
+    )
+    COURSEWARE_SEARCH_INCLUSION_DATE: Any = Field(
+        default=None,
+        description=".. setting_name: COURSEWARE_SEARCH_INCLUSION_DATE\n.. setting_default: None\n.. setting_description: YYYY-MM-DD cutoff date used to roll out courseware search to newer courses.\nIn the LMS, the courseware-search-enabled endpoint exposes search for any course whose start date\nis after this date (in addition to any course where the courseware.mfe_courseware_search waffle\nflag is enabled); leaving it None disables this date-based rollout. The Studio\n`reindex_course --from_inclusion_date` command reindexes courses starting on/after this date,\nflooring an unset value at 2020-01-01 so the standalone command still has a bound to filter by.",  # noqa: E501
+    )  # refine type
+    COURSE_ABOUT_VISIBILITY_PERMISSION: str = Field(
+        default="see_exists",
+        description="which access.py permission name to check in order to determine if a course about page is\nvisible. We default this to the legacy permission 'see_exists'.",  # noqa: E501
+    )
+    COURSE_ACCESS_DURATION_MAX_WEEKS: int = Field(
+        default=18,
+        description=".. setting_name: COURSE_ACCESS_DURATION_MAX_WEEKS\n.. setting_default: 18\n.. setting_description: Maximum course duration in weeks. Course access duration is bounded by this upper limit\n.. regardless of Discovery service data.",  # noqa: E501
+    )
+    COURSE_ACCESS_DURATION_MIN_WEEKS: int = Field(
+        default=4,
+        description=".. setting_name: COURSE_ACCESS_DURATION_MIN_WEEKS\n.. setting_default: 4\n.. setting_description: Minimum course duration in weeks when Discovery service data is unavailable or course has no\n.. weeks_to_complete value. Used as fallback for course access duration calculations (e.g., audit access expiration\n.. and discussion notification filtering).",  # noqa: E501
+    )
+    COURSE_AUTHORING_MICROFRONTEND_URL: Any = Field(
+        default=None,
+        description=".. setting_name: COURSE_AUTHORING_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based course authoring (Studio) page.",  # noqa: E501
+    )  # refine type
+    COURSE_CATALOG_API_URL: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    COURSE_CATALOG_URL_ROOT: str = Field(default="http://localhost:8008")
+    COURSE_CATALOG_VISIBILITY_PERMISSION: str = Field(
+        default="see_exists",
+        description="which access.py permission name to check in order to determine if a course is visible in\nthe course catalog. We default this to the legacy permission 'see_exists'.",  # noqa: E501
+    )
+    COURSE_ENROLLMENT_MODES: Any = Field(
+        default_factory=lambda: {
+            "audit": {
+                "id": 1,
+                "slug": "audit",
+                "display_name": _("Audit"),
+                "min_price": 0,
+            },
+            "verified": {
+                "id": 2,
+                "slug": "verified",
+                "display_name": _("Verified"),
+                "min_price": 1,
+            },
+            "professional": {
+                "id": 3,
+                "slug": "professional",
+                "display_name": _("Professional"),
+                "min_price": 1,
+            },
+            "no-id-professional": {
+                "id": 4,
+                "slug": "no-id-professional",
+                "display_name": _("No-Id-Professional"),
+                "min_price": 0,
+            },
+            "credit": {
+                "id": 5,
+                "slug": "credit",
+                "display_name": _("Credit"),
+                "min_price": 0,
+            },
+            "honor": {
+                "id": 6,
+                "slug": "honor",
+                "display_name": _("Honor"),
+                "min_price": 0,
+            },
+            "masters": {
+                "id": 7,
+                "slug": "masters",
+                "display_name": _("Master's"),
+                "min_price": 0,
+            },
+            "executive-education": {
+                "id": 8,
+                "slug": "executive-educations",
+                "display_name": _("Executive Education"),
+                "min_price": 1,
+            },
+            "unpaid-executive-education": {
+                "id": 9,
+                "slug": "unpaid-executive-education",
+                "display_name": _("Unpaid Executive Education"),
+                "min_price": 0,
+            },
+            "paid-executive-education": {
+                "id": 10,
+                "slug": "paid-executive-education",
+                "display_name": _("Paid Executive Education"),
+                "min_price": 1,
+            },
+            "unpaid-bootcamp": {
+                "id": 11,
+                "slug": "unpaid-bootcamp",
+                "display_name": _("Unpaid Bootcamp"),
+                "min_price": 0,
+            },
+            "paid-bootcamp": {
+                "id": 12,
+                "slug": "paid-bootcamp",
+                "display_name": _("Paid Bootcamp"),
+                "min_price": 1,
+            },
+        },
+        description="The min_price key refers to the minimum price allowed for an instance\nof a particular type of course enrollment mode. This is not to be confused\nwith the min_price field of the CourseMode model, which refers to the actual\nprice of the CourseMode.",  # noqa: E501
+    )  # refine type
+    COURSE_LIVE_GLOBAL_CREDENTIALS: Annotated[dict[str, Any] | None, NoDecode] = Field(
+        default=None, description="keys for  big blue button live provider"
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    COURSE_MODE_DEFAULTS: Any = Field(
+        default_factory=lambda: {
+            "android_sku": None,
+            "bulk_sku": None,
+            "currency": "usd",
+            "description": None,
+            "expiration_datetime": None,
+            "ios_sku": None,
+            "min_price": 0,
+            "name": _("Audit"),
+            "sku": None,
+            "slug": "audit",
+            "suggested_prices": "",
+        },
+    )  # refine type
+    COURSE_OLX_VALIDATION_IGNORE_LIST: Any = Field(default=None)  # refine type
+    COURSE_OLX_VALIDATION_STAGE: int = Field(default=1)
+    CREDENTIALS_INTERNAL_SERVICE_URL: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    CREDENTIALS_PUBLIC_SERVICE_URL: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    CREDENTIALS_SERVICE_USERNAME: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    CREDIT_PROVIDER_SECRET_KEYS: Annotated[dict[str, Any] | None, NoDecode] = Field(
+        default=None,
+        description="Secret keys shared with credit providers.\nUsed to digitally sign credit requests (us --> provider)\nand validate responses (provider --> us).\nEach key in the dictionary is a credit provider ID, and\nthe value is the 32-character key.",  # noqa: E501
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    CREDIT_PROVIDER_TIMESTAMP_EXPIRATION: Any = Field(
+        default_factory=lambda: 15 * 60,
+        description="Maximum age in seconds of timestamps we will accept\nwhen a credit provider notifies us that a student has been approved\nor denied for credit.",  # noqa: E501
+    )  # refine type
+    CREDIT_TASK_DEFAULT_RETRY_DELAY: int = Field(
+        default=30,
+        description="Initial delay used for retrying tasks.\nAdditional retries use longer delays.\nValue is in seconds.",  # noqa: E501
+    )
+    CREDIT_TASK_MAX_RETRIES: int = Field(
+        default=5,
+        description="Maximum number of retries per task for errors that are not related\nto throttling.",  # noqa: E501
+    )
+    CROSS_DOMAIN_CSRF_COOKIE_DOMAIN: str = Field(
+        default="",
+        description='When setting the domain for the "cross-domain" version of the CSRF\ncookie, you should choose something like: ".example.com"\n(note the leading dot), where both the referer and the host\nare subdomains of "example.com".\nBrowser security rules require that\nthe cookie domain matches the domain of the server; otherwise\nthe cookie won\'t get set.  And once the cookie gets set, the client\nneeds to be on a domain that matches the cookie domain, otherwise\nthe client won\'t be able to read the cookie.',  # noqa: E501
+    )
+    CROSS_DOMAIN_CSRF_COOKIE_NAME: str = Field(
+        default="",
+        description='If setting a cross-domain cookie, it\'s really important to choose\na name for the cookie that is DIFFERENT than the cookies used\nby each subdomain.  For example, suppose the applications\nat these subdomains are configured to use the following cookie names:\n1) foo.example.com --> "csrftoken"\n2) baz.example.com --> "csrftoken"\n3) bar.example.com --> "csrftoken"\nFor the cross-domain version of the CSRF cookie, you need to choose\na name DIFFERENT than "csrftoken"; otherwise, the new token configured\nfor ".example.com" could conflict with the other cookies,\nnon-deterministically causing 403 responses.',  # noqa: E501
+    )
+    CSRF_COOKIE_AGE: Any = Field(
+        default_factory=lambda: 60 * 60 * 24 * 7 * 52
+    )  # refine type
+    CSRF_COOKIE_SECURE: bool = Field(
+        default=False,
+        description="It is highly recommended that you override this in any environment accessed by end users",  # noqa: E501
+    )
+    CSRF_TRUSTED_ORIGINS: Annotated[list[Any], NoDecode] = Field(default_factory=list)
+    CUSTOM_COURSES_EDX: bool = Field(
+        default=False,
+        description=".. toggle_name: CUSTOM_COURSES_EDX\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to enable Custom Courses for edX, a feature that is more commonly known as\nCCX. Documentation for configuring and using this feature is available at\nhttps://docs.openedx.org/en/latest/site_ops/install_configure_run_guide/configuration/enable_ccx.html\n.. toggle_warning: When set to true, 'lms.djangoapps.ccx.overrides.CustomCoursesForEdxOverrideProvider' will\nbe added to MODULESTORE_FIELD_OVERRIDE_PROVIDERS\n.. toggle_use_cases: opt_in, circuit_breaker\n.. toggle_creation_date: 2015-04-10\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/6636",  # noqa: E501
+    )
+    CUSTOM_PAGES_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/manage_custom_page.html",  # noqa: E501
+    )
+    CUSTOM_RESOURCE_TEMPLATES_DIRECTORY: Any = Field(
+        default=None,
+        description='.. setting_name: CUSTOM_RESOURCE_TEMPLATES_DIRECTORY\n.. setting_default: None\n.. setting_description: Path to an existing directory of YAML files containing\nhtml content to be used with the subclasses of xmodule.x_module.ResourceTemplates.\nDefault example templates can be found in xmodule/templates/html.\nNote that the extension used is ".yaml" and not ".yml".\nSee xmodule.x_module.ResourceTemplates for usage.\n"CUSTOM_RESOURCE_TEMPLATES_DIRECTORY" : null',  # noqa: E501
+    )  # refine type
+    DATABASES: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "default": {
+                "ATOMIC_REQUESTS": True,
+                "CONN_MAX_AGE": 0,
+                "ENGINE": "django.db.backends.mysql",
+                "HOST": "127.0.0.1",
+                "NAME": "edxapp",
+                "OPTIONS": {},
+                "PASSWORD": "password",
+                "PORT": "3306",
+                "USER": "edxapp001",
+            },
+            "read_replica": {
+                "CONN_MAX_AGE": 0,
+                "ENGINE": "django.db.backends.mysql",
+                "HOST": "127.0.0.1",
+                "NAME": "edxapp",
+                "OPTIONS": {},
+                "PASSWORD": "password",
+                "PORT": "3306",
+                "USER": "edxapp001",
+            },
+            "student_module_history": {
+                "CONN_MAX_AGE": 0,
+                "ENGINE": "django.db.backends.mysql",
+                "HOST": "127.0.0.1",
+                "NAME": "edxapp_csmh",
+                "OPTIONS": {},
+                "PASSWORD": "password",
+                "PORT": "3306",
+                "USER": "edxapp001",
+            },
+        },
+    )
+    DATABASE_ROUTERS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: [
+            "openedx.core.lib.django_courseware_routers.StudentModuleHistoryExtendedRouter"  # noqa: E501
+        ],
+    )
+    DATA_DIR: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    DATA_UPLOAD_MAX_MEMORY_SIZE: Any = Field(
+        default=None,
+        description="Set request limits for maximum size of a request body and maximum number of GET/POST parameters. (>=Django 1.10)\nLimits are currently disabled - but can be used for finer-grained denial-of-service protection.",  # noqa: E501
+    )  # refine type
+    DATA_UPLOAD_MAX_NUMBER_FIELDS: Any = Field(default=None)  # refine type
+    DEBUG: bool = Field(default=False)
+    DEBUG_TOOLBAR_PATCH_SETTINGS: bool = Field(default=False)
+    DEFAULT_COURSE_ABOUT_IMAGE_URL: str = Field(default="images/pencils.jpg")
+    DEFAULT_COURSE_VISIBILITY_IN_CATALOG: str = Field(default="both")
+    DEFAULT_EMAIL_LOGO_URL: str = Field(
+        default="https://edx-cdn.org/v3/default/logo.png"
+    )
+    DEFAULT_HASHING_ALGORITHM: str = Field(
+        default="sha256",
+        description="This Django setting was removed in Django 4.0, but it is still being referenced\nin the code. It would be worth investigating if we still need this and, if we do,\nleave a comment explaining why here. See https://github.com/openedx/edx-platform/issues/37744.",  # noqa: E501
+    )
+    DEFAULT_MOBILE_AVAILABLE: bool = Field(
+        default=False,
+        description=".. toggle_name: DEFAULT_MOBILE_AVAILABLE\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: This specifies if the courses are available for mobile by default. To make any individual\ncourse available for mobile one can set the value of Mobile Course Available to true in Advanced Settings from the\nstudio when this is False.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2021-01-26\n.. toggle_tickets: https://openedx.atlassian.net/browse/OSPR-1985",  # noqa: E501
+    )
+    DEFAULT_NOTIFICATION_ICON_URL: str = Field(default="")
+    DEFAULT_SITE_THEME: Any = Field(
+        default=None,
+        description=".. setting_name: DEFAULT_SITE_THEME\n.. setting_default: None\n.. setting_description: Theme to use when no site or site theme is defined, for example\n\"dark-theme\". Set to None if you want to use openedx default theme.\n.. setting_warning: The theme folder needs to be in 'edx-platform/themes' or define the path\nto the theme folder in COMPREHENSIVE_THEME_DIRS. To be effective, ENABLE_COMPREHENSIVE_THEMING\nhas to be enabled.",  # noqa: E501
+    )  # refine type
+    DEFAULT_TEMPLATE_ENGINE: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    DEPRECATED_ADVANCED_COMPONENT_TYPES: Annotated[list[Any], NoDecode] = Field(
+        default_factory=list
+    )
+    DISABLE_ACCOUNT_ACTIVATION_REQUIREMENT_SWITCH: str = Field(
+        default="verify_student_disable_account_activation_requirement"
+    )
+    DISABLE_MOBILE_COURSE_AVAILABLE: bool = Field(
+        default=False,
+        description=".. toggle_name: settings.DISABLE_MOBILE_COURSE_AVAILABLE\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to remove Mobile Course Available UI Flag from Studio's Advanced Settings\npage else Mobile Course Available UI Flag will be available on Studio side.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2020-02-14\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/23073",  # noqa: E501
+    )
+    DISABLE_START_DATES: bool = Field(
+        default=False,
+        description=".. toggle_name: DISABLE_START_DATES\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When True, all courses will be active, regardless of start\ndate.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2012-07-24\n.. toggle_warning: This will cause ALL courses to be immediately visible.\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/17913\nDO NOT SET TO True IN THIS FILE\nDoing so will cause all courses to be released on production",  # noqa: E501
+    )
+    DISABLE_UNENROLLMENT: bool = Field(
+        default=False,
+        description=".. toggle_name: DISABLE_UNENROLLMENT\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to disable self-unenrollments via REST API.\nThis also hides the \"Unenroll\" button on the Learner Dashboard.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2021-10-11\n.. toggle_warning: For consistency in user experience, keep the value in sync with the setting of the same name\nin the LMS and CMS.\n.. toggle_tickets: 'https://github.com/open-craft/edx-platform/pull/429'",  # noqa: E501
+    )
+    DISCUSSIONS_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/concepts/communication/about_course_discussions.html",  # noqa: E501
+    )
+    DISCUSSIONS_MFE_FEEDBACK_URL: Any = Field(
+        default=None,
+        description=".. setting_name: DISCUSSIONS_MFE_FEEDBACK_URL\n.. setting_default: None\n.. setting_description: Base URL of the discussions micro-frontend google form based feedback.",  # noqa: E501
+    )  # refine type
+    DISCUSSIONS_MICROFRONTEND_URL: Any = Field(
+        default=None,
+        description=".. setting_name: DISCUSSIONS_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based discussions page.\n.. setting_warning: Also set site's courseware.discussions_mfe waffle flag.",  # noqa: E501
+    )  # refine type
+    DISCUSSION_RATELIMIT: str = Field(default="100/m")
+    DISPLAY_COURSE_MODES_ON_DASHBOARD: bool = Field(
+        default=True,
+        description=".. toggle_name: DISPLAY_COURSE_MODES_ON_DASHBOARD\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: When True, course modes (verified, honor, etc.) are shown as pills on the learner dashboard.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2017-09-13",  # noqa: E501
+    )
+    DJFS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "type": "osfs",
+            "directory_root": "/edx/var/edxapp/django-pyfs/static/django-pyfs",
+            "url_root": "/static/django-pyfs",
+        },
+    )
+    DOC_STORE_CONFIG: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "db": "edxapp",
+            "host": "localhost",
+            "replicaSet": "",
+            "port": 27017,
+            "user": "edxapp",
+            "collection": "modulestore",
+            "ssl": False,
+            "socketTimeoutMS": 6000,
+            "connectTimeoutMS": 2000,
+            "auth_source": None,
+        },
+    )
+    ECOMMERCE_API_SIGNING_KEY: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    ECOMMERCE_API_URL: str = Field(default="http://localhost:8002/api/v2")
+    ECOMMERCE_PUBLIC_URL_ROOT: str = Field(default="http://localhost:8002")
+    EDXMKTG_LOGGED_IN_COOKIE_NAME: str = Field(default="edxloggedin")
+    EDXMKTG_USER_INFO_COOKIE_NAME: str = Field(default="edx-user-info")
+    EDXMKTG_USER_INFO_COOKIE_VERSION: int = Field(default=1)
+    EDXNOTES_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/exercise_tools/enable_notes.html",  # noqa: E501
+    )
+    EDX_DRF_EXTENSIONS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "JWT_PAYLOAD_USER_ATTRIBUTE_MAPPING": {},
+            "STANDARDIZED_ERROR_BASE_HANDLER": "openedx.core.lib.request_utils.ignored_error_exception_handler",  # noqa: E501
+        },
+    )
+    EDX_PLATFORM_REVISION: str = Field(
+        default="release",
+        description="Initialize to 'release', but read from JSON in production.py",
+    )
+    EDX_ROOT_URL: str = Field(default="")
+    ELASTIC_SEARCH_CONFIG: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: [{"use_ssl": False, "host": "localhost", "port": 9200}]
+    )
+    EMAIL_CHANGE_RATE_LIMIT: str = Field(default="")
+    EMBARGO: bool = Field(
+        default=False,
+        description=".. toggle_name: EMBARGO\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Turns on embargo functionality, which blocks users from\nthe site or courses based on their location. Embargo can restrict users by states\nand whitelist/blacklist (IP Addresses (ie. 10.0.0.0), Networks (ie. 10.0.0.0/24)), or the user profile country.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2014-02-27\n.. toggle_target_removal_date: None\n.. toggle_warning: reverse proxy should be configured appropriately for example Client IP address headers\n(e.g HTTP_X_FORWARDED_FOR) should be configured.\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/2749",  # noqa: E501
+    )
+    EMBARGO_SITE_REDIRECT_URL: Any = Field(
+        default=None, description="Embargo"
+    )  # refine type
+    ENABLE_AUTOADVANCE_VIDEOS: bool = Field(
+        default=False,
+        description="Move the student/course author to next page when a video finishes. Set to\nTrue to show an auto-advance button in videos. If False, videos never\nauto-advance.",  # noqa: E501
+    )
+    ENABLE_CHANGE_USER_PASSWORD_ADMIN: bool | None = Field(
+        default=None,
+        description=".. toggle_name: ENABLE_CHANGE_USER_PASSWORD_ADMIN\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to enable changing a user password through django admin. This is disabled by\ndefault because enabling allows a method to bypass password policy.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2020-02-21\n.. toggle_tickets: 'https://github.com/openedx/edx-platform/pull/21616'",  # noqa: E501
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    ENABLE_CODEJAIL_REST_SERVICE: bool = Field(
+        default=False, description="Code jail REST service"
+    )
+    ENABLE_COMPREHENSIVE_THEMING: bool = Field(
+        default=False,
+        description=".. toggle_name: ENABLE_COMPREHENSIVE_THEMING\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When enabled, this toggle activates the use of the custom theme\ndefined by DEFAULT_SITE_THEME.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2016-06-30",  # noqa: E501
+    )
+    ENABLE_CORS_HEADERS: bool = Field(
+        default=False,
+        description="Allows to configure the LMS to provide CORS headers to serve requests from other\ndomains",  # noqa: E501
+    )
+    ENABLE_COURSE_OLX_VALIDATION: bool = Field(
+        default=False, description="Settings for course import olx validation"
+    )
+    ENABLE_CREDIT_ELIGIBILITY: bool = Field(
+        default=True,
+        description='.. toggle_name: ENABLE_CREDIT_ELIGIBILITY\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: When enabled, it is possible to define a credit eligibility criteria in the CMS. A "Credit\nEligibility" section then appears for those courses in the LMS.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-06-17\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/8550',  # noqa: E501
+    )
+    ENABLE_CROSS_DOMAIN_CSRF_COOKIE: bool = Field(default=False)
+    ENABLE_CSMH_EXTENDED: bool = Field(
+        default=True,
+        description='.. toggle_name: ENABLE_CSMH_EXTENDED\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: Write Courseware Student Module History (CSMH) to the extended table: this logs all\nstudent activities to MySQL, in a separate database.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2020-11-05\n.. toggle_warning: Even though most Open edX instances run with a separate CSMH database, it may not always be\nthe case. When disabling this feature flag, remember to remove "lms.djangoapps.coursewarehistoryextended"\nfrom the INSTALLED_APPS and the "StudentModuleHistoryExtendedRouter" from the DATABASE_ROUTERS. This is needed\nin the LMS and CMS for migration consistency.',  # noqa: E501
+    )
+    ENABLE_DISCUSSION_SERVICE: bool = Field(
+        default=True,
+        description=".. toggle_name: ENABLE_DISCUSSION_SERVICE\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: When True, it will enable the Discussion tab in courseware for all courses. Setting this\nto False will not contain inline discussion components and discussion tab in any courses.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2012-08-14\n.. toggle_warning: If the discussion panel is present in the course and the value for this flag is False then,\nattempting to expand those components will cause errors. So, this should only be set to False with an LMS that\nis running courses that do not contain discussion components.\nFor consistency in user-experience, keep the value in sync with the setting of the same name in the CMS.",  # noqa: E501
+    )
+    ENABLE_DYNAMIC_REGISTRATION_FIELDS: bool = Field(
+        default=False,
+        description=".. toggle_name: ENABLE_DYNAMIC_REGISTRATION_FIELDS\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When enabled, this toggle adds fields configured in\nREGISTRATION_EXTRA_FIELDS to Authn MFE\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2022-04-21\n.. toggle_target_removal_date: None\n.. toggle_tickets: https://openedx.atlassian.net/browse/VAN-838",  # noqa: E501
+    )
+    ENABLE_EDXNOTES: bool = Field(
+        default=False,
+        description="Let students save and manage their annotations\n.. toggle_name: settings.ENABLE_EDXNOTES\n.. toggle_implementation: SettingToggle\n.. toggle_default: False\n.. toggle_description: This toggle enables the students to save and manage their annotations in the\ncourse using the notes service. The bulk of the actual work in storing the notes is done by\na separate service (see the edx-notes-api repo).\n.. toggle_warning: Requires the edx-notes-api service properly running and to have configured the django settings\nEDXNOTES_INTERNAL_API and EDXNOTES_PUBLIC_API. If you update this setting, also update it in Studio.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-01-04\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/6321",  # noqa: E501
+    )
+    ENABLE_ENROLLMENT_RESET: bool = Field(
+        default=False,
+        description="Enable feature to remove enrollments and users. Used to reset state of master's integration environments",  # noqa: E501
+    )
+    ENABLE_ENROLLMENT_TRACK_USER_PARTITION: bool = Field(
+        default=True,
+        description="Whether or not the dynamic EnrollmentTrackUserPartition should be registered.",  # noqa: E501
+    )
+    ENABLE_EXAM_SETTINGS_HTML_VIEW: bool = Field(
+        default=False,
+        description='.. toggle_name: ENABLE_EXAM_SETTINGS_HTML_VIEW\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Enable the "Exam Settings" view in Studio\'s course settings. When enabled,\nthe corresponding legacy proctored/timed-exam fields on the course are marked deprecated in the\nadvanced settings editor so they are edited via the dedicated view instead.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2020-07-09\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/24405',  # noqa: E501
+    )
+    ENABLE_HELP_LINK: bool = Field(
+        default=True,
+        description="Can be turned off to disable the help link in the navbar\n.. toggle_name: ENABLE_HELP_LINK\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: When True, a help link is displayed on the main navbar. Set False to hide it.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2021-03-05\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/26106",  # noqa: E501
+    )
+    ENABLE_INTEGRITY_SIGNATURE: bool = Field(
+        default=False,
+        description=".. toggle_name: ENABLE_INTEGRITY_SIGNATURE\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Whether to display honor code agreement for learners before their first grade assignment.\nThe honor code agreement replaces the ID verification requirement (https://github.com/edx/edx-name-affirmation).\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2022-02-15\n.. toggle_target_removal_date: None\n.. toggle_tickets: 'https://openedx.atlassian.net/browse/MST-1348'",  # noqa: E501
+    )
+    ENABLE_MOBILE_REST_API: bool = Field(
+        default=False, description="Expose Mobile REST API."
+    )
+    ENABLE_ORA_ALL_FILE_URLS: bool = Field(
+        default=False,
+        description='.. toggle_name: ENABLE_ORA_ALL_FILE_URLS\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: A "work-around" feature toggle meant to help in cases where some file uploads are not\ndiscoverable.  If enabled, will iterate through all possible file key suffixes up to the max for displaying\nfile metadata in staff assessments.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2020-03-03\n.. toggle_target_removal_date: None\n.. toggle_tickets: https://openedx.atlassian.net/browse/EDUCATOR-4951\n.. toggle_warning: This temporary feature toggle does not have a target removal date.',  # noqa: E501
+    )
+    ENABLE_ORA_USER_STATE_UPLOAD_DATA: bool = Field(
+        default=False,
+        description='.. toggle_name: ENABLE_ORA_USER_STATE_UPLOAD_DATA\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: A "work-around" feature toggle meant to help in cases where some file uploads are not\ndiscoverable.  If enabled, will pull file metadata from StudentModule.state for display in staff assessments.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2020-03-03\n.. toggle_target_removal_date: None\n.. toggle_tickets: https://openedx.atlassian.net/browse/EDUCATOR-4951\n.. toggle_warning: This temporary feature toggle does not have a target removal date.',  # noqa: E501
+    )
+    ENABLE_PASSWORD_RESET_FAILURE_EMAIL: bool | None = Field(
+        default=None,
+        description=".. toggle_name: ENABLE_PASSWORD_RESET_FAILURE_EMAIL\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Whether to send an email for failed password reset attempts or not. This happens when a\nuser asks for a password reset but they don't have an account associated to their email. This is useful for\nnotifying users that they don't have an account associated with email addresses they believe they've registered\nwith. This setting can be overridden by a site-specific configuration.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2017-07-20\n.. toggle_tickets: https://openedx.atlassian.net/browse/OSPR-1832",  # noqa: E501
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    ENABLE_PREREQUISITE_COURSES: bool = Field(
+        default=False, description="Prerequisite courses feature flag"
+    )
+    ENABLE_PROCTORED_EXAMS: bool = Field(
+        default=False,
+        description=".. toggle_name: ENABLE_PROCTORED_EXAMS\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Global gate on the proctoring app. When True, the proctoring\napp advertises itself as available for all courses; per-course opt-in is a\nseparate check.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-07-24",  # noqa: E501
+    )
+    ENABLE_PUBLISHER: bool = Field(
+        default=False,
+        description="Toggle to enable coordination with the Publisher tool (keep in sync between the LMS and CMS)",  # noqa: E501
+    )
+    ENABLE_READING_FROM_MULTIPLE_HISTORY_TABLES: bool = Field(
+        default=True,
+        description="Read from both the CSMH and CSMHE history tables.\nThis is the default, but can be disabled if all history\nlives in the Extended table, saving the frontend from\nmaking multiple queries.",  # noqa: E501
+    )
+    ENABLE_SERVICE_STATUS: bool = Field(
+        default=False,
+        description="Enable URL that shows information about the status of various services",  # noqa: E501
+    )
+    ENABLE_SPECIAL_EXAMS: bool = Field(
+        default=False,
+        description=".. toggle_name: ENABLE_SPECIAL_EXAMS\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Enable to use special exams, aka timed and proctored exams.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-09-04\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/9744",  # noqa: E501
+    )
+    ENABLE_TEAMS: bool = Field(default=True, description="Teams feature")
+    ENABLE_TEXTBOOK: bool = Field(
+        default=True,
+        description=".. toggle_name: ENABLE_TEXTBOOK\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: Add PDF and HTML textbook tabs to the courseware.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2014-03-27\n.. toggle_warning: For consistency in user-experience, keep the value in sync with the setting of the same name\nin the CMS.\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/3064",  # noqa: E501
+    )
+    ENABLE_VIDEO_BUMPER: bool = Field(default=False, description="Show video bumper")
+    ENTERPRISE_API_CACHE_TIMEOUT: int = Field(default=3600)
+    ENTERPRISE_BACKEND_SERVICE_EDX_OAUTH2_KEY: str = Field(
+        default="enterprise-backend-service-key"
+    )
+    ENTERPRISE_BACKEND_SERVICE_EDX_OAUTH2_PROVIDER_URL: str = Field(
+        default="http://127.0.0.1:8000/oauth2"
+    )
+    ENTERPRISE_BACKEND_SERVICE_EDX_OAUTH2_SECRET: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    ENTERPRISE_CATALOG_INTERNAL_ROOT_URL: str = Field(
+        default="http://enterprise.catalog.app:18160"
+    )
+    ENTERPRISE_CUSTOMER_CATALOG_DEFAULT_CONTENT_FILTER: Annotated[
+        dict[str, Any], NoDecode
+    ] = Field(  # noqa: E501
+        default_factory=dict,
+        description="The default value of this needs to be a 16 character string",
+    )
+    ENTERPRISE_ENROLLMENT_API_URL: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    ENTERPRISE_MARKETING_FOOTER_QUERY_PARAMS: Annotated[dict[str, Any], NoDecode] = (
+        Field(  # noqa: E501
+            default_factory=dict
+        )
+    )
+    ENTERPRISE_SERVICE_WORKER_USERNAME: str = Field(default="enterprise_worker")
+    ENTRANCE_EXAM_MIN_SCORE_PCT: int = Field(default=50)
+    EVENT_BUS_PRODUCER_CONFIG: Any = Field(
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description=".. setting_name: EVENT_BUS_PRODUCER_CONFIG\n.. setting_default: all events disabled\n.. setting_description: Dictionary of event_types mapped to dictionaries of topic to topic-related configuration.\nEach topic configuration dictionary contains\n* `enabled`: a toggle denoting whether the event will be published to the topic. These should be annotated\naccording to\nhttps://docs.openedx.org/projects/edx-toggles/en/latest/how_to/documenting_new_feature_toggles.html\n* `event_key_field` which is a period-delimited string path to event data field to use as event key.\nNote: The topic names should not include environment prefix as it will be dynamically added based on\nEVENT_BUS_TOPIC_PREFIX setting.",  # noqa: E501
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    EVENT_TRACKING_BACKENDS: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    EVENT_TRACKING_ENABLED: bool = Field(default=True)
+    EVENT_TRACKING_PROCESSORS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=list
+    )
+    EVENT_TRACKING_SEGMENTIO_EMIT_WHITELIST: Annotated[list[Any], NoDecode] = Field(
+        default_factory=list
+    )
+    EXPIRED_NOTIFICATIONS_DELETE_BATCH_SIZE: int = Field(default=10000)
+    FALLBACK_TO_ENGLISH_TRANSCRIPTS: bool = Field(
+        default=True,
+        description="At edX it's safe to assume that English transcripts are always available\nThis is not the case for all installations.\nThe default value here and in xmodule/tests/test_video.py should be consistent.",  # noqa: E501
+    )
+    FAVICON_PATH: str = Field(default="images/favicon.ico")
+    FAVICON_URL: Any = Field(default=None)  # refine type
+    FEEDBACK_SUBMISSION_EMAIL: str = Field(default="")
+    FERNET_KEYS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: ["DUMMY KEY CHANGE BEFORE GOING TO PRODUCTION"]
+    )
+    FILE_UPLOAD_STORAGE_BUCKET_NAME: str = Field(
+        default="SET-ME-PLEASE (ex. bucket-name)",
+        description="Default File Upload Storage bucket and prefix. Used by the FileUpload Service.",  # noqa: E501
+    )
+    FILE_UPLOAD_STORAGE_PREFIX: str = Field(default="submissions_attachments")
+    FINANCIAL_REPORTS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "STORAGE_TYPE": "localfs",
+            "BUCKET": None,
+            "ROOT_PATH": "sandbox",
+        },
+    )
+    GENERATE_PROFILE_SCORES: bool = Field(
+        default=False,
+        description="If this is true, random scores will be generated for the purpose of debugging the profile graphs",  # noqa: E501
+    )
+    GEOIP_PATH: Any = Field(
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="For geolocation ip database",
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    GOOGLE_ANALYTICS_ACCOUNT: Any = Field(default=None)  # refine type
+    HEARTBEAT_CELERY_ROUTING_KEY: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    HEARTBEAT_CELERY_TIMEOUT: int = Field(default=5)
+    HEARTBEAT_CHECKS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: [
+            "openedx.core.djangoapps.heartbeat.default_checks.check_modulestore",
+            "openedx.core.djangoapps.heartbeat.default_checks.check_database",
+        ],
+        description="Checks run in normal mode by the heartbeat djangoapp",
+    )
+    HEARTBEAT_EXTENDED_CHECKS: tuple[Any, ...] = Field(
+        default=("openedx.core.djangoapps.heartbeat.default_checks.check_celery",),
+        description='Other checks to run by default in "extended"/heavy mode',
+    )  # refine type
+    HELP_TOKENS_BOOKS: Annotated[dict[str, Any] | None, NoDecode] = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    HELP_TOKENS_INI_FILE: Any = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    HELP_TOKENS_LANGUAGE_CODE: Any = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    HELP_TOKENS_VERSION: Any = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    HTTPS: str = Field(default="on")
+    ICP_LICENSE: Any = Field(
+        default=None, description="License for serving content in China"
+    )  # refine type
+    ICP_LICENSE_INFO: Annotated[dict[str, Any], NoDecode] = Field(default_factory=dict)
+    IDA_LOGOUT_URI_LIST: Annotated[list[Any], NoDecode] = Field(
+        default_factory=list,
+        description="List of logout URIs for each IDA that the learner should be logged out of when they logout of the LMS\nor CMS. Only applies to IDA for which the social auth flow uses DOT (Django OAuth Toolkit).",  # noqa: E501
+    )
+    ID_VERIFICATION_SUPPORT_LINK: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    INTEGRATED_CHANNELS_API_CHUNK_TRANSMISSION_LIMIT: Annotated[
+        dict[str, Any], NoDecode
+    ] = Field(  # noqa: E501
+        default_factory=dict,
+        description="The setting key maps to the channel code (e.g. 'SAP' for success factors), Channel code is defined as\npart of django model of each integrated channel in edx-enterprise.\nThe absence of a key/value pair translates to NO LIMIT on the number of \"chunks\" transmitted per cycle.",  # noqa: E501
+    )
+    JWT_AUTH: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    LANGUAGES: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: [
+            ("en", "English"),
+            ("rtl", "Right-to-Left Test Language"),
+            ("eo", "Dummy Language (Esperanto)"),
+            ("am", "አማርኛ"),
+            ("ar", "العربية"),
+            ("az", "azərbaycanca"),
+            ("bg-bg", "български (България)"),
+            ("bn-bd", "বাংলা (বাংলাদেশ)"),
+            ("bn-in", "বাংলা (ভারত)"),
+            ("bs", "bosanski"),
+            ("ca", "Català"),
+            ("ca@valencia", "Català (València)"),
+            ("cs", "Čeština"),
+            ("cy", "Cymraeg"),
+            ("da", "dansk"),
+            ("de-de", "Deutsch (Deutschland)"),
+            ("el", "Ελληνικά"),
+            ("en-uk", "English (United Kingdom)"),
+            ("en@lolcat", "LOLCAT English"),
+            ("en@pirate", "Pirate English"),
+            ("es-419", "Español (Latinoamérica)"),
+            ("es-ar", "Español (Argentina)"),
+            ("es-ec", "Español (Ecuador)"),
+            ("es-es", "Español (España)"),
+            ("es-mx", "Español (México)"),
+            ("es-pe", "Español (Perú)"),
+            ("et-ee", "Eesti (Eesti)"),
+            ("eu-es", "euskara (Espainia)"),
+            ("fa", "فارسی"),
+            ("fa-ir", "فارسی (ایران)"),
+            ("fi-fi", "Suomi (Suomi)"),
+            ("fil", "Filipino"),
+            ("fr", "Français"),
+            ("gl", "Galego"),
+            ("gu", "ગુજરાતી"),
+            ("he", "עברית"),
+            ("hi", "हिन्दी"),
+            ("hr", "hrvatski"),
+            ("hu", "magyar"),
+            ("hy-am", "Հայերեն (Հայաստան)"),
+            ("id", "Bahasa Indonesia"),
+            ("it-it", "Italiano (Italia)"),
+            ("ja-jp", "日本語 (日本)"),
+            ("kk-kz", "қазақ тілі (Қазақстан)"),
+            ("km-kh", "ភាសាខ្មែរ (កម្ពុជា)"),
+            ("kn", "ಕನ್ನಡ"),
+            ("ko-kr", "한국어 (대한민국)"),
+            ("lt-lt", "Lietuvių (Lietuva)"),
+            ("ml", "മലയാളം"),
+            ("mn", "Монгол хэл"),
+            ("mr", "मराठी"),
+            ("ms", "Bahasa Melayu"),
+            ("nb", "Norsk bokmål"),
+            ("ne", "नेपाली"),
+            ("nl-nl", "Nederlands (Nederland)"),
+            ("or", "ଓଡ଼ିଆ"),
+            ("pl", "Polski"),
+            ("pt-br", "Português (Brasil)"),
+            ("pt-pt", "Português (Portugal)"),
+            ("ro", "română"),
+            ("ru", "Русский"),
+            ("si", "සිංහල"),
+            ("sk", "Slovenčina"),
+            ("sl", "Slovenščina"),
+            ("sq", "shqip"),
+            ("sr", "Српски"),
+            ("sv", "svenska"),
+            ("sw", "Kiswahili"),
+            ("ta", "தமிழ்"),
+            ("te", "తెలుగు"),
+            ("th", "ไทย"),
+            ("tr-tr", "Türkçe (Türkiye)"),
+            ("uk", "Українська"),
+            ("ur", "اردو"),
+            ("vi", "Tiếng Việt"),
+            ("uz", "Ўзбек"),
+            ("zh-cn", "中文 (简体)"),
+            ("zh-hk", "中文 (香港)"),
+            ("zh-tw", "中文 (台灣)"),
+        ],
+        description="Sourced from http://www.localeplanet.com/icu/ and wikipedia",
+    )
+    LANGUAGES_BIDI: tuple[Any, ...] = Field(
+        default=("he", "ar", "fa", "ur", "fa-ir", "rtl"),
+        description="these languages display right to left",
+    )  # refine type
+    LANGUAGE_CODE: str = Field(default="en")
+    LANGUAGE_COOKIE_NAME: str = Field(default="openedx-language-preference")
+    LANGUAGE_DICT: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    LEARNER_ENGAGEMENT_PROMPT_FOR_ACTIVE_CONTRACT: str = Field(default="")
+    LEARNER_ENGAGEMENT_PROMPT_FOR_NON_ACTIVE_CONTRACT: str = Field(default="")
+    LEARNER_HOME_MICROFRONTEND_URL: Any = Field(
+        default=None,
+        description=".. setting_name: LEARNER_HOME_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based learner home page.",  # noqa: E501
+    )  # refine type
+    LEARNER_PROGRESS_PROMPT_FOR_ACTIVE_CONTRACT: str = Field(default="")
+    LEARNER_PROGRESS_PROMPT_FOR_NON_ACTIVE_CONTRACT: str = Field(default="")
+    LEARNING_MICROFRONTEND_URL: Any = Field(
+        default=None,
+        description=".. setting_name: LEARNING_MICROFRONTEND_URL\n.. setting_default: None\n.. setting_description: Base URL of the micro-frontend-based courseware page.",  # noqa: E501
+    )  # refine type
+    LICENSING: bool = Field(
+        default=False,
+        description=".. toggle_name: LICENSING\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Toggle platform-wide course licensing. The course.license attribute is then used to append\nlicense information to the courseware.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-05-14\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/7315",  # noqa: E501
+    )
+    LMS_ENROLLMENT_API_PATH: str = Field(default="/api/enrollment/v1/")
+    LMS_INTERNAL_ROOT_URL: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    LMS_ROOT_URL: Any = Field(default=None)  # refine type
+    LOCALE_PATHS: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    LOCAL_LOGLEVEL: str = Field(default="INFO")
+    LOGGING_ENV: str = Field(default="sandbox")
+    LOGIN_AND_REGISTER_FORM_RATELIMIT: str = Field(default="100/5m")
+    LOGIN_ISSUE_SUPPORT_LINK: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    LOGIN_REDIRECT_WHITELIST: Annotated[list[Any], NoDecode] = Field(
+        default_factory=list,
+        description=".. setting_name: LOGIN_REDIRECT_WHITELIST\n.. setting_default: empty list ([])\n.. setting_description: While logout, if logout request has a redirect-url as query strings,\nthen the redirect-url is validated through LOGIN_REDIRECT_WHITELIST.",  # noqa: E501
+    )
+    LOGISTRATION_API_RATELIMIT: str = Field(default="20/m")
+    LOGISTRATION_PER_EMAIL_RATELIMIT_RATE: str = Field(default="30/5m")
+    LOGISTRATION_RATELIMIT_RATE: str = Field(default="100/5m")
+    LOGO_IMAGE_EXTRA_TEXT: str = Field(default="")
+    LOGO_TRADEMARK_URL: Any = Field(default=None)  # refine type
+    LOGO_URL: Any = Field(default=None)  # refine type
+    LOGO_URL_PNG: Any = Field(default=None)  # refine type
+    LOG_DIR: str = Field(default="/edx/var/log/edx")
+    MAKO_MODULE_DIR: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    MAKO_TEMPLATE_DIRS_BASE: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    MANAGERS: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    MARK_LIBRARY_CONTENT_BLOCK_COMPLETE_ON_VIEW: bool = Field(
+        default=False,
+        description=".. toggle_name: MARK_LIBRARY_CONTENT_BLOCK_COMPLETE_ON_VIEW\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: If enabled, the Library Content Block is marked as complete when users view it.\nOtherwise (by default), all children of this block must be completed.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2022-03-22\n.. toggle_target_removal_date: None\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/28268\n.. toggle_warning: For consistency in user-experience, keep the value in sync between the LMS and CMS",  # noqa: E501
+    )
+    MEDIA_URL: str = Field(default="/media/", description="User-uploaded content")
+    MESSAGE_STORAGE: str = Field(
+        default="django.contrib.messages.storage.session.SessionStorage",
+        description="Messages",
+    )
+    MILESTONES_APP: bool = Field(
+        default=False, description="Milestones application flag"
+    )
+    MKTG_URLS: Annotated[dict[str, Any], NoDecode] = Field(default_factory=dict)
+    MKTG_URL_OVERRIDES: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=dict
+    )
+    MODULESTORE: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    MODULESTORE_FIELD_OVERRIDE_PROVIDERS: tuple[Any, ...] = Field(
+        default=(),
+        description="Modulestore-level field override providers. These field override providers don't\nrequire student context.",  # noqa: E501
+    )  # refine type
+    NOTIFICATIONS_DEFAULT_FROM_EMAIL: str = Field(default="no-reply@example.com")
+    NOTIFICATIONS_EXPIRY: int = Field(default=60)
+    NOTIFICATION_APPS_OVERRIDE: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=dict,
+        description="These settings are used to override the default notification preferences values for apps and types.\nHere is complete documentation about how to use them:\nhttps://docs.openedx.org/en/latest/site_ops/how-tos/enable_notifications.html#how-to-override-default-notification-preferences",  # noqa: E501
+    )
+    NOTIFICATION_CREATION_BATCH_SIZE: int = Field(default=76)
+    NOTIFICATION_DAILY_DIGEST_DELIVERY_HOUR: int = Field(
+        default=17,
+        description="Digest email delivery schedule settings (all times in UTC).\nInstance operators can override these to control when daily/weekly digest emails are sent.",  # noqa: E501
+    )
+    NOTIFICATION_DAILY_DIGEST_DELIVERY_MINUTE: int = Field(default=0)
+    NOTIFICATION_DIGEST_LOGO: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    NOTIFICATION_IMMEDIATE_EMAIL_BUFFER_MINUTES: int = Field(default=15)
+    NOTIFICATION_TYPES_OVERRIDE: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=dict
+    )
+    NOTIFICATION_TYPE_ICONS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=dict
+    )
+    NOTIFICATION_WEEKLY_DIGEST_DELIVERY_DAY: int = Field(default=0)
+    NOTIFICATION_WEEKLY_DIGEST_DELIVERY_HOUR: int = Field(default=17)
+    NOTIFICATION_WEEKLY_DIGEST_DELIVERY_MINUTE: int = Field(default=0)
+    NOTIFY_CREDENTIALS_FREQUENCY: int | None = Field(
+        default=None, description="time between scheduled runs, in seconds"
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    OAUTH2_PROVIDER_APPLICATION_MODEL: str = Field(
+        default="oauth2_provider.Application"
+    )
+    ONE_CLICK_UNSUBSCRIBE_RATE_LIMIT: str = Field(default="100/m")
+    OPENAPI_CACHE_TIMEOUT: Any = Field(
+        default_factory=lambda: 60 * 60,
+        description="How long to cache OpenAPI schemas and UI, in seconds.",
+    )  # refine type
+    OPTIMIZELY_FULLSTACK_SDK_KEY: Any = Field(default=None)  # refine type
+    OPTIMIZELY_PROJECT_ID: Any = Field(default=None)  # refine type
+    OPTIONAL_APPS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: [
+            (
+                "problem_builder",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",  # noqa: E501
+            ),
+            ("edx_sga", None),
+            (
+                "submissions",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",  # noqa: E501
+            ),
+            (
+                "openassessment",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",  # noqa: E501
+            ),
+            (
+                "openassessment.assessment",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",  # noqa: E501
+            ),
+            (
+                "openassessment.fileupload",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",  # noqa: E501
+            ),
+            (
+                "openassessment.staffgrader",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",  # noqa: E501
+            ),
+            (
+                "openassessment.workflow",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",  # noqa: E501
+            ),
+            (
+                "openassessment.xblock",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",  # noqa: E501
+            ),
+            (
+                "edxval",
+                "openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig",  # noqa: E501
+            ),
+            ("integrated_channels.integrated_channel", None),
+            ("integrated_channels.degreed", None),
+            ("integrated_channels.degreed2", None),
+            ("integrated_channels.sap_success_factors", None),
+            ("integrated_channels.cornerstone", None),
+            ("integrated_channels.xapi", None),
+            ("integrated_channels.blackboard", None),
+            ("integrated_channels.canvas", None),
+            ("integrated_channels.moodle", None),
+        ],
+    )
+    ORA_SETTINGS_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/exercise_tools/Manage_ORA_Assignment.html",  # noqa: E501
+    )
+    P3P_HEADER: str = Field(
+        default='CP="Open EdX does not have a P3P policy."',
+        description="Platform for Privacy Preferences header",
+    )
+    PARENTAL_CONSENT_AGE_LIMIT: int = Field(
+        default=13,
+        description=".. setting_name: PARENTAL_CONSENT_AGE_LIMIT\n.. setting_default: 13\n.. setting_description: The age at which a learner no longer requires parental consent,\nor ``None`` if parental consent is never required.",  # noqa: E501
+    )
+    PARTNER_SUPPORT_EMAIL: str = Field(default="")
+    PASSWORD_POLICY_COMPLIANCE_ROLLOUT_CONFIG: Annotated[
+        dict[str, Any] | None, NoDecode
+    ] = Field(  # noqa: E501
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    PASSWORD_RESET_EMAIL_RATE: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    PASSWORD_RESET_IP_RATE: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    PASSWORD_RESET_SUPPORT_LINK: Any = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    PIPELINE: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "PIPELINE_ENABLED": True,
+            "CSS_COMPRESSOR": None,
+            "DISABLE_WRAPPER": True,
+            "UGLIFYJS_BINARY": "node_modules/.bin/uglifyjs",
+        },
+    )
+    PLATFORM_DESCRIPTION: Any = Field(
+        default_factory=lambda: _("Your Platform Description Here")
+    )  # refine type
+    PLATFORM_FACEBOOK_ACCOUNT: str = Field(
+        default="http://www.facebook.com/YourPlatformFacebookAccount"
+    )
+    PLATFORM_NAME: Any = Field(
+        default_factory=lambda: _("Your Platform Name Here"),
+        description=".. setting_name: PLATFORM_NAME\n.. setting_default: Your Platform Name Here\n.. setting_description: The display name of the platform to be used in\ntemplates/emails/etc.",  # noqa: E501
+    )  # refine type
+    PLATFORM_TWITTER_ACCOUNT: str = Field(default="@YourPlatformTwitterAccount")
+    POLICY_CHANGE_GRADES_ROUTING_KEY: Any = Field(
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="Queue to use for updating grades due to grading policy change",
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    POLICY_CHANGE_TASK_RATE_LIMIT: str = Field(
+        default="900/h",
+        description="Rate limit for regrading tasks that a grading policy change can kick off",  # noqa: E501
+    )
+    PREPEND_LOCALE_PATHS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=list,
+        description='.. setting_name: PREPEND_LOCALE_PATHS\n.. setting_default: []\n.. setting_description: A list of the paths to locale directories to load first e.g.\n"PREPEND_LOCALE_PATHS" : ["/edx/my-locales/"].',  # noqa: E501
+    )
+    PROCTORING_BACKENDS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {"DEFAULT": "null", "null": {}},
+        description='.. setting_name: PROCTORING_BACKENDS\n.. setting_description: A dictionary describing all available proctoring provider configurations.\nStructure:\n"<provider_name>": {\n"show_review_rules": <bool>,\n"requires_escalation_email": <bool>,\n... additional provider-specific options ...\n"<another_provider_name>": { ... }\n"DEFAULT": "<provider_name>",\nKeys:\n**show_review_rules** (bool):\nWhether studio would show a "Review Rules" field as part of proctoring configuration.\nDefault is True.\n**requires_escalation_email** (bool):\nProviders with this flag set to True require that an escalation email address be\nspecified in the advanced course settings. Default is False.\n.. setting_default: {\n\'DEFAULT\': \'null\',\n\'null\': {}',  # noqa: E501
+    )
+    PROFILE_IMAGE_BACKEND: Any = Field(
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="WARNING: Certain django storage backends do not support atomic\nfile overwrites (including the default, OverwriteStorage) - instead\nthere are separate calls to delete and then write a new file in the\nstorage backend.  This introduces the risk of a race condition\noccurring when a user uploads a new profile image to replace an\nearlier one (the file will temporarily be deleted).",  # noqa: E501
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    PROFILE_IMAGE_DEFAULT_FILENAME: str = Field(default="images/profiles/default")
+    PROFILE_IMAGE_DEFAULT_FILE_EXTENSION: str = Field(default="png")
+    PROFILE_IMAGE_HASH_SEED: str = Field(
+        default="placeholder_secret_key",
+        description="This key is used in generating unguessable URLs to users'\nprofile images. Once it has been set, changing it will make the\nplatform unaware of current image URLs.",  # noqa: E501
+    )
+    PROFILE_IMAGE_MAX_BYTES: Any = Field(
+        default_factory=lambda: 1024 * 1024
+    )  # refine type
+    PROFILE_IMAGE_MIN_BYTES: int = Field(default=100)
+    PROFILE_IMAGE_SIZES_MAP: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {"full": 500, "large": 120, "medium": 50, "small": 30}
+    )
+    PROGRESS_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/references/data/progress_page.html",  # noqa: E501
+    )
+    RECALCULATE_GRADES_ROUTING_KEY: Any = Field(
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="Queue to use for updating persistent grades",
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    REDIRECT_CACHE_KEY_PREFIX: str = Field(default="redirects")
+    REDIRECT_CACHE_TIMEOUT: Any = Field(
+        default=None,
+        description="Setting this to None causes Redirect data to never expire\nThe cache is cleared when Redirect models are saved/deleted",  # noqa: E501
+    )  # refine type
+    REGISTRATION_EMAIL_PATTERNS_ALLOWED: Any = Field(
+        default=None,
+        description=".. setting_name: REGISTRATION_EMAIL_PATTERNS_ALLOWED\n.. setting_default: None\n.. setting_description: Optional setting to restrict registration / account creation\nto only emails that match a regex in this list. Set to ``None`` to allow any email (default).",  # noqa: E501
+    )  # refine type
+    REGISTRATION_EXTRA_FIELDS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "confirm_email": "hidden",
+            "level_of_education": "optional",
+            "gender": "optional",
+            "year_of_birth": "optional",
+            "mailing_address": "optional",
+            "goals": "optional",
+            "honor_code": "required",
+            "terms_of_service": "hidden",
+            "city": "hidden",
+            "country": "hidden",
+        },
+        description=".. setting_name: REGISTRATION_EXTRA_FIELDS\n.. setting_default: {'confirm_email': 'hidden', 'level_of_education': 'optional', 'gender': 'optional',\n'year_of_birth': 'optional', 'mailing_address': 'optional', 'goals': 'optional', 'honor_code': 'required',\n'terms_of_service': 'hidden', 'city': 'hidden', 'country': 'hidden'}\n.. setting_description: The signup form may contain extra fields that are presented to every user. For every field, we\ncan specifiy whether it should be \"required\": to display the field, and make it mandatory; \"optional\": to display\nthe optional field as part of a toggled input field list; \"optional-exposed\": to display the optional fields among\nthe required fields, and make it non-mandatory; \"hidden\": to not display the field.\nWhen the terms of service are not visible and agreement to the honor code is required (the default), the signup page\nincludes a paragraph that links to the honor code page (defined my MKTG_URLS[\"HONOR\"]). This page might not be\navailable for all Open edX platforms. In such cases, the \"honor_code\" registration field should be \"hidden\".",  # noqa: E501
+    )
+    REGISTRATION_RATELIMIT: str = Field(
+        default="60/7d",
+        description=".. setting_name: REGISTRATION_RATELIMIT\n.. setting_default: 60/7d\n.. setting_description: New users are registered on edx via RegistrationView.\nIt's POST end-point is rate-limited up to 60 requests per IP Address in a week by default.\nPurpose of this setting is to restrict an attacker from registering numerous fake accounts.\n.. setting_tickets: https://github.com/openedx/edx-platform/pull/27060",  # noqa: E501
+    )
+    REGISTRATION_VALIDATION_RATELIMIT: str = Field(
+        default="30/7d",
+        description=".. setting_name: REGISTRATION_VALIDATION_RATELIMIT\n.. setting_default: 30/7d\n.. setting_description: Whenever a user tries to register on edx, the data entered during registration\nis validated via RegistrationValidationView.\nIt's POST endpoint is rate-limited up to 30 requests per IP Address in a week by default.\nIt was introduced because an attacker can guess or brute force a series of names to enumerate valid users.\n.. setting_tickets: https://github.com/openedx/edx-platform/pull/24664",  # noqa: E501
+    )
+    REQUIRE_BASE_URL: str = Field(
+        default="./",
+        description="The baseUrl to pass to the r.js optimizer, relative to STATIC_ROOT.",  # noqa: E501
+    )
+    REQUIRE_BUILD_PROFILE: Any = Field(
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="The name of a build profile to use for your project, relative to REQUIRE_BASE_URL.\nA sensible value would be 'app.build.js'. Leave blank to use the built-in default build profile.\nSet to False to disable running the default profile (e.g. if only using it to build Standalone\nModules)",  # noqa: E501
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    REQUIRE_DEBUG: bool = Field(
+        default=False, description="Whether to run django-require in debug mode."
+    )
+    RESET_PASSWORD_API_RATELIMIT: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    RESET_PASSWORD_TOKEN_VALIDATE_API_RATELIMIT: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    RESTRICT_AUTOMATIC_AUTH: bool = Field(
+        default=True,
+        description='.. toggle_name: RESTRICT_AUTOMATIC_AUTH\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: Prevent auto auth from creating superusers or modifying existing users. Auto auth is a\nmechanism where superusers can simply modify attributes of other users by accessing the "/auto_auth url" with\nthe right\nquerystring parameters.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2018-05-07\n.. toggle_tickets: https://openedx.atlassian.net/browse/TE-2545',  # noqa: E501
+    )
+    REST_FRAMEWORK: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "DEFAULT_AUTHENTICATION_CLASSES": [
+                "openedx.core.djangolib.default_auth_classes.DefaultJwtAuthentication",
+                "openedx.core.djangolib.default_auth_classes.DefaultSessionAuthentication",  # noqa: E501
+            ],
+            "DEFAULT_PAGINATION_CLASS": "edx_rest_framework_extensions.paginators.DefaultPagination",  # noqa: E501
+            "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
+            "EXCEPTION_HANDLER": "openedx.core.lib.request_utils.ignored_error_exception_handler",  # noqa: E501
+            "PAGE_SIZE": 10,
+            "URL_FORMAT_OVERRIDE": None,
+            "DEFAULT_THROTTLE_RATES": {
+                "user": "60/minute",
+                "service_user": "800/minute",
+                "registration_validation": "30/minute",
+                "high_service_user": "2000/minute",
+            },
+            "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+        },
+    )
+    RETIRED_EMAIL_DOMAIN: str = Field(
+        default="retired.invalid",
+        description=".. setting_name: RETIRED_EMAIL_DOMAIN\n.. setting_default: retired.invalid\n.. setting_description: Set the domain part of hashed emails for retired users. Used by the derived\nsetting RETIRED_EMAIL_FMT.",  # noqa: E501
+    )
+    RETIRED_EMAIL_PREFIX: str = Field(
+        default="retired__user_",
+        description=".. setting_name: RETIRED_EMAIL_PREFIX\n.. setting_default: retired__user_\n.. setting_description: Set the prefix part of hashed emails for retired users. Used by the derived\nsetting RETIRED_EMAIL_FMT.",  # noqa: E501
+    )
+    RETIRED_USERNAME_PREFIX: str = Field(
+        default="retired__user_",
+        description=".. setting_name: RETIRED_USERNAME_PREFIX\n.. setting_default: retired__user_\n.. setting_description: Set the prefix part of hashed usernames for retired users. Used by the derived\nsetting RETIRED_USERNAME_FMT.",  # noqa: E501
+    )
+    RETIREMENT_STATES: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: [
+            "PENDING",
+            "LOCKING_ACCOUNT",
+            "LOCKING_COMPLETE",
+            "RETIRING_FORUMS",
+            "FORUMS_COMPLETE",
+            "RETIRING_EMAIL_LISTS",
+            "EMAIL_LISTS_COMPLETE",
+            "RETIRING_ENROLLMENTS",
+            "ENROLLMENTS_COMPLETE",
+            "RETIRING_NOTES",
+            "NOTES_COMPLETE",
+            "RETIRING_LMS",
+            "LMS_COMPLETE",
+            "ERRORED",
+            "ABORTED",
+            "COMPLETE",
+        ],
+        description="These states are the default, but are designed to be overridden in configuration.\n.. setting_name: RETIREMENT_STATES\n.. setting_default:\n'PENDING',\n'LOCKING_ACCOUNT',\n'LOCKING_COMPLETE',\n'RETIRING_FORUMS',\n'FORUMS_COMPLETE',\n'RETIRING_EMAIL_LISTS',\n'EMAIL_LISTS_COMPLETE',\n'RETIRING_ENROLLMENTS',\n'ENROLLMENTS_COMPLETE',\n'RETIRING_NOTES',\n'NOTES_COMPLETE',\n'RETIRING_LMS',\n'LMS_COMPLETE',\n'ERRORED',\n'ABORTED',\n'COMPLETE',\n.. setting_description: Set a list that defines the name and order of states for the retirement\nworkflow.\n.. setting_warning: These states are stored in the database and it is the responsibility of the\nadministrator to populate the state list since the states can vary across different installations.\nThere must be, at minimum, a PENDING state at the beginning, and COMPLETED, ERRORED, and ABORTED\nstates at the end of the list.",  # noqa: E501
+    )
+    RETRY_ACTIVATION_EMAIL_MAX_ATTEMPTS: int = Field(
+        default=5, description="Used with Email sending"
+    )
+    RETRY_ACTIVATION_EMAIL_TIMEOUT: float = Field(default=0.5)
+    ROOT_URLCONF: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    SAML_METADATA_URL_ALLOW_PRIVATE_IPS: bool = Field(
+        default=False,
+        description=".. toggle_name: SAML_METADATA_URL_ALLOW_PRIVATE_IPS\n.. toggle_default: False\n.. toggle_description: When False (the default), fetching SAML metadata from\nprivate IP address ranges (RFC 1918: 10.x, 172.16.x, 192.168.x) is blocked\nas a defense against SSRF attacks. Set to True only in deployments where the\nSAML Identity Provider is hosted on the same private network as the Open edX\nserver. Note: loopback (127.x) and link-local (169.254.x) addresses remain\nblocked regardless of this toggle. Operators are also encouraged to enforce\nnetwork-level egress filtering as a complementary control, particularly to\ncover hostname-based URLs that are not subject to IP validation.\n.. toggle_implementation: DjangoSetting\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2026-04-24",  # noqa: E501
+    )
+    SEARCH_ENGINE: Any = Field(
+        default=None, description="Use None for the default search engine"
+    )  # refine type
+    SECONDARY_EMAIL_RATE_LIMIT: str = Field(default="")
+    SECURE_PROXY_SSL_HEADER: tuple[Any, ...] = Field(
+        default=("HTTP_X_FORWARDED_PROTO", "https"),
+        description="IMPORTANT: With this enabled, the server must always be behind a proxy that strips the header HTTP_X_FORWARDED_PROTO\nfrom client requests. Otherwise, a user can fool our server into thinking it was an https connection. See\nhttps://docs.djangoproject.com/en/dev/ref/settings/#secure-proxy-ssl-header for other warnings.",  # noqa: E501
+    )  # refine type
+    SESSION_COOKIE_DOMAIN: Any = Field(default=None)  # refine type
+    SESSION_COOKIE_HTTPONLY: bool = Field(default=True)
+    SESSION_COOKIE_NAME: str = Field(default="sessionid")
+    SESSION_COOKIE_SECURE: bool = Field(default=False)
+    SESSION_ENGINE: str = Field(default="django.contrib.sessions.backends.cache")
+    SESSION_INACTIVITY_TIMEOUT_IN_SECONDS: Any = Field(default=None)  # refine type
+    SESSION_SAVE_EVERY_REQUEST: bool = Field(default=False)
+    SESSION_SERIALIZER: str = Field(
+        default="openedx.core.lib.session_serializers.PickleSerializer"
+    )
+    SHARED_COOKIE_DOMAIN: Any = Field(
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="This is the domain that is used to set shared cookies between various sub-domains.",  # noqa: E501
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    SHIBBOLETH_DOMAIN_PREFIX: str = Field(
+        default="shib:",
+        description="External auth usage -- prefixes for ENROLLMENT_DOMAIN",
+    )
+    SHOW_ACCOUNT_ACTIVATION_CTA: bool = Field(
+        default=False,
+        description=".. toggle_name: SOME_FEATURE_NAME\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Flag would be used to show account activation popup after the registration\n.. toggle_use_cases: open_edx\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/27661\n.. toggle_creation_date: 2021-06-10",  # noqa: E501
+    )
+    SHOW_ACTIVATE_CTA_POPUP_COOKIE_NAME: str = Field(
+        default="show-account-activation-popup"
+    )
+    SHOW_BUMPER_PERIODICITY: Any = Field(
+        default_factory=lambda: 7 * 24 * 3600,
+        description="How many seconds to show the bumper again, default is 7 days:",
+    )  # refine type
+    SHOW_FOOTER_LANGUAGE_SELECTOR: bool = Field(
+        default=False,
+        description=".. toggle_name: SHOW_FOOTER_LANGUAGE_SELECTOR\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When set to True, language selector will be visible in the footer.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2017-05-25\n.. toggle_warning: LANGUAGE_COOKIE_NAME is required to use footer-language-selector, set it if it has not been set.\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/15133",  # noqa: E501
+    )
+    SHOW_HEADER_LANGUAGE_SELECTOR: bool = Field(
+        default=False,
+        description=".. toggle_name: SHOW_HEADER_LANGUAGE_SELECTOR\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When set to True, language selector will be visible in the header.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2017-05-25\n.. toggle_warning: You should set the languages in the DarkLangConfig table to get this working. If you have\nnot set any languages in the DarkLangConfig table then the language selector will not be visible in the header.\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/15133",  # noqa: E501
+    )
+    SHOW_REGISTRATION_LINKS: bool = Field(
+        default=True,
+        description=".. toggle_name: SHOW_REGISTRATION_LINKS\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: Allow registration links. If this is disabled, users will no longer see buttons to the\nthe signup page.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2023-03-27",  # noqa: E501
+    )
+    SIMPLE_HISTORY_DATE_INDEX: bool = Field(
+        default=False,
+        description="disable indexing on date field its coming from django-simple-history.",  # noqa: E501
+    )
+    SINGLE_LEARNER_COURSE_REGRADE_ROUTING_KEY: Any = Field(
+        default=None,
+        json_schema_extra={"aqueduct_unresolved": True},
+        description="Queue to use for individual learner course regrades",
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    SITE_ID: int = Field(
+        default=1,
+        description="See https://github.com/openedx/edx-django-sites-extensions for more info.\nDefault site to use if site matching request headers does not exist.",  # noqa: E501
+    )
+    SITE_NAME: str = Field(default="localhost")
+    SKIP_RATE_LIMIT_ON_ACCOUNT_AFTER_DAYS: int = Field(default=0)
+    SOCIAL_AUTH_SAML_SP_PRIVATE_KEY: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    SOCIAL_AUTH_SAML_SP_PRIVATE_KEY_DICT: Annotated[dict[str, Any] | None, NoDecode] = (
+        Field(  # noqa: E501
+            default=None
+        )
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    SOCIAL_AUTH_SAML_SP_PUBLIC_CERT: str = Field(default="")
+    SOCIAL_AUTH_SAML_SP_PUBLIC_CERT_DICT: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=dict
+    )
+    SOCIAL_MEDIA_FOOTER_ACE_URLS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "reddit": "http://www.reddit.com/r/edx",
+            "twitter": "https://twitter.com/edXOnline",
+            "linkedin": "http://www.linkedin.com/company/edx",
+            "facebook": "http://www.facebook.com/EdxOnline",
+        },
+        description="The footer URLs dictionary maps social footer names\nto URLs defined in configuration.",  # noqa: E501
+    )
+    SOCIAL_MEDIA_LOGO_URLS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "reddit": "http://email-media.s3.amazonaws.com/edX/2021/social_5_reddit.png",  # noqa: E501
+            "twitter": "http://email-media.s3.amazonaws.com/edX/2021/social_2_twitter.png",  # noqa: E501
+            "linkedin": "http://email-media.s3.amazonaws.com/edX/2021/social_3_linkedin.png",  # noqa: E501
+            "facebook": "http://email-media.s3.amazonaws.com/edX/2021/social_1_fb.png",
+        },
+        description="The social media logo urls dictionary maps social media names\nto the respective icons",  # noqa: E501
+    )
+    SOCIAL_SHARING_SETTINGS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "CUSTOM_COURSE_URLS": False,
+            "DASHBOARD_FACEBOOK": False,
+            "CERTIFICATE_FACEBOOK": False,
+            "CERTIFICATE_TWITTER": False,
+            "DASHBOARD_TWITTER": False,
+        },
+        description="Social Media Sharing on Student Dashboard",
+    )
+    SOFTWARE_SECURE_REQUEST_RETRY_DELAY: Any = Field(
+        default_factory=lambda: 60 * 60,
+        description="Software Secure request retry settings\nTime in seconds before a retry of the task should be 60 mints.",  # noqa: E501
+    )  # refine type
+    SOFTWARE_SECURE_RETRY_MAX_ATTEMPTS: int = Field(
+        default=6, description="Maximum of 6 retries before giving up."
+    )
+    SOFTWARE_SECURE_VERIFICATION_ROUTING_KEY: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    STATICFILES_DIRS: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    STATICFILES_FINDERS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: [
+            "openedx.core.djangoapps.theming.finders.ThemeFilesFinder",
+            "django.contrib.staticfiles.finders.FileSystemFinder",
+            "django.contrib.staticfiles.finders.AppDirectoriesFinder",
+            "openedx.core.lib.xblock_pipeline.finder.XBlockPipelineFinder",
+            "pipeline.finders.PipelineFinder",
+        ],
+        description="List of finder classes that know how to find static files in various locations.\nNote: the pipeline finder is included to be able to discover optimized files",  # noqa: E501
+    )
+    STATICFILES_IGNORE_PATTERNS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: [
+            "*.py",
+            "*.pyc",
+            "sass/*.scss",
+            "sass/*/*.scss",
+            "sass/*/*/*.scss",
+            "sass/*/*/*/*.scss",
+            "spec",
+            "spec_helpers",
+            "xmodule_js",
+        ],
+    )
+    STATICFILES_STORAGE_KWARGS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=dict
+    )
+    STATICI18N_FILENAME_FUNCTION: str = Field(
+        default="statici18n.utils.legacy_filename"
+    )
+    STATICI18N_OUTPUT_DIR: str = Field(default="js/i18n")
+    STATICI18N_ROOT: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    STATIC_ROOT_BASE: Any = Field(default=None)  # refine type
+    STATIC_URL_BASE: Any = Field(
+        default=None,
+        description='.. setting_name: STATIC_URL_BASE\n.. setting_default: "None"\n.. setting_description: The LMS and CMS use this to construct ``STATIC_URL`` by appending\na slash (if needed), and for the CMS, ``studio/`` afterwards.',  # noqa: E501
+    )  # refine type
+    STORAGES: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {"BACKEND": "openedx.core.storage.ProductionStorage"},
+        },
+    )
+    SUPPORT_SITE_LINK: str = Field(default="")
+    SWIFT_AUTH_URL: Any = Field(default=None)  # refine type
+    SWIFT_AUTH_VERSION: Any = Field(default=None)  # refine type
+    SWIFT_KEY: Any = Field(default=None)  # refine type
+    SWIFT_REGION_NAME: Any = Field(default=None)  # refine type
+    SWIFT_TEMP_URL_DURATION: int = Field(default=1800)
+    SWIFT_TEMP_URL_KEY: Any = Field(default=None)  # refine type
+    SWIFT_TENANT_ID: Any = Field(default=None)  # refine type
+    SWIFT_TENANT_NAME: Any = Field(default=None)  # refine type
+    SWIFT_USERNAME: Any = Field(default=None)  # refine type
+    SYSLOG_SERVER: str = Field(default="")
+    SYSTEM_WIDE_ROLE_CLASSES: Annotated[list[Any], NoDecode] = Field(
+        default_factory=list
+    )
+    TEAMS_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/navigation/advanced_features.html#use-teams-in-your-course",  # noqa: E501
+    )
+    TEMPLATES: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    TEXTBOOKS_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/how-tos/course_development/manage_textbooks.html",  # noqa: E501
+    )
+    THIRD_PARTY_AUTH_HINT: str = Field(
+        default="",
+        description=".. setting_name: THIRD_PARTY_AUTH_HINT\n.. setting_default: ''\n.. setting_description: Default third-party auth provider hint (tpa_hint) to append to login/registration\nredirect URLs site-wide. Usually left empty and overridden per-site via site configuration.",  # noqa: E501
+    )
+    TIME_ZONE: str = Field(default="UTC")
+    TRACKING_BACKENDS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "logger": {
+                "ENGINE": "common.djangoapps.track.backends.logger.LoggerBackend",
+                "OPTIONS": {"name": "tracking"},
+            }
+        },
+    )
+    TRACKING_IGNORE_URL_PATTERNS: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: ["^/event", "^/login", "^/heartbeat"],
+        description="We're already logging events, and we don't want to capture user\nnames/passwords.  Heartbeat events are likely not interesting.",  # noqa: E501
+    )
+    TRACK_MAX_EVENT: int = Field(
+        default=50000, description="FIXME: Should we be doing this truncation?"
+    )
+    TRANSCRIPT_LANG_CACHE_TIMEOUT: Any = Field(
+        default_factory=lambda: 60 * 60 * 24
+    )  # refine type
+    USERNAME_PATTERN: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    USERNAME_REGEX_PARTIAL: str = Field(
+        default="[\\w .@_+-]+",
+        description="The space is required for space-dependent languages like Arabic and Farsi.\nHowever, backward compatibility with Ficus older releases is still maintained (space is still not valid)\nin the AccountCreationForm and the user_api through the ENABLE_UNICODE_USERNAME feature flag.",  # noqa: E501
+    )
+    USERNAME_REPLACEMENT_WORKER: str = Field(default="REPLACE WITH VALID USERNAME")
+    USE_EXTRACTED_ANNOTATABLE_BLOCK: bool = Field(
+        default=True,
+        description=".. toggle_name: USE_EXTRACTED_ANNOTATABLE_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted annotatable XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+    )
+    USE_EXTRACTED_DISCUSSION_BLOCK: bool = Field(
+        default=True,
+        description=".. toggle_name: USE_EXTRACTED_DISCUSSION_BLOCK\n.. toggle_default: False\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted Discussion XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_warning: Not production-ready until relevant subtask https://github.com/openedx/edx-platform/issues/34827 is done.\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+    )
+    USE_EXTRACTED_HTML_BLOCK: bool = Field(
+        default=True,
+        description=".. toggle_name: USE_EXTRACTED_HTML_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted HTML XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+    )
+    USE_EXTRACTED_LTI_BLOCK: bool = Field(
+        default=True,
+        description=".. toggle_name: USE_EXTRACTED_LTI_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted LTI XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+    )
+    USE_EXTRACTED_POLL_QUESTION_BLOCK: bool = Field(
+        default=True,
+        description=".. toggle_name: USE_EXTRACTED_POLL_QUESTION_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted poll question XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+    )
+    USE_EXTRACTED_PROBLEM_BLOCK: bool = Field(
+        default=True,
+        description=".. toggle_name: USE_EXTRACTED_PROBLEM_BLOCK\n.. toggle_default: False\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted Problem XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_warning: Not production-ready until relevant subtask https://github.com/openedx/edx-platform/issues/34827 is done.\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+    )
+    USE_EXTRACTED_VIDEO_BLOCK: bool = Field(
+        default=True,
+        description=".. toggle_name: USE_EXTRACTED_VIDEO_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted Video XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+    )
+    USE_EXTRACTED_WORD_CLOUD_BLOCK: bool = Field(
+        default=True,
+        description=".. toggle_name: USE_EXTRACTED_WORD_CLOUD_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted Word Cloud XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+    )
+    USE_I18N: bool = Field(default=True)
+    USE_TZ: bool = Field(default=True)
+    VERIFY_STUDENT: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {"DAYS_GOOD_FOR": 365, "EXPIRING_SOON_WINDOW": 28}
+    )
+    VIDEO_CDN_URL: Annotated[dict[str, Any], NoDecode] = Field(default_factory=dict)
+    VIDEO_TRANSCRIPTS_MAX_AGE: int = Field(default=31536000)
+    VIDEO_TRANSCRIPTS_SETTINGS: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    VIDEO_UPLOAD_PIPELINE: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {"VEM_S3_BUCKET": "", "BUCKET": "", "ROOT_PATH": ""}
+    )
+    WEBPACK_LOADER: Any = Field(
+        default=None, json_schema_extra={"aqueduct_unresolved": True}
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    WIKI_ENABLED: bool = Field(
+        default=True,
+        description=".. toggle_name: WIKI_ENABLED\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: This setting allows us to have a collaborative tool to contribute or\nmodify content of course related materials.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2012-07-13",  # noqa: E501
+    )
+    WIKI_HELP_URL: str = Field(
+        default="https://docs.openedx.org/en/latest/educators/concepts/communication/about_course_wiki.html",  # noqa: E501
+    )
+    XBLOCK_EXTRA_MIXINS: tuple[Any, ...] = Field(
+        default=(),
+        description=".. setting_name: XBLOCK_EXTRA_MIXINS\n.. setting_default: ()\n.. setting_description: Custom mixins that will be dynamically added to every XBlock and XBlockAside instance.\nThese can be classes or dotted-path references to classes.\nFor example: `XBLOCK_EXTRA_MIXINS = ('my_custom_package.my_module.MyCustomMixin',)`",  # noqa: E501
+    )  # refine type
+    XBLOCK_FIELD_DATA_WRAPPERS: tuple[Any, ...] = Field(
+        default=(),
+        description=".. setting_name: XBLOCK_FIELD_DATA_WRAPPERS\n.. setting_default: ()\n.. setting_description: Paths to wrapper methods which should be applied to every XBlock's FieldData.",  # noqa: E501
+    )  # refine type
+    XBLOCK_RUNTIME_V2_EPHEMERAL_DATA_CACHE: str = Field(
+        default="default",
+        description=".. setting_name: XBLOCK_RUNTIME_V2_EPHEMERAL_DATA_CACHE\n.. setting_default: default\n.. setting_description: The django cache key of the cache to use for storing anonymous user state for XBlocks.",  # noqa: E501
+    )
+    XBLOCK_SETTINGS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=dict,
+        description=".. setting_name: XBLOCK_SETTINGS\n.. setting_default: {}\n.. setting_description: Dictionary containing server-wide configuration of XBlocks on a per-type basis.\nBy default, keys should match the XBlock `block_settings_key` attribute/property. If the attribute/property\nis not defined, use the XBlock class name. Check `xmodule.services.SettingsService`\nfor more reference.",  # noqa: E501
+    )
+    XQA_SERVER: str = Field(
+        default="http://your_xqa_server.com",
+        description=".. setting_name: XQA_SERVER\n.. setting_default: 'http://your_xqa_server.com'\n.. setting_description: URL of the XQA staff debug/inspection server linked from the\nstaff-only markup rendered by openedx.core.lib.xblock_utils.add_staff_markup. Set\nto a real endpoint if operating an XQA-compatible service; leave the placeholder\ndefault to effectively disable the link.",  # noqa: E501
+    )
+    XQUEUE_INTERFACE: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "url": "http://localhost:18040",
+            "basic_auth": ["edx", "edx"],
+            "django_auth": {"username": "lms", "password": "password"},
+        },
+    )
+    XQUEUE_WAITTIME_BETWEEN_REQUESTS: int = Field(
+        default=5, description="Used with XQueue"
+    )
+    X_FRAME_OPTIONS: str = Field(
+        default="DENY",
+        description="Clickjacking protection can be disbaled by setting this to 'ALLOW'",  # noqa: E501
+    )
+    YOUTUBE: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=lambda: {
+            "API": "https://www.youtube.com/iframe_api",
+            "TEST_TIMEOUT": 1500,
+            "METADATA_URL": "https://www.googleapis.com/youtube/v3/videos/",
+            "TRANSCRIPTS": {
+                "CAPTION_TRACKS_REGEX": 'captionTracks\\"\\:\\[(?P<caption_tracks>[^\\]]+)',  # noqa: E501
+                "YOUTUBE_URL_BASE": "https://www.youtube.com/watch?v=",
+                "ALLOWED_LANGUAGE_CODES": ["en", "en-US", "en-GB"],
+            },
+            "IMAGE_API": "http://img.youtube.com/vi/{youtube_id}/0.jpg",
+        },
+    )
+    YOUTUBE_API_KEY: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    ZENDESK_CUSTOM_FIELDS: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=dict
+    )
+    ZENDESK_GROUP_ID_MAPPING: Annotated[dict[str, Any], NoDecode] = Field(
+        default_factory=dict,
+        description="A mapping of string names to Zendesk Group IDs\nTo get the IDs of your groups you can go to\n{zendesk_url}/api/v2/groups.json",  # noqa: E501
+    )
+    ZENDESK_OAUTH_ACCESS_TOKEN: str | None = Field(
+        default=None
+    )  # REDACTED: name looks secret-like — set via a source, not here
+    ZENDESK_URL: str = Field(default="")
     # ===== rapid-response-xblock =====
     ENABLE_RAPID_RESPONSE_AUTHOR_VIEW: bool = Field(
         default=False, json_schema_extra={"aqueduct_plugin": "rapid-response-xblock"}
@@ -1148,14 +3006,40 @@ class AqueductSettings(BaseSettings):
     @field_validator(
         "ACE_ENABLED_CHANNELS",
         "ACE_ENABLED_POLICIES",
+        "ADMINS",
         "ADVANCED_PROBLEM_TYPES",
+        "ALLOWED_HOSTS",
+        "ALL_LANGUAGES",
+        "AUTHENTICATION_BACKENDS",
+        "AUTH_PASSWORD_VALIDATORS",
+        "COMPREHENSIVE_THEME_LOCALE_PATHS",
+        "CONTEXT_PROCESSORS",
+        "COURSES_WITH_UNSAFE_CODE",
+        "CSRF_TRUSTED_ORIGINS",
+        "DATABASE_ROUTERS",
         "DEFAULT_GRADE_DESIGNATIONS",
+        "DEPRECATED_ADVANCED_COMPONENT_TYPES",
+        "ELASTIC_SEARCH_CONFIG",
+        "EVENT_TRACKING_PROCESSORS",
+        "EVENT_TRACKING_SEGMENTIO_EMIT_WHITELIST",
         "EXTENDED_VIDEO_TRANSCRIPT_LANGUAGES",
         "EXTRA_MIDDLEWARE_CLASSES",
+        "FERNET_KEYS",
+        "HEARTBEAT_CHECKS",
+        "IDA_LOGOUT_URI_LIST",
+        "LANGUAGES",
         "LIBRARY_BLOCK_TYPES",
         "LIBRARY_ENABLED_BLOCKS",
+        "LOGIN_REDIRECT_WHITELIST",
         "MIDDLEWARE",
+        "OPTIONAL_APPS",
+        "PREPEND_LOCALE_PATHS",
         "RETIRED_USER_SALTS",
+        "RETIREMENT_STATES",
+        "STATICFILES_FINDERS",
+        "STATICFILES_IGNORE_PATTERNS",
+        "SYSTEM_WIDE_ROLE_CLASSES",
+        "TRACKING_IGNORE_URL_PATTERNS",
         mode="before",
     )
     @classmethod
@@ -1180,17 +3064,59 @@ class AqueductSettings(BaseSettings):
         return [item.strip() for item in stripped.split(",")]
 
     @field_validator(
+        "CACHES",
+        "CERTIFICATE_TEMPLATE_LANGUAGES",
+        "CODE_JAIL",
+        "CONTENT_TYPE_GATE_GROUP_IDS",
+        "COURSE_LIVE_GLOBAL_CREDENTIALS",
+        "CREDIT_PROVIDER_SECRET_KEYS",
+        "DATABASES",
         "DISCUSSION_SETTINGS",
+        "DJFS",
+        "DOC_STORE_CONFIG",
         "EDXAPP_PARSE_KEYS",
+        "EDX_DRF_EXTENSIONS",
         "ELASTIC_FIELD_MAPPINGS",
+        "ENTERPRISE_CUSTOMER_CATALOG_DEFAULT_CONTENT_FILTER",
+        "ENTERPRISE_MARKETING_FOOTER_QUERY_PARAMS",
         "FILES_AND_UPLOAD_TYPE_FILTERS",
+        "FINANCIAL_REPORTS",
         "GIT_EXPORT_DEFAULT_IDENT",
         "GRADES_DOWNLOAD",
+        "HELP_TOKENS_BOOKS",
+        "ICP_LICENSE_INFO",
+        "INTEGRATED_CHANNELS_API_CHUNK_TRANSMISSION_LIMIT",
+        "MKTG_URLS",
+        "MKTG_URL_OVERRIDES",
+        "NOTIFICATION_APPS_OVERRIDE",
+        "NOTIFICATION_TYPES_OVERRIDE",
+        "NOTIFICATION_TYPE_ICONS",
         "PARSE_KEYS",
+        "PASSWORD_POLICY_COMPLIANCE_ROLLOUT_CONFIG",
+        "PIPELINE",
         "PROCTORING_BACKENDS",
         "PROCTORING_SETTINGS",
+        "PROFILE_IMAGE_SIZES_MAP",
+        "REGISTRATION_EXTRA_FIELDS",
+        "REST_FRAMEWORK",
+        "SOCIAL_AUTH_SAML_SP_PRIVATE_KEY_DICT",
+        "SOCIAL_AUTH_SAML_SP_PUBLIC_CERT_DICT",
+        "SOCIAL_MEDIA_FOOTER_ACE_URLS",
+        "SOCIAL_MEDIA_LOGO_URLS",
+        "SOCIAL_SHARING_SETTINGS",
         "SPECTACULAR_SETTINGS",
+        "STATICFILES_STORAGE_KWARGS",
+        "STORAGES",
+        "TRACKING_BACKENDS",
+        "VERIFY_STUDENT",
+        "VIDEO_CDN_URL",
         "VIDEO_IMAGE_SUPPORTED_FILE_FORMATS",
+        "VIDEO_UPLOAD_PIPELINE",
+        "XBLOCK_SETTINGS",
+        "XQUEUE_INTERFACE",
+        "YOUTUBE",
+        "ZENDESK_CUSTOM_FIELDS",
+        "ZENDESK_GROUP_ID_MAPPING",
         mode="before",
     )
     @classmethod
