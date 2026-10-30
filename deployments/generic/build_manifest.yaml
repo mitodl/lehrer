@@ -28,7 +28,7 @@ cells:
   # edx-platform installs it, and local-dev defaults to this cell.
   - granian==2.8.4
   - django-aqueduct==0.15.1
-  - pydantic-settings[yaml]==2.15.0
+  - pydantic-settings[yaml]==2.16.0
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
   - opentelemetry-instrumentation-django
