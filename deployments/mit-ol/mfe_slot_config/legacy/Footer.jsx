@@ -331,10 +331,8 @@ const AppziScript = () => {
 };
 
 const CONTACT_US_RECHECK_MS = 60000;
-// Matches both the learning MFE's /course/course-v1:ORG+NUM+RUN and Studio's
-// /container/block-v1:ORG+NUM+RUN+type@...; the first three segments are the
-// course triple in either form. Anchored to a path boundary so ccx-block-v1:,
-// which contains block-v1:, does not resolve to its parent course.
+// Matches the learning MFE's /course/course-v1:... and Studio's /container/block-v1:...
+// Anchored so ccx-block-v1:, which contains block-v1:, is not read as its parent course.
 const COURSE_TRIPLE_REGEX = /(?:^|\/)(?:course-v1|block-v1):([^/+]+\+[^/+]+\+[^/+?#]+)/;
 
 // The pathname arrives percent-encoded; the MFE only redirects to the decoded
