@@ -239,7 +239,7 @@ cells:
   # Typesense forum search is non-functional below 0.4.7 (openedx/forum#289).
   # edx-platform pins 0.4.2 on release/verawood; remove once the pin there
   # reaches 0.4.7.
-  - openedx-forum==0.4.9
+  - openedx-forum==0.5.0
 - release: verawood
   deployment: mitx-staging
   platform_repo: https://github.com/openedx/edx-platform
@@ -286,7 +286,7 @@ cells:
   # Typesense forum search is non-functional below 0.4.7 (openedx/forum#289).
   # edx-platform pins 0.4.2 on release/verawood; remove once the pin there
   # reaches 0.4.7.
-  - openedx-forum==0.4.9
+  - openedx-forum==0.5.0
 - release: verawood
   deployment: xpro
   platform_branch: release/verawood
@@ -329,4 +329,4 @@ cells:
   # Typesense forum search is non-functional below 0.4.7 (openedx/forum#289).
   # edx-platform pins 0.4.2 on release/verawood; remove once the pin there
   # reaches 0.4.7.
-  - openedx-forum==0.4.9
+  - openedx-forum==0.5.0
