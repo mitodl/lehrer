@@ -65,9 +65,25 @@ runs:
       DAGGER_VERSION: ${{ steps.version.outputs.version }}
     run: |
       set -euo pipefail
+      # No sudo: ubuntu-latest rolled to 26.04, whose sudo-rs ignores `-E`
+      # ("preserving the entire environment is not supported") and so drops the
+      # variables set for it. install.sh then used its own defaults — ./bin,
+      # which left `dagger` off PATH, and "latest", which unpinned the CLI.
+      bin_dir="$RUNNER_TEMP/dagger-bin"
       curl -fsSL https://dl.dagger.io/dagger/install.sh \
-        | BIN_DIR=/usr/local/bin sudo -E sh
-      dagger version
+        | BIN_DIR="$bin_dir" sh
+      echo "$bin_dir" >> "$GITHUB_PATH"
+
+      # Assert the pin rather than just printing it. When sudo swallowed
+      # DAGGER_VERSION the installer quietly fell back to latest, and only the
+      # BIN_DIR half of that failed loudly — a silent CLI/engine mismatch is
+      # much harder to read than a failure here.
+      installed="$("$bin_dir/dagger" version | awk '{print $2}')"
+      if [ "$installed" != "v$DAGGER_VERSION" ]; then
+        echo "::error::Dagger CLI is $installed but dagger.json pins v$DAGGER_VERSION"
+        exit 1
+      fi
+      echo "Dagger CLI $installed"
 
   - name: Start engine with registry mirror
     shell: bash
