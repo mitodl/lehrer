@@ -224,6 +224,8 @@ export const LanguageSelector = () => {
   const { authenticatedUser } = useContext(AppContext);
   const location = useLocation();
   const [languageConfig, setLanguageConfig] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const username = authenticatedUser?.username;
 
   // Refetch when client-side navigation moves to another course or page.
@@ -251,24 +253,45 @@ export const LanguageSelector = () => {
   const currentLanguage = languages.find((language) => language.code === current);
 
   const onSelect = async (code) => {
-    if (code === current) return;
+    if (code === current || saving) return;
+    setSaving(true);
+    setSaveFailed(false);
     // The LMS writes the shared language cookie from pref-lang on this response.
     if (await saveLanguagePreference(getConfig().LMS_BASE_URL, username, code)) {
       window.location.reload();
+      return;
     }
+    setSaving(false);
+    setSaveFailed(true);
   };
 
+  const currentName = currentLanguage?.name ?? current;
   return (
     <Dropdown onSelect={onSelect} className="ol-language-selector mr-3">
-      <Dropdown.Toggle variant="outline-primary" size="sm" id="ol-language-selector">
-        {currentLanguage?.name ?? current}
+      <Dropdown.Toggle
+        variant="outline-primary"
+        size="sm"
+        id="ol-language-selector"
+        disabled={saving}
+        aria-label={`Language: ${currentName}`}
+      >
+        <span lang={current}>{currentName}</span>
       </Dropdown.Toggle>
+      {saveFailed && (
+        <span role="alert" className="small text-danger ml-2">
+          <FormattedMessage
+            id="ol.languageSelector.saveFailed"
+            defaultMessage="Could not change the language. Please try again."
+          />
+        </span>
+      )}
       <Dropdown.Menu className="overflow-auto" style={{ maxHeight: "320px" }}>
         {languages.map((language) => (
           <Dropdown.Item
             key={language.code}
             eventKey={language.code}
             active={language.code === current}
+            lang={language.code}
           >
             {language.name}
           </Dropdown.Item>
