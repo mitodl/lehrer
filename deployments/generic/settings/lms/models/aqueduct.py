@@ -314,7 +314,7 @@ class AqueductSettings(BaseSettings):
     )  # refine type
     CUSTOM_CERTIFICATE_TEMPLATES_ENABLED: bool = Field(
         default=False,
-        description=".. toggle_name: settings.CUSTOM_CERTIFICATE_TEMPLATES_ENABLED\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to enable custom certificate templates which are configured via Django admin.\n.. toggle_warning: None\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-08-13\n.. toggle_target_removal_date: None\n.. toggle_tickets: https://openedx.atlassian.net/browse/SOL-1044",  # noqa: E501
+        description=".. toggle_name: settings.CUSTOM_CERTIFICATE_TEMPLATES_ENABLED\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to enable custom certificate templates which are configured via Django admin.\nTemplates are rendered with Mako.\n.. toggle_warning: Mako templates can run arbitrary Python on the LMS server. Any user who can add or change a\ncertificate template in Django admin (the certificates.add_certificatetemplate and\ncertificates.change_certificatetemplate permissions) can run code as the LMS process. Only grant those permissions\nto users you would trust with shell access to the LMS.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2015-08-13\n.. toggle_target_removal_date: None\n.. toggle_tickets: https://openedx.atlassian.net/browse/SOL-1044",  # noqa: E501
     )
     DASHBOARD_COURSE_LIMIT: Any = Field(
         default=None,
@@ -1032,7 +1032,6 @@ class AqueductSettings(BaseSettings):
             "openedx.features.calendar_sync",
             "openedx.features.course_bookmarks",
             "openedx.features.course_experience",
-            "openedx.features.enterprise_support.apps.EnterpriseSupportConfig",
             "openedx.features.course_duration_limits",
             "openedx.features.content_type_gating",
             "openedx.features.discounts",
@@ -1846,6 +1845,18 @@ class AqueductSettings(BaseSettings):
         default=None,
         description="If running a Gradebook container locally,\nmodify lms/envs/private.py to give it a non-null value",  # noqa: E501
     )  # refine type
+    XBLOCK_NOAUTH_HANDLER_ALLOWLIST: Annotated[list[Any], NoDecode] = Field(
+        default_factory=lambda: [
+            "xmodule.lti_block._BuiltInLTIBlock.grade_handler",
+            "xmodule.lti_2_util.LTI20BlockMixin.lti_2_0_result_rest_handler",
+            "xblocks_contrib.lti.lti.LTIBlock.grade_handler",
+            "xblocks_contrib.lti.lti_2_util.LTI20BlockMixin.lti_2_0_result_rest_handler",  # noqa: E501
+            "lti_consumer.lti_xblock.LtiConsumerXBlock.outcome_service_handler",
+            "lti_consumer.lti_xblock.LtiConsumerXBlock.result_service_handler",
+            "xblocks_contrib.video.video_handlers.VideoStudentViewHandlers.transcript",
+        ],
+        description=".. setting_name: XBLOCK_NOAUTH_HANDLER_ALLOWLIST\n.. setting_default: LTI 1.1 outcome handlers and the video transcript handler (see below)\n.. setting_description: Dotted paths to the XBlock handler methods that may be called through the\nunauthenticated ``handler_noauth`` URL. Requests for any other handler on that URL get a 404. Handlers\non this URL always run as an anonymous user, so each one must do its own authentication (for example, an\nOAuth signature from an LTI tool) or serve only public data. Paths name the class that defines the method,\ne.g. ``'my_package.blocks.MyXBlock.my_callback_handler'``. Paths that cannot be imported are skipped.",  # noqa: E501
+    )
     XDOMAIN_PROXY_CACHE_TIMEOUT: Any = Field(
         default_factory=lambda: 60 * 15,
         description="Default cache expiration for the cross-domain proxy HTML page.\nThis is a static page that can be iframed into an external page\nto simulate cross-domain requests.",  # noqa: E501
@@ -4065,6 +4076,7 @@ class AqueductSettings(BaseSettings):
         "TRACKING_IGNORE_URL_PATTERNS",
         "TRACKING_SEGMENTIO_ALLOWED_TYPES",
         "TRACKING_SEGMENTIO_DISALLOWED_SUBSTRING_NAMES",
+        "XBLOCK_NOAUTH_HANDLER_ALLOWLIST",
         mode="before",
     )
     @classmethod
