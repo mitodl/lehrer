@@ -708,6 +708,7 @@ class AqueductSettings(BaseSettings):
             "openedx.core.djangoapps.safe_sessions.middleware.SafeSessionMiddleware",
             "method_override.middleware.MethodOverrideMiddleware",
             "openedx.core.djangoapps.cache_toolbox.middleware.CacheBackedAuthenticationMiddleware",  # noqa: E501
+            "cms.djangoapps.contentstore.middleware.LoginRedirectToUnauthorizedMiddleware",  # noqa: E501
             "common.djangoapps.student.middleware.UserStandingMiddleware",
             "django.contrib.messages.middleware.MessageMiddleware",
             "common.djangoapps.track.middleware.TrackMiddleware",
@@ -807,8 +808,11 @@ class AqueductSettings(BaseSettings):
                 "openedx.core.apidocs.untag_deprecated_operations",
             ],
             "SCHEMA_PATH_PREFIX": "/api/(contentstore|authoring)",
+            "SWAGGER_UI_DIST": "SIDECAR",
+            "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+            "REDOC_DIST": "SIDECAR",
         },
-        description="The Authoring API schema, for any settings module that does not define its\nown SPECTACULAR_SETTINGS -- notably cms.envs.development, which generates the\ncommitted docs/cms-openapi.yaml in CI. Without these the document has no\ntitle, version 0.0.0, and every endpoint in the service rather than the\nAuthoring API's own surface.\ndevstack.py and production.py replace this wholesale, adding SERVERS and a\nlonger DESCRIPTION. Those are the only parts that depend on CMS_BASE and\nAUTHORING_API_URL, which are empty here; the hooks and the path prefix do\nnot, so they belong at this level.",  # noqa: E501
+        description="The Authoring API schema for every settings module, including\ncms.envs.development, which generates the committed docs/cms-openapi.yaml in\nCI. Without these the document has no title, version 0.0.0, and every\nendpoint in the service rather than the Authoring API's own surface.\ndevstack.py and production.py set only SERVERS and a longer DESCRIPTION on\ntop of this, because those are the only parts that depend on CMS_BASE and\nAUTHORING_API_URL, which are empty here. Everything else belongs at this\nlevel so there is one copy of it.",  # noqa: E501
     )
     SQUELCH_PII_IN_LOGS: bool = Field(
         default=False,
