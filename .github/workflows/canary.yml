@@ -112,7 +112,7 @@ jobs:
         # fallback when the input is legitimately false.
         STRICT_INPUT: ${{ inputs.strict_translations }}
         # Scoped to this step only (not the job) so neither `checkout` nor the
-        # curl|sudo -E installer above can read it — least privilege. If set,
+        # curl|sh installer above can read it — least privilege. If set,
         # Dagger streams to Dagger Cloud and reuses its layer cache across runs,
         # keeping the canary's wall-clock tolerable; unset (empty) is fine —
         # Dagger just runs locally with the engine's own cache.
