@@ -1,4 +1,4 @@
-import React, { useContext, useEffect } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { Button, Dropdown, Collapsible, Hyperlink, Image } from "@openedx/paragon";
 import { ExpandLess, ExpandMore } from '@openedx/paragon/icons';
 import { getConfig } from '@edx/frontend-platform';
@@ -330,19 +330,55 @@ const AppziScript = () => {
   return null;
 };
 
-// Module scope, not component state: route changes remount the footer, and
-// unmounting the launcher loses the open chat and files a second ticket.
-let contactUsLauncherMount = null;
+const CONTACT_US_RECHECK_MS = 60000;
+// Matches both the learning MFE's /course/course-v1:ORG+NUM+RUN and Studio's
+// /container/block-v1:ORG+NUM+RUN+type@...; the first three segments are the
+// course triple in either form. Anchored to a path boundary so ccx-block-v1:,
+// which contains block-v1:, does not resolve to its parent course.
+const COURSE_TRIPLE_REGEX = /(?:^|\/)(?:course-v1|block-v1):([^/+]+\+[^/+]+\+[^/+?#]+)/;
 
-const mountContactUsLauncher = ({ apiUrl, userEmail, userName, userUsername }) => {
-  if (contactUsLauncherMount) {
-    return contactUsLauncherMount;
+// React Router reports the pathname still percent-encoded, and the MFE's
+// DecodePageRoute only redirects to the decoded URL after a first render. Match
+// the decoded form so the first render already resolves the course key.
+const decodePathname = (pathname) => {
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    // A stray % is not valid encoding; the raw path is the best we have.
+    return pathname;
   }
-  // Only the learning MFE ships this bundle, so the URL is absolute. A classic
-  // script needs no CORS.
+};
+
+// Everything below is module scope rather than component state because the
+// learning MFE renders FooterSlot inside TabPage, and the outline and courseware
+// are separate routes, so opening a subsection or clicking the "Course"
+// breadcrumb remounts the footer without a page load. Holding the launcher or
+// the gate answer in the component would tear the launcher down there, closing
+// an open card, losing the conversation, and making the next message start a new
+// thread, which files a second ticket. One launcher per page load, as hq#14033
+// asks for.
+
+// The UMD bundle is fetched at most once per page, separately from the launcher,
+// so flipping the flag off and back on remounts without refetching it.
+let bundleLoad = null;
+// The mounted launcher, or null when it is down.
+let launcher = null;
+// The desired state. Mounting waits on the bundle, so a flag flip that lands
+// mid-load has to be recorded where that load's callback will see it.
+let launcherWanted = false;
+// Set from the component so the async mount reads current values rather than
+// whichever render's closure happened to start the load.
+let launcherOptions = null;
+
+const loadContactUsBundle = () => {
+  if (bundleLoad) {
+    return bundleLoad;
+  }
+  // Only the learning MFE ships this bundle; the others load that copy. Absolute
+  // because authoring is on a different origin, and a classic script needs no CORS.
   const bundlePath = process.env.CONTACT_US_BUNDLE_PATH
     || `${getConfig().LMS_BASE_URL}/learn/static/smoot-design/contactUsLauncher.umd.js`;
-  contactUsLauncherMount = new Promise((resolve, reject) => {
+  bundleLoad = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = bundlePath;
     script.async = true;
@@ -355,49 +391,161 @@ const mountContactUsLauncher = ({ apiUrl, userEmail, userName, userUsername }) =
         reject(new Error(`bundle at ${bundlePath} has no init()`));
         return;
       }
-      // learn-ai has no session on this cross-origin POST, so these are the
-      // ticket's only requester fields.
+      resolve(window.contactUsLauncher);
+    };
+    document.head.appendChild(script);
+  });
+  // feedbackBundle.js nulls its promise on failure so the next click retries.
+  // This one keeps the rejection: it loads when the gate opens rather than on a
+  // click, and it 404s until the learning MFE is promoted, so retrying would
+  // refetch and re-log on every navigation for a failure that will not fix itself.
+  bundleLoad.catch((error) => {
+    // Pass the error itself, not its message: the bundle can throw a non-Error,
+    // and the stack is the only clue when the throw comes from inside it.
+    console.error('ContactUsLauncherScript:', error);
+  });
+  return bundleLoad;
+};
+
+const mountContactUsLauncher = () => {
+  launcherWanted = true;
+  if (launcher) {
+    return;
+  }
+  loadContactUsBundle()
+    .then((bundle) => {
+      // The flag can go off, or another caller can win, while the bundle loads.
+      if (!launcherWanted || launcher) {
+        return;
+      }
+      const {
+        apiUrl, userEmail, userName, userUsername,
+      } = launcherOptions;
+      // learn-ai gets no session on this cross-origin POST, so the ticket's
+      // requester fields are whatever we send here or nothing.
       const requestBody = {
         ...(userEmail ? { user_email: userEmail } : {}),
         ...(userName ? { user_name: userName } : {}),
         ...(userUsername ? { user_username: userUsername } : {}),
       };
       try {
-        resolve(window.contactUsLauncher.init({
+        launcher = bundle.init({
           settings: {
             chat: { apiUrl, requestBody },
           },
-        }));
+        });
       } catch (error) {
-        // A throw would escape the load handler and leave the promise pending.
-        reject(error);
+        // Without this the throw is swallowed by the promise and nothing says
+        // why there is no launcher.
+        console.error('ContactUsLauncherScript:', error);
       }
-    };
-    document.head.appendChild(script);
-  });
-  // The rejection is cached too, unlike feedbackBundle.js: this loads on every
-  // remount, so retrying would re-log a failure that will not fix itself.
-  contactUsLauncherMount.catch((error) => {
-    // The error itself, not its message: init() can throw a non-Error.
-    console.error('ContactUsLauncherScript:', error);
-  });
-  return contactUsLauncherMount;
+    })
+    .catch(() => {
+      // The bundle itself failed; loadContactUsBundle already reported it.
+    });
+};
+
+const unmountContactUsLauncher = () => {
+  launcherWanted = false;
+  if (!launcher) {
+    return;
+  }
+  try {
+    launcher.unmount();
+  } catch (error) { /* unmount handles its own errors */ }
+  launcher = null;
+};
+
+// The gate answer is cached per course so a footer remount reuses it instead of
+// hiding the launcher and asking again. null means not yet answered for this key.
+let gateCourseKey = null;
+let gateEnabled = null;
+let gateLastCheck = 0;
+let gateSeq = 0;
+
+const applyContactUsGate = (enabled) => {
+  gateEnabled = enabled;
+  if (enabled) {
+    mountContactUsLauncher();
+  } else {
+    unmountContactUsLauncher();
+  }
+};
+
+// isInitial separates "we have no answer yet" from "we had one and this check
+// failed". With no answer, anything but an explicit true keeps the launcher off.
+// On a re-check only an explicit false may remove it: a blip is not a kill
+// signal, and tearing down a launcher mid-conversation loses the message.
+const checkContactUsGate = (courseKey, isInitial) => {
+  gateSeq += 1;
+  const mySeq = gateSeq;
+  gateLastCheck = Date.now();
+  fetch(
+    `${getConfig().LMS_BASE_URL}/ol-openedx-chat/api/contact-us-enabled/${courseKey}`,
+    { credentials: 'omit' },
+  )
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data) => {
+      // A superseded course's answer must not overwrite the current course's.
+      if (mySeq !== gateSeq) {
+        return;
+      }
+      if (data?.enabled === true) {
+        applyContactUsGate(true);
+      } else if (isInitial || data?.enabled === false) {
+        applyContactUsGate(false);
+      }
+    })
+    .catch(() => {
+      if (isInitial && mySeq === gateSeq) {
+        applyContactUsGate(false);
+      }
+    });
 };
 
 const ContactUsLauncherScript = () => {
   const { authenticatedUser } = useContext(AppContext);
+  const location = useLocation();
   const apiUrl = process.env.CONTACT_US_SUPPORT_API_URL;
   const userEmail = authenticatedUser?.email;
   const userName = authenticatedUser?.name;
   const userUsername = authenticatedUser?.username;
 
+  const match = decodePathname(location.pathname).match(COURSE_TRIPLE_REGEX);
+  const courseKey = match ? `course-v1:${match[1]}` : '';
+
   useEffect(() => {
     if (!apiUrl) {
-      return;
+      return undefined;
     }
-    // Re-runs are no-ops; the first call wins and its launcher stays put.
-    mountContactUsLauncher({ apiUrl, userEmail, userName, userUsername });
-  }, [apiUrl, userEmail, userName, userUsername]);
+    launcherOptions = {
+      apiUrl, userEmail, userName, userUsername,
+    };
+
+    if (courseKey !== gateCourseKey) {
+      // A different course can have a different answer, so the old one does not
+      // carry over. The launcher stays up until the new answer lands rather than
+      // flickering off and back on.
+      gateCourseKey = courseKey;
+      gateEnabled = null;
+      checkContactUsGate(courseKey, true);
+    } else if (gateEnabled !== null) {
+      // Same course, so reuse the answer instead of asking again. A check that
+      // is still in flight will apply itself when it lands.
+      applyContactUsGate(gateEnabled);
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible'
+          && Date.now() - gateLastCheck > CONTACT_US_RECHECK_MS) {
+        checkContactUsGate(gateCourseKey, false);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [apiUrl, courseKey, userEmail, userName, userUsername]);
 
   return null;
 };
