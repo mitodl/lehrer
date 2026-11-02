@@ -193,7 +193,14 @@ function fetchLearnerLanguageConfig() {
     learnerLanguageRequests[courseId] = getAuthenticatedHttpClient()
       .get(url)
       .then(({ data }) => data)
-      .catch(() => ({ enabled: false, languages: [] }));
+      .catch((error) => {
+        // Not cached, so the next navigation tries again.
+        delete learnerLanguageRequests[courseId];
+        if (process.env.NODE_ENV === DEVELOPMENT_ENVIRONMENT) {
+          console.warn("Language config fetch failed:", error);
+        }
+        return { enabled: false, languages: [] };
+      });
   }
   return learnerLanguageRequests[courseId];
 }
