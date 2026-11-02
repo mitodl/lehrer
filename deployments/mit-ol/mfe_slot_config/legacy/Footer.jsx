@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { Button, Dropdown, Collapsible, Hyperlink, Image } from "@openedx/paragon";
 import { ExpandLess, ExpandMore } from '@openedx/paragon/icons';
 import { getConfig } from '@edx/frontend-platform';
@@ -233,6 +233,8 @@ export const LanguageSelector = () => {
   const [languageConfig, setLanguageConfig] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
+  // Set at once, unlike `saving`, so a second pick before the next render is ignored.
+  const savingRef = useRef(false);
   const username = authenticatedUser?.username;
 
   // Refetch when client-side navigation moves to another course or page.
@@ -260,7 +262,8 @@ export const LanguageSelector = () => {
   const currentLanguage = languages.find((language) => language.code === current);
 
   const onSelect = async (code) => {
-    if (code === current || saving) return;
+    if (code === current || savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setSaveFailed(false);
     // The LMS writes the shared language cookie from pref-lang on this response.
@@ -268,6 +271,7 @@ export const LanguageSelector = () => {
       window.location.reload();
       return;
     }
+    savingRef.current = false;
     setSaving(false);
     setSaveFailed(true);
   };
