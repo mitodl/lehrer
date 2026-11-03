@@ -1,15 +1,21 @@
 """Schema for a bootstrap spec: the objects a fresh Open edX install needs.
 
-A bootstrap spec declares, as data, what has to exist in the LMS database
-before the install is usable: users to log in as, OAuth2 applications for the
-services that authenticate against the LMS (notes, Studio SSO, ...), and
-waffle flags. :mod:`lehrer.bootstrap.__main__` applies one inside the platform
-image; every step is idempotent, so applying the same spec twice changes
-nothing the second time.
+A bootstrap spec declares, as data, what has to exist in the database before
+the install is usable: the migrated schema, users to log in as, OAuth2
+applications for the services that authenticate against the LMS (notes,
+Studio SSO, ...), waffle flags, and optionally the demo course.
+:mod:`lehrer.bootstrap.__main__` applies one inside the platform image; every
+step is idempotent, so applying the same spec twice changes nothing the second
+time.
 
-The same file drives local dev (the edxapp-provision Job), a deployed
-environment's pre-deploy Job, and later an operator reconciling the same
-fields from a CRD, so that none of them carries bootstrap logic of its own.
+When a step runs is the caller's decision, not the spec's: a caller passes
+``--steps`` (e.g. migrate on every deploy, the demo course only when a
+developer asks for it), so one spec serves all of them.
+
+The same file drives local dev (the edxapp-migrate, edxapp-provision and
+edxapp-demo-course Jobs), a deployed environment's pre-deploy Job, and later
+an operator reconciling the same fields from a CRD, so that none of them
+carries bootstrap logic of its own.
 
 Secrets never appear in a spec. A field ending in ``_env`` names the
 environment variable the value is read from at apply time, so a spec can live
@@ -28,17 +34,80 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 STEPS = (
+    "migrate",
     "users",
     "oauth_applications",
     "third_party_auth_providers",
     "service_access_tokens",
     "waffle_flags",
+    "demo_course",
 )
-"""Step names in the order they run. OAuth applications are owned by a user,
-so users come first."""
+"""Step names in the order they run. Everything after migrate needs the schema,
+and OAuth applications are owned by a user, so users come before them."""
+
+
+class Migration(BaseModel):
+    """One ``manage.py <service> migrate`` run.
+
+    Each runs in a subprocess with that service's settings, since the runner
+    itself is set up for one settings module and the CMS migrates under its
+    own.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    service: Literal["lms", "cms"]
+    app_label: str | None = Field(
+        default=None, description="Migrate only this app. Omitted, migrates all."
+    )
+    database: str = Field(
+        default="default",
+        description=(
+            "The DATABASES alias to migrate. migrate never touches another alias "
+            "on its own, so an app routed to a separate database (e.g. "
+            "coursewarehistoryextended on student_module_history) needs its own "
+            "entry."
+        ),
+    )
+    fake: str | None = Field(
+        default=None,
+        description=(
+            "Full name of one app_label migration (e.g. "
+            "0006_mariadb_uuid_conversion) to record as applied without running "
+            "it, after applying the migrations it depends on. For a migration "
+            "that cannot run as written; once it is recorded the entry does "
+            "nothing."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _fake_names_its_app(self) -> Migration:
+        if self.fake and not self.app_label:
+            msg = f"fake: {self.fake} needs the app_label it belongs to"
+            raise ValueError(msg)
+        return self
+
+
+class DemoCourse(BaseModel):
+    """The Open edX demo course, imported into the CMS modulestore.
+
+    Re-importing overwrites the course in place.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo: str = "https://github.com/openedx/openedx-demo-course"
+    branch: str | None = Field(
+        default=None,
+        description=(
+            "Branch to import. Omitted, the first of release/<line>, "
+            "open-release/<line>.master and <line> that exists, where <line> is "
+            "the platform's own RELEASE_LINE (e.g. verawood, master)."
+        ),
+    )
 
 
 class User(BaseModel):
@@ -289,6 +358,7 @@ class BootstrapSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    migrate: list[Migration] = Field(default_factory=list)
     users: list[User] = Field(default_factory=list)
     oauth_applications: list[OAuthApplication] = Field(default_factory=list)
     third_party_auth_providers: list[ThirdPartyAuthProvider] = Field(
@@ -296,6 +366,7 @@ class BootstrapSpec(BaseModel):
     )
     service_access_tokens: list[ServiceAccessToken] = Field(default_factory=list)
     waffle_flags: list[WaffleFlag] = Field(default_factory=list)
+    demo_course: DemoCourse | None = None
 
 
 def load(path: str | Path) -> BootstrapSpec:

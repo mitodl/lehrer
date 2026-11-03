@@ -85,6 +85,13 @@ class TestSpec:
         assert "client_secret_env" in properties
         assert "client_secret" not in properties
 
+    def test_fake_needs_the_app_it_belongs_to(self) -> None:
+        # Without one the runner could only resolve the name across every app.
+        with pytest.raises(ValidationError, match="needs the app_label"):
+            BootstrapSpec.model_validate(
+                {"migrate": [{"service": "lms", "fake": "0006_x"}]}
+            )
+
 
 class TestResolve:
     def test_substitutes_settings(self) -> None:

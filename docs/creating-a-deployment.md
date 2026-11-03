@@ -438,12 +438,14 @@ and `--shared-src` on the `build_site` / `watch_site` call.
 ## Provisioning — `provision/bootstrap.yaml`
 
 Not a builder: this one is read at `tilt up` by `lehrer-core.star`, which
-renders it into the `edxapp-provision` ConfigMap and runs it through the
-`lehrer_bootstrap` package baked into the platform image. It declares what a
-fresh database needs before the stack is usable — the superuser, OAuth
-applications, third-party auth providers, service access tokens and waffle
-flags. `bootstrap.schema.json` at the repo root describes the format, and
-every step is idempotent.
+renders it into the `edxapp-bootstrap` ConfigMap that the `edxapp-migrate`,
+`edxapp-provision` and `edxapp-demo-course` Jobs each apply a slice of through
+the `lehrer_bootstrap` package baked into the platform image. It declares what
+a fresh database needs before the stack is usable — the migrations and the
+order they run in, the superuser, OAuth applications, third-party auth
+providers, service access tokens, waffle flags and the demo course.
+`bootstrap.schema.json` at the repo root describes the format, and every step
+is idempotent.
 
 Required, like `codejail_config/` and `notes_config/`: a deployment without
 one fails at `tilt up` with a message naming the missing path, rather than
