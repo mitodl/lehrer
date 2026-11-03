@@ -197,9 +197,10 @@ def _apply_structural_overrides(merged: dict[str, Any], model: Any) -> None:
     """Post-overlay adjustments to plugin-complete INSTALLED_APPS / AUTH_BACKENDS.
 
     Also runs ``apply_base_post_configure``, which every entry module's
-    post_configure does: merging the JWT signing key scalars into JWT_AUTH and
+    post_configure does: merging the JWT signing key scalars into JWT_AUTH,
     defaulting the celery router inputs (EXPLICIT_QUEUES, ALTERNATE_ENV_TASKS)
-    that only upstream's production.py defines.
+    that only upstream's production.py defines, and dropping "SIDECAR" API-docs
+    asset settings when drf_spectacular_sidecar is not installed.
 
     Passed as ``configure_django_settings(post_configure=…)``; runs *after* the
     ``base="lms.envs.common"`` overlay, so ``INSTALLED_APPS`` and
