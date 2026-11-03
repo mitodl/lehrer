@@ -14,6 +14,7 @@ from lehrer.settings.base import (
     ProductionSettingsMixin,
     StudioSettingsMixin,
     apply_base_post_configure,
+    drop_unservable_spectacular_assets,
     ensure_celery_router_inputs,
     merge_jwt_signing_keys,
     spectacular_with_servers,
@@ -576,6 +577,58 @@ class TestEnsureCeleryRouterInputs:
         apply_base_post_configure(merged, ProductionSettingsMixin())
         assert merged["JWT_AUTH"]["JWT_PRIVATE_SIGNING_JWK"] == '{"kid": "k"}'
         assert merged["EXPLICIT_QUEUES"] == {}
+
+
+_SIDECAR_SPECTACULAR = {
+    "TITLE": "Authoring API",
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "REDOC_DIST": "SIDECAR",
+}
+
+
+class TestDropUnservableSpectacularAssets:
+    def test_sidecar_assets_are_dropped_without_the_app(self) -> None:
+        # The master model on a verawood cell: master's SIDECAR asset settings,
+        # verawood's INSTALLED_APPS, which has no drf_spectacular_sidecar.
+        spectacular = dict(_SIDECAR_SPECTACULAR)
+        merged = {
+            "INSTALLED_APPS": ["drf_spectacular"],
+            "SPECTACULAR_SETTINGS": spectacular,
+        }
+        drop_unservable_spectacular_assets(merged)
+        assert merged["SPECTACULAR_SETTINGS"] == {"TITLE": "Authoring API"}
+        # Replaced, not edited, so a base module's own dict is untouched.
+        assert spectacular == _SIDECAR_SPECTACULAR
+
+    def test_sidecar_assets_are_kept_with_the_app(self) -> None:
+        spectacular = dict(_SIDECAR_SPECTACULAR)
+        merged = {
+            "INSTALLED_APPS": ["drf_spectacular", "drf_spectacular_sidecar"],
+            "SPECTACULAR_SETTINGS": spectacular,
+        }
+        drop_unservable_spectacular_assets(merged)
+        assert merged["SPECTACULAR_SETTINGS"] is spectacular
+
+    def test_asset_urls_are_kept_without_the_app(self) -> None:
+        spectacular = {"SWAGGER_UI_DIST": "https://assets.example.com/swagger"}
+        merged = {"INSTALLED_APPS": [], "SPECTACULAR_SETTINGS": spectacular}
+        drop_unservable_spectacular_assets(merged)
+        assert merged["SPECTACULAR_SETTINGS"] == spectacular
+
+    def test_settings_without_spectacular_are_untouched(self) -> None:
+        merged: dict = {"INSTALLED_APPS": []}
+        drop_unservable_spectacular_assets(merged)
+        assert merged == {"INSTALLED_APPS": []}
+
+    def test_base_post_configure_drops_them(self) -> None:
+        merged: dict = {
+            "JWT_AUTH": {},
+            "INSTALLED_APPS": ["drf_spectacular"],
+            "SPECTACULAR_SETTINGS": dict(_SIDECAR_SPECTACULAR),
+        }
+        apply_base_post_configure(merged, ProductionSettingsMixin())
+        assert merged["SPECTACULAR_SETTINGS"] == {"TITLE": "Authoring API"}
 
 
 def test_redirect_is_https_parses_false(monkeypatch: pytest.MonkeyPatch) -> None:

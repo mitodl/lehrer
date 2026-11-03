@@ -265,17 +265,58 @@ def ensure_celery_router_inputs(merged: dict[str, Any]) -> None:
     merged.setdefault("ALTERNATE_ENV_TASKS", {})
 
 
+# The drf-spectacular settings that accept "SIDECAR", meaning "serve this asset
+# from the drf_spectacular_sidecar app's static files".
+_SPECTACULAR_SIDECAR_ASSETS = (
+    "SWAGGER_UI_DIST",
+    "SWAGGER_UI_FAVICON_HREF",
+    "REDOC_DIST",
+)
+
+
+def drop_unservable_spectacular_assets(merged: dict[str, Any]) -> None:
+    """Drop ``"SIDECAR"`` asset settings when the sidecar app is not installed.
+
+    The generated model is rendered from one cell and serves every cell in the
+    group, so it can carry the generating release's ``SPECTACULAR_SETTINGS``
+    into a release that lacks what they need. edx-platform ``master`` points
+    the Swagger UI and ReDoc assets at ``"SIDECAR"`` and installs
+    ``drf_spectacular_sidecar``; ``release/verawood`` installs neither, so its
+    Studio Swagger UI would reference static files that are not in the image.
+
+    A ``post_configure`` hook rather than a validator: only ``merged`` holds the
+    live, plugin-complete ``INSTALLED_APPS``, and an installed app is what puts
+    the sidecar's files in ``staticfiles``. Dropping the keys falls back to
+    drf-spectacular's own defaults, its CDN copies of the same assets. The
+    setting is replaced rather than edited, since it may be the base module's
+    own dict.
+    """
+    spectacular = merged.get("SPECTACULAR_SETTINGS")
+    if not isinstance(spectacular, dict) or "drf_spectacular_sidecar" in (
+        merged.get("INSTALLED_APPS") or []
+    ):
+        return
+    merged["SPECTACULAR_SETTINGS"] = {
+        key: value
+        for key, value in spectacular.items()
+        if not (key in _SPECTACULAR_SIDECAR_ASSETS and value == "SIDECAR")
+    }
+
+
 def apply_base_post_configure(merged: dict[str, Any], model: Any) -> None:
     """The ``post_configure`` every entry module needs, whatever else it adds.
 
-    Both members fix up settings the model cannot reach on its own:
+    Each member fixes up settings the model cannot reach on its own:
     ``merge_jwt_signing_keys`` merges the JWT signing scalars into a
-    ``common.py`` dict, and ``ensure_celery_router_inputs`` defaults the celery
-    router inputs that ``production.py`` used to provide. An entry module with
-    its own structural work calls this rather than listing them.
+    ``common.py`` dict, ``ensure_celery_router_inputs`` defaults the celery
+    router inputs that ``production.py`` used to provide, and
+    ``drop_unservable_spectacular_assets`` checks the API docs' asset settings
+    against the live ``INSTALLED_APPS``. An entry module with its own structural
+    work calls this rather than listing them.
     """
     merge_jwt_signing_keys(merged, model)
     ensure_celery_router_inputs(merged)
+    drop_unservable_spectacular_assets(merged)
 
 
 # ---------------------------------------------------------------------------
