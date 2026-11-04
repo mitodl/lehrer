@@ -492,6 +492,10 @@ class AqueductSettings(BaseSettings):
         default=False,
         description=".. toggle_name: settings.ENABLE_COMBINED_LOGIN_REGISTRATION_FOOTER\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Display the standard footer in the login page. This feature can be overridden by a site-\nspecific configuration.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2016-06-24\n.. toggle_tickets: https://openedx.atlassian.net/browse/OSPR-1320",  # noqa: E501
     )
+    ENABLE_COMPETENCY_MASTERY_TRACKING: bool = Field(
+        default=False,
+        description=".. toggle_name: settings.ENABLE_COMPETENCY_MASTERY_TRACKING\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to update a learner's competency criterion status in the same transaction that\npersists a subsection grade. Also a safety valve: turning it off stops competency code from running on grade writes.\n.. toggle_warning: When enabled, a competency storage failure makes the grade write fail, and each grade write that\nchanges a status queues a roll-up task.\n.. toggle_use_cases: opt_in\n.. toggle_creation_date: 2026-10-01",  # noqa: E501
+    )
     ENABLE_COOKIE_CONSENT: bool = Field(
         default=False,
         description=".. toggle_name: settings.ENABLE_COOKIE_CONSENT\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Enable header banner for cookie consent using this service:\nhttps://cookieconsent.insites.com/\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2017-03-03\n.. toggle_tickets: https://openedx.atlassian.net/browse/OSPR-1560",  # noqa: E501
@@ -1912,6 +1916,13 @@ class AqueductSettings(BaseSettings):
         },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     OPENEDX_AUTHZ_COURSE_OVERVIEW_MODEL: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    OPENEDX_AUTHZ_JSON_SCHEMA: Any = Field(
         default=None,
         json_schema_extra={
             "aqueduct_unresolved": True,
