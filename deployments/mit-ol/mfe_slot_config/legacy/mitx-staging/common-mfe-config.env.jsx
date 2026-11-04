@@ -40,7 +40,7 @@ const LearningHeaderUserMenu = (widget) => {
 
 const footerLegalLinks = [
   {
-    url: `${configData.MARKETING_SITE_BASE_URL}/tos/`,
+    url: `${configData.MARKETING_SITE_BASE_URL}/tos`,
     title: 'Terms of Service',
   },
   {
