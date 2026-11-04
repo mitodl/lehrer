@@ -268,10 +268,22 @@ _AQUEDUCT_TOML = (
 
 
 _SPECTACULAR_HOOKS_SCRIPT = """\
+from django.conf import settings
 from drf_spectacular.settings import spectacular_settings
 for key in ("PREPROCESSING_HOOKS", "POSTPROCESSING_HOOKS"):
     hooks = [hook.__name__ for hook in getattr(spectacular_settings, key)]
     print(f"  spectacular OK: {key} resolve {hooks}")
+sidecar = [
+    key
+    for key in ("SWAGGER_UI_DIST", "SWAGGER_UI_FAVICON_HREF", "REDOC_DIST")
+    if getattr(spectacular_settings, key) == "SIDECAR"
+]
+if sidecar and "drf_spectacular_sidecar" not in settings.INSTALLED_APPS:
+    raise SystemExit(
+        f"  spectacular FAIL: {sidecar} are SIDECAR but drf_spectacular_sidecar "
+        "is not in INSTALLED_APPS, so the API docs pages have no assets"
+    )
+print(f"  spectacular OK: sidecar assets {sidecar or 'unused'}")
 """
 
 
@@ -3148,7 +3160,8 @@ class OpenedxPlatform:
            and every registered system check runs.  This is what turns "the
            settings parse" into "the platform would actually start".  It then
            resolves ``SPECTACULAR_SETTINGS``' hooks, which drf-spectacular only
-           imports when a schema is requested.
+           imports when a schema is requested, and fails a ``"SIDECAR"`` asset
+           setting whose ``drf_spectacular_sidecar`` app is not installed.
         3. **Model drift** (``drift``, opt-in) — regenerate the model from this
            cell's edx-platform source through the identical pipeline
            :meth:`regenerate_aqueduct_settings` uses (static AST generation then
@@ -3264,7 +3277,9 @@ class OpenedxPlatform:
                 )
                 # drf-spectacular imports its hooks on first use, so a dotted
                 # path this release's edx-platform does not define passes
-                # `check` and only fails when the schema is requested.
+                # `check` and only fails when the schema is requested. A
+                # "SIDECAR" asset setting without the sidecar app passes
+                # `check` too, and only breaks the docs page in a browser.
                 container = container.with_exec(
                     [
                         "sh",
