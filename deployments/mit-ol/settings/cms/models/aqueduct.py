@@ -1046,6 +1046,13 @@ class AqueductSettings(BaseSettings):
             "aqueduct_plugin": "openedx-authz",
         },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    OPENEDX_AUTHZ_JSON_SCHEMA: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "openedx-authz",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     # ===== openedx-platform =====
     ACE_CHANNEL_DEFAULT_EMAIL: str = Field(
         default="django_email",
