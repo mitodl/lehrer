@@ -963,6 +963,14 @@ class AqueductSettings(BaseSettings):
             "aqueduct_plugin": "ol-openedx-chat-xblock",
         },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    # ===== ol-openedx-course-export =====
+    COURSE_EXPORT_CELERY_QUEUE: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-course-export",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     # ===== ol-openedx-course-sync =====
     OL_OPENEDX_COURSE_SYNC_SERVICE_WORKER_USERNAME: Any = Field(
         default=None,
@@ -985,6 +993,13 @@ class AqueductSettings(BaseSettings):
         },
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
     GIT_AUTO_EXPORT_AUTHORING_URL_PREFIX: Any = Field(
+        default=None,
+        json_schema_extra={
+            "aqueduct_unresolved": True,
+            "aqueduct_plugin": "ol-openedx-git-auto-export",
+        },
+    )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
+    GIT_AUTO_EXPORT_CELERY_QUEUE: Any = Field(
         default=None,
         json_schema_extra={
             "aqueduct_unresolved": True,
