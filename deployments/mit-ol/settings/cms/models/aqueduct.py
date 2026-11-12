@@ -2908,35 +2908,35 @@ class AqueductSettings(BaseSettings):
     USERNAME_REPLACEMENT_WORKER: str = Field(default="REPLACE WITH VALID USERNAME")
     USE_EXTRACTED_ANNOTATABLE_BLOCK: bool = Field(
         default=True,
-        description=".. toggle_name: USE_EXTRACTED_ANNOTATABLE_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted annotatable XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+        description=".. toggle_name: USE_EXTRACTED_ANNOTATABLE_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted annotatable XBlock, which has been shifted to the 'openedx/xblocks-core' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
     )
     USE_EXTRACTED_DISCUSSION_BLOCK: bool = Field(
         default=True,
-        description=".. toggle_name: USE_EXTRACTED_DISCUSSION_BLOCK\n.. toggle_default: False\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted Discussion XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_warning: Not production-ready until relevant subtask https://github.com/openedx/edx-platform/issues/34827 is done.\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+        description=".. toggle_name: USE_EXTRACTED_DISCUSSION_BLOCK\n.. toggle_default: False\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted Discussion XBlock, which has been shifted to the 'openedx/xblocks-core' repo.\n.. toggle_use_cases: temporary\n.. toggle_warning: Not production-ready until relevant subtask https://github.com/openedx/edx-platform/issues/34827 is done.\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
     )
     USE_EXTRACTED_HTML_BLOCK: bool = Field(
         default=True,
-        description=".. toggle_name: USE_EXTRACTED_HTML_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted HTML XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+        description=".. toggle_name: USE_EXTRACTED_HTML_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted HTML XBlock, which has been shifted to the 'openedx/xblocks-core' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
     )
     USE_EXTRACTED_LTI_BLOCK: bool = Field(
         default=True,
-        description=".. toggle_name: USE_EXTRACTED_LTI_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted LTI XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+        description=".. toggle_name: USE_EXTRACTED_LTI_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted LTI XBlock, which has been shifted to the 'openedx/xblocks-core' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
     )
     USE_EXTRACTED_POLL_QUESTION_BLOCK: bool = Field(
         default=True,
-        description=".. toggle_name: USE_EXTRACTED_POLL_QUESTION_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted poll question XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+        description=".. toggle_name: USE_EXTRACTED_POLL_QUESTION_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted poll question XBlock, which has been shifted to the 'openedx/xblocks-core' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
     )
     USE_EXTRACTED_PROBLEM_BLOCK: bool = Field(
         default=True,
-        description=".. toggle_name: USE_EXTRACTED_PROBLEM_BLOCK\n.. toggle_default: False\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted Problem XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_warning: Not production-ready until relevant subtask https://github.com/openedx/edx-platform/issues/34827 is done.\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+        description=".. toggle_name: USE_EXTRACTED_PROBLEM_BLOCK\n.. toggle_default: False\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted Problem XBlock, which has been shifted to the 'openedx/xblocks-core' repo.\n.. toggle_use_cases: temporary\n.. toggle_warning: Not production-ready until relevant subtask https://github.com/openedx/edx-platform/issues/34827 is done.\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
     )
     USE_EXTRACTED_VIDEO_BLOCK: bool = Field(
         default=True,
-        description=".. toggle_name: USE_EXTRACTED_VIDEO_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted Video XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+        description=".. toggle_name: USE_EXTRACTED_VIDEO_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted Video XBlock, which has been shifted to the 'openedx/xblocks-core' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
     )
     USE_EXTRACTED_WORD_CLOUD_BLOCK: bool = Field(
         default=True,
-        description=".. toggle_name: USE_EXTRACTED_WORD_CLOUD_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted Word Cloud XBlock, which has been shifted to the 'openedx/xblocks-contrib' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
+        description=".. toggle_name: USE_EXTRACTED_WORD_CLOUD_BLOCK\n.. toggle_default: True\n.. toggle_implementation: DjangoSetting\n.. toggle_description: Enables the use of the extracted Word Cloud XBlock, which has been shifted to the 'openedx/xblocks-core' repo.\n.. toggle_use_cases: temporary\n.. toggle_creation_date: 2024-11-10\n.. toggle_target_removal_date: 2026-04-10",  # noqa: E501
     )
     USE_I18N: bool = Field(default=True)
     USE_TZ: bool = Field(default=True)
