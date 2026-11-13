@@ -214,6 +214,18 @@ class TestSchemaVersion:
                 cells=[Cell(release="master", deployment="x", packages=["a==1"])],
             )
 
+    @pytest.mark.parametrize("version", [True, "1", 1.0])
+    def test_version_is_not_coerced(self, version: object) -> None:
+        with pytest.raises(ValidationError, match="version"):
+            BuildManifest.model_validate(
+                {
+                    "version": version,
+                    "cells": [
+                        {"release": "master", "deployment": "x", "packages": ["a"]}
+                    ],
+                }
+            )
+
     def test_missing_version_rejected(self) -> None:
         with pytest.raises(ValidationError, match="version"):
             BuildManifest.model_validate(

@@ -146,7 +146,10 @@ class BuildManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    # Strict, so ``true``, ``"1"`` and ``1.0`` don't coerce to 1: those are not
+    # version 1 to any other reader of the file.
     version: int = Field(
+        strict=True,
         description=(
             "Schema version this manifest is written against. A reader refuses "
             "a version it does not list as supported."
