@@ -249,8 +249,8 @@ just not correctly:
 
 - `commonAppConfig.mitolHeader.mitLearnBaseUrl` / `marketingSiteBaseUrl` →
   fall back to `https://learn.mit.edu` / `lmsBaseUrl`, which sends the Dashboard
-  button to production MIT Learn and Profile / Settings to the LMS instead of the
-  marketing site.
+  button and Settings to production MIT Learn and Profile to the LMS instead of
+  the marketing site.
 - `commonAppConfig.mitolFooter.footerLogoUrl` / `footerLogoDestination` →
   footer logo falls back to `headerLogoImageUrl` and renders without a link. For
   mitxonline that fallback is drawn `fill="white"` for the dark header, so it is
