@@ -398,10 +398,13 @@ class TestProvisioningManifests:
         # edx-enterprise's blackboard.0025 and canvas.0041 ALTER these apps'
         # tables without depending on them, so on a fresh schema an unrestricted
         # migrate that reaches them first fails with "table doesn't exist".
+        # Those apps' shared channel_integration.0001 has a foreign key to
+        # enterprise without depending on it, so enterprise has to come first.
         # edx-submissions' 0006 cannot run on MariaDB at all, so it has to be
         # recorded before the full LMS migrate reaches it.
         spec = load_bootstrap_spec(_paths.bootstrap_spec(deployment))
-        assert [(m.service, m.app_label, m.fake) for m in spec.migrate[:5]] == [
+        assert [(m.service, m.app_label, m.fake) for m in spec.migrate[:6]] == [
+            ("lms", "enterprise", None),
             ("lms", "blackboard_channel", None),
             ("lms", "canvas_channel", None),
             ("lms", "submissions", "0006_mariadb_uuid_conversion"),

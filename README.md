@@ -196,12 +196,13 @@ All three edxapp Jobs apply a slice of the selected deployment's
 unless `--deployment-config` names another), picked with `--steps`:
 
 - `edxapp-migrate` runs its `migrate` step: LMS and CMS migrations, and the
-  csmh database, which `migrate` never touches unless asked by alias. Two
-  enterprise-integrated-channels apps are migrated first, because two
-  edx-enterprise migrations alter their tables without depending on them, and
-  edx-submissions' `0006_mariadb_uuid_conversion`, which cannot run on MariaDB,
-  is recorded as applied (`fake:`) rather than run. The spec's comments say
-  why each entry exists and when it can go.
+  csmh database, which `migrate` never touches unless asked by alias.
+  `enterprise` and then two enterprise-integrated-channels apps are migrated
+  first: two edx-enterprise migrations alter those apps' tables without
+  depending on them, and the apps in turn need `enterprise`'s tables without
+  depending on it. edx-submissions' `0006_mariadb_uuid_conversion`, which
+  cannot run on MariaDB, is recorded as applied (`fake:`) rather than run. The
+  spec's comments say why each entry exists and when it can go.
 - `edxapp-provision` runs `users`, `oauth_applications`,
   `third_party_auth_providers`, `service_access_tokens` and `waffle_flags`: the
   `edx` / `edx` superuser (override the password with
