@@ -7,9 +7,11 @@ import pytest
 from pydantic import ValidationError
 
 from lehrer.core.build_manifest import (
+    SUPPORTED_MANIFEST_VERSIONS,
     BuildManifest,
     Cell,
     CellDefaults,
+    json_schema,
     load_manifest,
 )
 
@@ -167,8 +169,6 @@ class TestBuildManifestStructure:
             mit_ol_manifest.resolve_cell("nonexistent", "nowhere")
 
     def test_json_schema_round_trips(self) -> None:
-        from lehrer.core.build_manifest import json_schema
-
         schema = json_schema()
         assert schema == BuildManifest.model_json_schema()
         assert schema["title"] == "BuildManifest"
@@ -192,6 +192,37 @@ class TestBuildManifestStructure:
                 cell.render_overrides()
             ):
                 assert requirement_re.match(line), f"not a valid requirement: {line!r}"
+
+
+class TestSchemaVersion:
+    """A manifest written against a schema this reader doesn't know must not load."""
+
+    @pytest.mark.parametrize(
+        "manifest_fixture", ["mit_ol_manifest", "generic_manifest"]
+    )
+    def test_committed_manifests_declare_a_supported_version(
+        self, manifest_fixture: str, request: pytest.FixtureRequest
+    ) -> None:
+        manifest: BuildManifest = request.getfixturevalue(manifest_fixture)
+        assert manifest.version in SUPPORTED_MANIFEST_VERSIONS
+
+    @pytest.mark.parametrize("version", [0, max(SUPPORTED_MANIFEST_VERSIONS) + 1])
+    def test_unsupported_version_rejected(self, version: int) -> None:
+        with pytest.raises(ValidationError, match="not one this lehrer reads"):
+            BuildManifest(
+                version=version,
+                cells=[Cell(release="master", deployment="x", packages=["a==1"])],
+            )
+
+    def test_missing_version_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="version"):
+            BuildManifest.model_validate(
+                {"cells": [{"release": "master", "deployment": "x", "packages": ["a"]}]}
+            )
+
+    def test_schema_lists_the_supported_versions(self) -> None:
+        version = json_schema()["properties"]["version"]
+        assert version["enum"] == sorted(SUPPORTED_MANIFEST_VERSIONS)
 
 
 class TestNodeVersionValidation:

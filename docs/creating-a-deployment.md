@@ -85,6 +85,13 @@ and every parameter below is resolved from the matching cell unless you pass
 it explicitly. `pip_package_lists`/`pip_package_overrides` directories remain
 a supported lower-level alternative.
 
+The manifest's top-level `version` is its schema version, and lehrer refuses
+one it doesn't list in `SUPPORTED_MANIFEST_VERSIONS`. It changes only when the
+schema changes in a way an older reader would misread, so a routine edit
+(packages, branches, a new cell) never bumps it. A consumer that reads the
+manifest itself (e.g. a CI generator checking its coordinates against the
+cells) should declare the versions it reads the same way and fail on any other.
+
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `deployment_name` | `str` | **required** | Deployment name used for theme path and pip package file names (e.g. `"mydeployment"`) |

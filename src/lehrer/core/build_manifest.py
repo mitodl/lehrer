@@ -20,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from lehrer.core.plugin_imports import declares_distribution
 
@@ -37,6 +37,15 @@ AQUEDUCT_DISTRIBUTION = "django-aqueduct"
 # would slip past to a nonexistent nodeenv download URL fails fast at
 # manifest-load instead of deep in the Node build step.
 NODE_VERSION_PATTERN = r"^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,2}$"
+
+# The manifest schema versions this reader understands. ``version`` names the
+# schema a manifest is written against, not the lehrer release that reads it:
+# bump it only for a change an older reader would misread (a renamed or
+# re-keyed field), and add the new number here in the same change. Readers
+# outside lehrer declare their own set (ol-infrastructure's edx_platform_v3
+# pipeline generator checks it before ``fly set-pipeline``), so a bump there
+# fails loudly instead of building from a file it no longer understands.
+SUPPORTED_MANIFEST_VERSIONS = frozenset({1})
 
 
 class CellDefaults(BaseModel):
@@ -137,7 +146,13 @@ class BuildManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    version: int
+    version: int = Field(
+        description=(
+            "Schema version this manifest is written against. A reader refuses "
+            "a version it does not list as supported."
+        ),
+        json_schema_extra={"enum": [*sorted(SUPPORTED_MANIFEST_VERSIONS)]},
+    )
     defaults: CellDefaults = Field(default_factory=CellDefaults)
     release_python: dict[str, str] = Field(default_factory=dict)
     settings_model_release: str | None = Field(
@@ -164,6 +179,19 @@ class BuildManifest(BaseModel):
         ),
     )
     cells: list[Cell] = Field(min_length=1)
+
+    @field_validator("version", mode="after")
+    @classmethod
+    def _version_is_supported(cls, version: int) -> int:
+        if version not in SUPPORTED_MANIFEST_VERSIONS:
+            msg = (
+                f"build manifest schema version {version} is not one this "
+                f"lehrer reads (supported: {sorted(SUPPORTED_MANIFEST_VERSIONS)}). "
+                "A newer manifest needs a newer lehrer; an older one needs "
+                "migrating to a supported version."
+            )
+            raise ValueError(msg)
+        return version
 
     @model_validator(mode="after")
     def _settings_model_cell_is_a_real_aqueduct_cell(self) -> BuildManifest:
