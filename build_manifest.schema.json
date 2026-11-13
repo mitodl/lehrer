@@ -271,6 +271,10 @@
   "description": "Top-level schema for an operator's ``build_manifest.yaml``.",
   "properties": {
     "version": {
+      "description": "Schema version this manifest is written against. A reader refuses a version it does not list as supported.",
+      "enum": [
+        1
+      ],
       "title": "Version",
       "type": "integer"
     },
