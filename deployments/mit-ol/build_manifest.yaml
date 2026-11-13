@@ -74,7 +74,7 @@ cells:
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - git+https://github.com/verificient/edx-proctoring-proctortrack.git@31c6c9923a51c903ae83760ecbbac191363aa2a2#egg=edx_proctoring_proctortrack
   - lxml==6.1.3
-  - xmlsec==1.3.17
+  - xmlsec==1.3.18
   - openai==2.54.0
   - ol-openedx-course-translations
   - ol-openedx-auto-select-language
@@ -116,7 +116,7 @@ cells:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - lxml==6.1.3
-  - xmlsec==1.3.17
+  - xmlsec==1.3.18
 - release: master
   deployment: mitx-staging
   platform_branch: master
@@ -154,7 +154,7 @@ cells:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - lxml==6.1.3
-  - xmlsec==1.3.17
+  - xmlsec==1.3.18
 - release: ulmo
   deployment: xpro
   platform_branch: release/ulmo
@@ -192,7 +192,7 @@ cells:
   # https://github.com/openedx/edx-django-utils/pull/549 (released in 8.0.2).
   - edx-django-utils==8.1.0
   - lxml==6.1.3
-  - xmlsec==1.3.17
+  - xmlsec==1.3.18
 - release: verawood
   deployment: mitx
   platform_repo: https://github.com/openedx/edx-platform
@@ -234,7 +234,7 @@ cells:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - lxml==6.1.3
-  - xmlsec==1.3.17
+  - xmlsec==1.3.18
   - edx-sga==0.29.0
   # Typesense forum search is non-functional below 0.4.7 (openedx/forum#289).
   # edx-platform pins 0.4.2 on release/verawood; remove once the pin there
@@ -281,7 +281,7 @@ cells:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
   - lxml==6.1.3
-  - xmlsec==1.3.17
+  - xmlsec==1.3.18
   - edx-sga==0.29.0
   # Typesense forum search is non-functional below 0.4.7 (openedx/forum#289).
   # edx-platform pins 0.4.2 on release/verawood; remove once the pin there
@@ -325,7 +325,7 @@ cells:
   # https://github.com/openedx/edx-django-utils/pull/549 (released in 8.0.2).
   - edx-django-utils==8.1.0
   - lxml==6.1.3
-  - xmlsec==1.3.17
+  - xmlsec==1.3.18
   # Typesense forum search is non-functional below 0.4.7 (openedx/forum#289).
   # edx-platform pins 0.4.2 on release/verawood; remove once the pin there
   # reaches 0.4.7.
