@@ -4,7 +4,12 @@ import {
   DIRECT_PLUGIN,
 } from "@openedx/frontend-plugin-framework";
 import { getConfig } from "@edx/frontend-platform";
-import Footer, { Logo, MenuLinks, CopyrightNotice } from "./Footer.jsx";
+import Footer, {
+	addLanguageSelectorSlots,
+	Logo,
+	MenuLinks,
+	CopyrightNotice,
+} from "./Footer.jsx";
 
 const configData = getConfig();
 const currentYear = new Date().getFullYear();
@@ -250,5 +255,7 @@ if (edxMfeAppName === "learning") {
     ],
   };
 }
+
+config = addLanguageSelectorSlots(config);
 
 export default config;
