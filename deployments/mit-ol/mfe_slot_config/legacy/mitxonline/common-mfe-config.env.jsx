@@ -238,10 +238,10 @@ const getUserMenu = ({ includeDashboard = false } = {}) => {
 		},
 	};
 
+	const learnBaseURL =
+		process.env.MIT_LEARN_BASE_URL || "https://learn.mit.edu";
 	// Build dashboard URL consistently with SecondaryMenu logic
-	let dashboardURL = process.env.MIT_LEARN_BASE_URL
-		? `${process.env.MIT_LEARN_BASE_URL}/dashboard`
-		: "https://learn.mit.edu/dashboard";
+	let dashboardURL = `${learnBaseURL}/dashboard`;
 	if (isMITxOnlineCourse()) {
 		dashboardURL = configData.MARKETING_SITE_BASE_URL
 			? `${configData.MARKETING_SITE_BASE_URL}/dashboard/`
@@ -287,7 +287,7 @@ const getUserMenu = ({ includeDashboard = false } = {}) => {
 			),
 		},
 		{
-			url: `${configData.MARKETING_SITE_BASE_URL}/account-settings/`,
+			url: `${learnBaseURL}/dashboard/settings`,
 			message: (
 				<FormattedMessage
 					id={userMenuLinkMessages.account.id}

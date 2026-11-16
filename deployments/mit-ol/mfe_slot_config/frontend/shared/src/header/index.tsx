@@ -328,10 +328,12 @@ const MITxOnlineProfileMenuItem: FC = () => {
 
 /** Account settings menu item — only shown for MITx Online courses. */
 const MITxOnlineAccountMenuItem: FC = () => {
-	const { marketingSiteBaseUrl } = useMITOLHeaderConfig();
+	const { mitLearnBaseUrl } = useMITOLHeaderConfig();
 	if (!isMITxOnlineCourse()) return null;
 	return (
-		<Dropdown.Item href={`${marketingSiteBaseUrl ?? ""}/account-settings/`}>
+		<Dropdown.Item
+			href={`${mitLearnBaseUrl ?? "https://learn.mit.edu"}/dashboard/settings`}
+		>
 			Settings
 		</Dropdown.Item>
 	);
