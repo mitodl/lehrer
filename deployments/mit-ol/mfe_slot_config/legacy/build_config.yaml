@@ -50,8 +50,9 @@ mfes:
         verawood: useFeedbackEnrichment.verawood.js
         default: useFeedbackEnrichment.js
     # Also the only copy of contactUsLauncher.umd.js: Footer.jsx loads it from
-    # /learn/ for every MFE, so this bundle has to be >= 6.40.0: 6.39.0 first
-    # shipped it, and 6.40.0 is where it learned to paint above host page
-    # content and to go modal below the sm breakpoint.
+    # /learn/ for every MFE, so this bundle has to be >= 6.41.0: 6.39.0 first
+    # shipped it, 6.40.0 made it paint above host page content and go modal
+    # below the sm breakpoint, and 6.41.0 added the "Contact the support team"
+    # button.
     extra_npm_bundles:
-    - "@mitodl/smoot-design@^6.40.0|public/static/smoot-design"
+    - "@mitodl/smoot-design@^6.41.0|public/static/smoot-design"
