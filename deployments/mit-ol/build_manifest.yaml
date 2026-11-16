@@ -63,7 +63,7 @@ cells:
   - opentelemetry-instrumentation-celery
   - opentelemetry-instrumentation-mysqlclient
   - django-extensions
-  - setuptools==81.0.0
+  - setuptools==84.1.0
   - edx-sga==0.29.0
   - invideoquiz-xblock==2.0.0
   - ol-openedx-canvas-integration==0.9.1
@@ -111,7 +111,7 @@ cells:
   - opentelemetry-instrumentation-celery
   - opentelemetry-instrumentation-mysqlclient
   - django-extensions
-  - setuptools==81.0.0
+  - setuptools==84.1.0
   overrides:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
@@ -149,7 +149,7 @@ cells:
   - opentelemetry-instrumentation-celery
   - opentelemetry-instrumentation-mysqlclient
   - django-extensions
-  - setuptools==81.0.0
+  - setuptools==84.1.0
   overrides:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
   - git+https://github.com/mitodl/edx-submissions.git@fix/xqueue-scale-points-earned#egg=edx-submissions
@@ -185,7 +185,7 @@ cells:
   - opentelemetry-instrumentation-celery
   - opentelemetry-instrumentation-mysqlclient
   - django-extensions
-  - setuptools==81.0.0
+  - setuptools==84.1.0
   overrides:
   # edx-platform pins 8.0.1 on this release branch, which predates the
   # OpenTelemetryBackend.create_span() fix in
@@ -225,7 +225,7 @@ cells:
   - opentelemetry-instrumentation-celery
   - opentelemetry-instrumentation-mysqlclient
   - django-extensions
-  - setuptools==81.0.0
+  - setuptools==84.1.0
   overrides:
   # edx-platform pins 8.0.1 on this release branch, which predates the
   # OpenTelemetryBackend.create_span() fix in
@@ -272,7 +272,7 @@ cells:
   - opentelemetry-instrumentation-celery
   - opentelemetry-instrumentation-mysqlclient
   - django-extensions
-  - setuptools==81.0.0
+  - setuptools==84.1.0
   overrides:
   # edx-platform pins 8.0.1 on this release branch, which predates the
   # OpenTelemetryBackend.create_span() fix in
@@ -318,7 +318,7 @@ cells:
   - opentelemetry-instrumentation-celery
   - opentelemetry-instrumentation-mysqlclient
   - django-extensions
-  - setuptools==81.0.0
+  - setuptools==84.1.0
   overrides:
   # edx-platform pins 8.0.1 on this release branch, which predates the
   # OpenTelemetryBackend.create_span() fix in
