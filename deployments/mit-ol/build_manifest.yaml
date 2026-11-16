@@ -48,7 +48,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
   - ol-social-auth==0.3.1
-  - pydantic-settings[yaml]==2.15.0
+  - pydantic-settings[yaml]==2.16.2
   - django-aqueduct==0.15.1
   - ol-openedx-chat==0.7.0
   - ol-openedx-chat-xblock==0.5.0
@@ -101,7 +101,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
   - pip==26.2
-  - pydantic-settings[yaml]==2.15.0
+  - pydantic-settings[yaml]==2.16.2
   - django-aqueduct==0.15.1
   - rapid-response-xblock==0.12.0
   - ol-openedx-chat==0.7.0
@@ -140,7 +140,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
   - pip==26.2
-  - pydantic-settings[yaml]==2.15.0
+  - pydantic-settings[yaml]==2.16.2
   - django-aqueduct==0.15.1
   - rapid-response-xblock==0.12.0
   - ol-openedx-chat==0.7.0
@@ -179,7 +179,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - ol-social-auth==0.3.1
   - openedx-scorm-xblock==19.0.5
-  - pydantic-settings[yaml]==2.15.0
+  - pydantic-settings[yaml]==2.16.2
   - ol-openedx-chat==0.7.0
   - ol-openedx-chat-xblock==0.5.0
   - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
@@ -218,7 +218,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
   - pip==26.2
-  - pydantic-settings[yaml]==2.15.0
+  - pydantic-settings[yaml]==2.16.2
   - django-aqueduct==0.15.1
   - rapid-response-xblock==0.12.0
   - ol-openedx-chat==0.7.0
@@ -266,7 +266,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
   - pip==26.2
-  - pydantic-settings[yaml]==2.15.0
+  - pydantic-settings[yaml]==2.16.2
   - django-aqueduct==0.15.1
   - rapid-response-xblock==0.12.0
   - ol-openedx-chat==0.7.0
@@ -314,7 +314,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - ol-social-auth==0.3.1
   - openedx-scorm-xblock==19.0.5
-  - pydantic-settings[yaml]==2.15.0
+  - pydantic-settings[yaml]==2.16.2
   - django-aqueduct==0.15.1
   - ol-openedx-chat==0.7.0
   - ol-openedx-chat-xblock==0.5.0
