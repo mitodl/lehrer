@@ -32,7 +32,7 @@ import os
 import string
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -490,10 +490,15 @@ runner looks up the newest row for ``(SITE_ID, backend_name)``.
 """
 
 
-def _collapse[T: BaseModel](
-    field: str, entries: list[T], key: Callable[[T], object]
-) -> list[T]:
-    kept: dict[object, T] = {}
+# A TypeVar rather than PEP 695 `def _collapse[T: ...]`: this package is
+# compiled into every platform image, and ulmo's runs Python 3.11.
+_Entry = TypeVar("_Entry", bound=BaseModel)
+
+
+def _collapse(
+    field: str, entries: list[_Entry], key: Callable[[_Entry], object]
+) -> list[_Entry]:
+    kept: dict[object, _Entry] = {}
     for entry in entries:
         identity = key(entry)
         if identity not in kept:
