@@ -569,3 +569,100 @@ def test_shared_legacy_builds_must_agree() -> None:
     )
     (error,) = group.check()
     assert "share the learning build 'mxo-learning'" in error
+
+
+MODE = {"mode": {"type": "enum", "choices": ["a", "b"], "default": "a"}}
+
+
+class TestReviewRegressions:
+    def test_a_lookup_cannot_write_a_promoted_site_key(self) -> None:
+        definition = _definition(
+            parameters=MODE,
+            operations={
+                "site_config": {
+                    "mfe_config": {
+                        "by_parameter": "mode",
+                        "cases": {
+                            "a": {"LMS_BASE_URL": "https://x.invalid"},
+                            "b": None,
+                        },
+                    }
+                }
+            },
+        )
+        group = _group([definition], {"mxo-ci": {"thing": {}}})
+        with pytest.raises(FeatureManifestError, match="site-level keys"):
+            group.resolve("mxo-ci")
+
+    def test_a_flat_site_config_override_reaches_a_by_release_definition(self) -> None:
+        definition = _definition(
+            operations={
+                "site_config": {
+                    "by_release": {"default": {"mfe_config": {"CHAT": True}}}
+                }
+            }
+        )
+        adoption = {
+            "mxo-ci": {
+                "thing": {"operations": {"site_config": {"mfe_config": {"OTHER": 1}}}}
+            }
+        }
+        thing = _feature(_group([definition], adoption), "mxo-ci", "thing")
+        assert thing.site_config == {"MFE_CONFIG": {"CHAT": True, "OTHER": 1}}
+
+    def test_a_scalar_over_a_mapping_conflicts(self) -> None:
+        group = _group(
+            [
+                _definition(
+                    feature="a",
+                    operations={"site_config": {"mfe_config": {"CHAT": {"on": True}}}},
+                ),
+                _definition(
+                    feature="b", operations={"site_config": {"mfe_config": {"CHAT": 5}}}
+                ),
+            ],
+            {"mxo-ci": {"a": {}, "b": {}}},
+        )
+        with pytest.raises(
+            FeatureManifestError, match="conflict on setting lms MFE_CONFIG CHAT"
+        ):
+            group.resolve("mxo-ci")
+
+    def test_a_null_enum_omits_its_lookup(self) -> None:
+        definition = _definition(
+            parameters={"mode": {**MODE["mode"], "default": None}},
+            operations={
+                "site_config": {
+                    "mfe_config": {
+                        "CHAT": {"by_parameter": "mode", "cases": {"a": 1, "b": 2}}
+                    }
+                }
+            },
+        )
+        thing = _feature(
+            _group([definition], {"mxo-ci": {"thing": {}}}), "mxo-ci", "thing"
+        )
+        assert thing.site_config == {}
+
+    def test_an_override_entry_without_its_identity_is_an_error(self) -> None:
+        definition = _definition(
+            operations={"bootstrap": {"waffle_flags": [{"name": "thing.on"}]}}
+        )
+        adoption = {
+            "mxo-ci": {
+                "thing": {
+                    "operations": {"bootstrap": {"waffle_flags": [{"everyone": False}]}}
+                }
+            }
+        }
+        with pytest.raises(FeatureManifestError, match="no identity"):
+            _group([definition], adoption).adopted("mxo-ci")
+
+    def test_a_setting_typo_fails_even_when_its_value_is_null(self) -> None:
+        definition = _definition(
+            parameters={"model": {"type": "string", "default": None}},
+            operations={"settings": {"lms": {"NOT_A_REAL_SETTING": "${model}"}}},
+        )
+        group = _group([definition], {"mxo-ci": {"thing": {}}})
+        with pytest.raises(FeatureManifestError, match="NOT_A_REAL_SETTING"):
+            group.resolve("mxo-ci")

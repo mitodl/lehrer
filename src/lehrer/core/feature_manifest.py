@@ -326,6 +326,16 @@ def _is_lookup(value: Any) -> bool:
     return isinstance(value, dict) and set(value) == {"by_parameter", "cases"}
 
 
+def _written_keys(group: Any) -> set[str]:
+    """Every key a settings group can write, including each lookup case's."""
+    if _is_lookup(group):
+        keys: set[str] = set()
+        for case in group["cases"].values():
+            keys |= _written_keys(case or {})
+        return keys
+    return set(group) if isinstance(group, dict) else set()
+
+
 def _check_parameter_references(tree: Any, parameters: Mapping[str, Parameter]) -> None:
     if _is_lookup(tree):
         name = tree["by_parameter"]
@@ -493,6 +503,8 @@ def merge_operations(
     for key, value in override.items():
         here = (*path, key)
         current = merged.get(key)
+        if here == ("site_config",) and isinstance(current, dict):
+            current, value = _same_site_config_form(current, value)
         if (
             isinstance(current, dict)
             and isinstance(value, dict)
@@ -504,12 +516,52 @@ def merge_operations(
             if identity is None:
                 merged[key] = value
             else:
-                replacements = {identity(e): e for e in value}
-                kept = [replacements.pop(identity(e), e) for e in current]
-                merged[key] = kept + [e for e in value if identity(e) in replacements]
+                keyed = _keyed(identity, here)
+                replacements = {keyed(e): e for e in value}
+                kept = [replacements.pop(keyed(e), e) for e in current]
+                merged[key] = kept + [e for e in value if keyed(e) in replacements]
         else:
             merged[key] = value
     return merged
+
+
+def _keyed(
+    identity: Callable[[Any], object], path: tuple[str, ...]
+) -> Callable[[Any], object]:
+    def key(entry: Any) -> object:
+        try:
+            return identity(entry)
+        except (KeyError, TypeError):
+            msg = f"{'.'.join(path)}: entry {entry!r} has no identity to merge on"
+            raise FeatureManifestError(msg) from None
+
+    return key
+
+
+def _same_site_config_form(
+    base: dict[str, Any], override: Any
+) -> tuple[dict[str, Any], Any]:
+    """Put both sides of a site_config merge in ``by_release`` form if either is.
+
+    A flat block applies to every release, so it becomes that block under each
+    release the other side names plus ``default``. Without this, a flat
+    override of a ``by_release`` definition merges in beside ``by_release``,
+    where resolution never reads it.
+    """
+    if not isinstance(override, dict) or (
+        "by_release" not in base and "by_release" not in override
+    ):
+        return base, override
+    releases = {"default"}
+    for side in (base, override):
+        releases |= set(side.get("by_release") or {})
+
+    def spread(block: dict[str, Any]) -> dict[str, Any]:
+        if "by_release" in block:
+            return block
+        return {"by_release": {release: block for release in sorted(releases)}}
+
+    return spread(base), spread(override)
 
 
 class _Omit:
@@ -532,6 +584,8 @@ def substitute(
     if _is_lookup(value):
         cases = value["cases"]
         chosen = params[value["by_parameter"]]
+        if chosen is None:
+            return OMIT
         case = cases[chosen] if chosen in cases else cases["default"]
         return OMIT if case is None else substitute(case, params, path)
     if isinstance(value, dict):
@@ -643,12 +697,25 @@ class _Claims:
     def __init__(self, scope: str) -> None:
         self.scope = scope
         self.held: dict[tuple[str, ...], tuple[_Owner, Any]] = {}
+        self.below: dict[tuple[str, ...], list[tuple[_Owner, Any]]] = {}
+        """Per proper prefix, every write beneath it."""
         self.owners: dict[tuple[str, ...], list[str]] = {}
 
     def add(self, target: tuple[str, ...], owner: _Owner, value: Any) -> None:
         first, held = self.held.setdefault(target, (owner, value))
         if first[0] != owner[0] and held != value:
             self._refuse(" ".join(target), (first, held), (owner, value))
+        # A scalar at K and a mapping leaf at K.x are different targets, but
+        # one replaces the other, so they compete as much as equal targets.
+        for i in range(1, len(target)):
+            above = self.held.get(target[:i])
+            if above and above[0][0] != owner[0]:
+                self._refuse(" ".join(target[:i]), above, (owner, value))
+        for below in self.below.get(target, []):
+            if below[0][0] != owner[0]:
+                self._refuse(" ".join(target), below, (owner, value))
+        for i in range(1, len(target)):
+            self.below.setdefault(target[:i], []).append((owner, value))
         if owner[0] not in self.owners.setdefault(target, []):
             self.owners[target].append(owner[0])
 
@@ -762,7 +829,11 @@ class Group:
                         _check_operation_shapes(override, f"{where}: {name}")
                     except (ValidationError, ValueError) as error:
                         raise FeatureManifestError(str(error)) from None
-                    operations = merge_operations(operations, value)
+                    try:
+                        operations = merge_operations(operations, value)
+                    except FeatureManifestError as error:
+                        msg = f"{where}: {name}: {error}"
+                        raise FeatureManifestError(msg) from None
                     continue
                 param = definition.model.parameters.get(key)
                 if param is None:
@@ -837,10 +908,36 @@ class Group:
             raise FeatureManifestError(f"{where}: {error}") from None
         self._check_plugins(where, cell, model)
         self._check_frontends(where, frontends, model)
+        # Keys whose value resolves to null are omitted by substitution, so
+        # check every key as written as well: a typo must fail in every
+        # scope, not only the ones that happen to supply a value.
+        for group_name in ("settings", "features"):
+            for svc, group in adoption.operations.get(group_name, {}).items():
+                for key in _written_keys(group):
+                    self._check_not_reserved(where, svc, key)
+                    if group_name == "settings" and self._field(svc, key) is None:
+                        msg = (
+                            f"{where}: {svc} setting {key!r} is not declared by "
+                            "the settings model"
+                        )
+                        raise FeatureManifestError(msg)
 
         settings_ops = {svc: dict(v) for svc, v in ops.get("settings", {}).items()}
         features_ops = {svc: dict(v) for svc, v in ops.get("features", {}).items()}
         site_config = _resolve_site_config(ops.get("site_config", {}), cell.release)
+        try:
+            # Again after substitution: a by_parameter lookup can produce
+            # keys the definition-time check never saw.
+            _check_site_config(
+                {
+                    key: site_config[setting]
+                    for key, setting in SITE_CONFIG_SETTINGS.items()
+                    if setting in site_config
+                },
+                where,
+            )
+        except ValueError as error:
+            raise FeatureManifestError(str(error)) from None
         if (settings_ops or features_ops or site_config) and not cell.uses_aqueduct():
             msg = (
                 f"{where}: cell {cell.release}/{cell.deployment} does not use "
