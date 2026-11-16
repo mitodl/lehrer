@@ -92,7 +92,9 @@ def load_group(group: str) -> Group:
         if baseline_path.is_file()
         else None
     )
-    loaded = load_tree(features, slot_dir if slot_dir.is_dir() else None)
+    # The slot dir is passed even when absent, so a slot file referenced by a
+    # feature fails rather than going unchecked.
+    loaded = load_tree(features, slot_dir)
     loaded.manifest = load_manifest(root / "build_manifest.yaml")
     loaded.inventories = settings_inventories(root)
     loaded.baseline = baseline

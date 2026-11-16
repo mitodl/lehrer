@@ -117,6 +117,17 @@ def test_steps_are_validated() -> None:
         runner.main(["spec.yaml", "--steps", "users,nope"])
 
 
+OLDEST_IMAGE_PYTHON = (3, 11)
+"""The oldest release_python any build manifest pins (ulmo)."""
+
+
+@pytest.mark.parametrize("module", sorted(PACKAGE.glob("*.py")), ids=lambda p: p.name)
+def test_the_image_package_parses_on_the_oldest_image_python(module: Path) -> None:
+    # The image build runs compileall over this package, so syntax newer than
+    # the oldest cell's Python breaks that image before bootstrap can run.
+    ast.parse(module.read_text(), feature_version=OLDEST_IMAGE_PYTHON)
+
+
 def test_the_image_package_imports_only_what_the_image_has() -> None:
     # The platform image carries this package as lehrer_bootstrap, beside no
     # other part of lehrer. At module level it may import the stdlib, pydantic,
