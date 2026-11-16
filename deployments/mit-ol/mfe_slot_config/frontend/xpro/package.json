@@ -11,7 +11,7 @@
     "serve": "openedx serve"
   },
   "dependencies": {
-    "@openedx/frontend-app-instructor-dashboard": "git+https://github.com/mitodl/frontend-app-instructor-dashboard.git#verawood",
+    "@openedx/frontend-app-instructor-dashboard": "1.x",
     "@openedx/frontend-base": "1.x",
     "@openedx/paragon": "^23",
     "@tanstack/react-query": "^5",
