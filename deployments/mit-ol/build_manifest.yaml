@@ -57,6 +57,7 @@ cells:
   - ol-openedx-events-handler==0.6.1
   - ol-openedx-course-sync
   - ol-openedx-uai-content-customization==0.5.2
+  - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
   - opentelemetry-instrumentation-django
@@ -105,6 +106,7 @@ cells:
   - rapid-response-xblock==0.12.0
   - ol-openedx-chat==0.7.0
   - ol-openedx-chat-xblock==0.5.0
+  - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
   - opentelemetry-instrumentation-django
@@ -143,6 +145,7 @@ cells:
   - rapid-response-xblock==0.12.0
   - ol-openedx-chat==0.7.0
   - ol-openedx-chat-xblock==0.5.0
+  - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
   - opentelemetry-instrumentation-django
@@ -179,6 +182,7 @@ cells:
   - pydantic-settings[yaml]==2.15.0
   - ol-openedx-chat==0.7.0
   - ol-openedx-chat-xblock==0.5.0
+  - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
   - opentelemetry-instrumentation-django
@@ -219,6 +223,7 @@ cells:
   - rapid-response-xblock==0.12.0
   - ol-openedx-chat==0.7.0
   - ol-openedx-chat-xblock==0.5.0
+  - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
   - opentelemetry-instrumentation-django
@@ -266,6 +271,7 @@ cells:
   - rapid-response-xblock==0.12.0
   - ol-openedx-chat==0.7.0
   - ol-openedx-chat-xblock==0.5.0
+  - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
   - opentelemetry-instrumentation-django
@@ -312,6 +318,7 @@ cells:
   - django-aqueduct==0.15.1
   - ol-openedx-chat==0.7.0
   - ol-openedx-chat-xblock==0.5.0
+  - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
   - opentelemetry-instrumentation-django
