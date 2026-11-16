@@ -102,7 +102,7 @@ Currently contains:
 | mitxonline | `@openedx/frontend-app-admin-console` | `^1.0.0-alpha.6` |
 | mitxonline | `@openedx/frontend-app-gradebook` | `^2.0.0-alpha.4` |
 | mitx | `@openedx/frontend-app-instructor-dashboard` | `1.x` |
-| xpro | `@openedx/frontend-app-instructor-dashboard` | `mitodl/…#verawood` (see below) |
+| xpro | `@openedx/frontend-app-instructor-dashboard` | `1.x` |
 
 admin-console and gradebook are wired in unwrapped, unlike the instructor
 dashboard. They register absolute route paths (`/admin-console/authz/*`,
@@ -142,9 +142,9 @@ react-intl 10. Within 1.x, updates are ordinary reviewable bumps, and
 major stays a deliberate decision.
 
 The cost of `1.x` over `1.2.x` is that these sites carry features published after
-Verawood's frontend set was fixed. Both lockfiles resolve **1.3.0**, one minor ahead
-of template-site's `1.2.x`, which adds CCX coach pages, the grading policy view and
-Schedule — features that call LMS endpoints `release/verawood` may not serve. Nothing
+Verawood's frontend set was fixed. Both lockfiles resolve **1.4.0**, two minors ahead
+of template-site's `1.2.x`, which adds CCX coach pages, the grading policy view,
+Schedule and bulk unenroll — features that call LMS endpoints `release/verawood` may not serve. Nothing
 in `shared/` or either site's `src/` registers against them, so they surface only as
 upstream tabs that may fail against a Verawood backend. Narrow the range to `1.2.x`
 if that turns out to matter; it resolves to 1.2.0, whose public API is identical.
@@ -159,45 +159,6 @@ admits the alpha line.
 [adr3]: https://docs.openedx.org/projects/openedx-proposals/en/latest/processes/oep-0010/decisions/0003-frontend-release-strategy.html
 [ts-main]: https://github.com/openedx/frontend-template-site/blob/main/package.json
 [ts-vera]: https://github.com/openedx/frontend-template-site/blob/release/verawood/package.json
-
-### Fork pin: xpro instructor-dashboard (Verawood line)
-
-xpro builds the instructor dashboard from `mitodl/frontend-app-instructor-dashboard`
-instead of npm, tracking that fork's `verawood` branch (currently at commit `7d6de02`).
-That branch is upstream `v1.2.0` (commit `272b8290`, which is the `gitHead` npm records
-for the published `1.2.0`, so it is the same code the Verawood line ships) plus two
-Course Team fixes needed to unblock Verawood CI testing:
-
-- inactive accounts are reported instead of silently skipped
-- failures with no reason attached raise an alert instead of closing the modal quietly
-
-Upstream PR: https://github.com/openedx/frontend-app-instructor-dashboard/pull/234
-Issue: https://github.com/mitodl/hq/issues/13068
-
-The branch also carries a `prepare` script, which the published package does not need: npm runs
-`prepare` rather than `prepack` for a git dependency, and without it the install produces no
-`dist/` and the site build fails on the package's `"."` export.
-
-The dependency names the branch, not a commit. `package-lock.json` still records the
-commit it resolved, so an install is reproducible and a re-resolution shows as a lockfile
-diff — but Renovate's weekly lock file maintenance deletes the lockfile and re-resolves,
-so a commit pushed to the fork's `verawood` branch is absorbed by that run rather than
-arriving as a deliberate bump. Treat the branch as frozen, or name a commit instead, if
-that matters.
-
-**Merging upstream #234 is not on its own enough to retire this pin.** The fixes have to
-reach npm on a line xpro can install. `stable` is the only 1.x line that publishes — there
-is no `1.2.x` maintenance branch, and `1.2.1` exists solely as a git tag — so they arrive
-either as `1.3.x` (if cherry-picked to `stable`) or only in `2.x`. Because xpro's
-frontend-base range is `1.x`, a `1.3.x` publish **is** in range: at that point replace the
-git pin with `"1.x"`, re-run `npm install` in `xpro/`, and delete this section. If the
-fixes only ever land in `2.x`, the pin stays until xpro adopts a named release built on
-frontend-base 2.
-
-Meanwhile, if #234 merges and xpro needs it on Verawood before any of that, rebase the
-fork branch on the tag the Verawood line is at plus the merged commit and push it to
-`verawood`. `xpro/package.json` needs no edit; re-run `npm install` in `xpro/` so the
-lockfile records the new commit.
 
 ## Deployment prerequisites
 
