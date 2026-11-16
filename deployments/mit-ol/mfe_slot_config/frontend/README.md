@@ -119,9 +119,10 @@ cells build from, not by what is newest.
 
 Apps built on `frontend-base` are **never branched or tagged for an Open edX
 release** — they declare `openedx.org/release: null` and participate by published
-version only ([OEP-10 ADR 0003][adr3]). Only two branches publish:
-`main` → the `alpha` dist-tag, which takes breaking changes with no DEPR process
-and is explicitly not supported in production, and `stable` → `latest`.
+version only ([OEP-10 ADR 0003][adr3]). `main` publishes to the `alpha` dist-tag,
+which takes breaking changes with no DEPR process and is explicitly not supported
+in production, and `stable` publishes to `latest`. An app may also cut a
+maintenance branch (instructor-dashboard's `1.2.x` publishes under `release-1.2.x`).
 `openedx/frontend-template-site` is the only frontend repo branched per release,
 and ADR 0003 makes its `release/*` branch the authoritative record of which
 frontend versions that release ships.
@@ -147,7 +148,8 @@ of template-site's `1.2.x`, which adds CCX coach pages, the grading policy view,
 Schedule and bulk unenroll — features that call LMS endpoints `release/verawood` may not serve. Nothing
 in `shared/` or either site's `src/` registers against them, so they surface only as
 upstream tabs that may fail against a Verawood backend. Narrow the range to `1.2.x`
-if that turns out to matter; it resolves to 1.2.0, whose public API is identical.
+if that turns out to matter; it resolves to 1.2.2 from upstream's `1.2.x` branch,
+which also carries the Course Team fixes from openedx/frontend-app-instructor-dashboard#234.
 
 Write a stable line as an explicit range (`1.x`), never as a caret on a prerelease:
 `^1.1.0-alpha` expands to `>=1.1.0-alpha <2.0.0`, which is how mitx ended up on
