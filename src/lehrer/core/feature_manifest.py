@@ -245,8 +245,11 @@ class FeatureDefinition(BaseModel):
         if (self.origin == "plugin") != (self.provided_by is not None):
             msg = "provided_by is required for origin: plugin and only for it"
             raise ValueError(msg)
-        if "enabled" in self.parameters:
-            msg = "'enabled' is reserved in adoption and cannot be a parameter"
+        reserved = {"enabled", "operations"} & set(self.parameters)
+        if reserved:
+            msg = (
+                f"{sorted(reserved)} are reserved in adoption and cannot be parameters"
+            )
             raise ValueError(msg)
         ops = self.operations
         built = set(ops.mfe_build_env) | set(ops.mfe_assets)
@@ -505,10 +508,13 @@ def merge_operations(
         current = merged.get(key)
         if here == ("site_config",) and isinstance(current, dict):
             current, value = _same_site_config_form(current, value)
+        # A lookup is one value, not a mapping to merge into: merging a literal
+        # over it would leave by_parameter/cases beside the override's keys.
         if (
             isinstance(current, dict)
             and isinstance(value, dict)
             and not _is_lookup(value)
+            and not _is_lookup(current)
         ):
             merged[key] = merge_operations(current, value, here)
         elif isinstance(current, list) and isinstance(value, list):
@@ -517,7 +523,15 @@ def merge_operations(
                 merged[key] = value
             else:
                 keyed = _keyed(identity, here)
-                replacements = {keyed(e): e for e in value}
+                replacements: dict[object, Any] = {}
+                for entry in value:
+                    held = replacements.setdefault(keyed(entry), entry)
+                    if held != entry:
+                        msg = (
+                            f"{'.'.join(here)}: two entries for {keyed(entry)!r} "
+                            f"differ: {held!r} vs {entry!r}"
+                        )
+                        raise FeatureManifestError(msg)
                 kept = [replacements.pop(keyed(e), e) for e in current]
                 merged[key] = kept + [e for e in value if keyed(e) in replacements]
         else:
@@ -702,18 +716,20 @@ class _Claims:
         self.owners: dict[tuple[str, ...], list[str]] = {}
 
     def add(self, target: tuple[str, ...], owner: _Owner, value: Any) -> None:
+        # Unequal values conflict even from one feature: features.K and
+        # settings.K (or two site_config keys) land on one emitted value, and
+        # which wins would depend on emit order.
         first, held = self.held.setdefault(target, (owner, value))
-        if first[0] != owner[0] and held != value:
+        if held != value:
             self._refuse(" ".join(target), (first, held), (owner, value))
         # A scalar at K and a mapping leaf at K.x are different targets, but
         # one replaces the other, so they compete as much as equal targets.
         for i in range(1, len(target)):
             above = self.held.get(target[:i])
-            if above and above[0][0] != owner[0]:
+            if above:
                 self._refuse(" ".join(target[:i]), above, (owner, value))
         for below in self.below.get(target, []):
-            if below[0][0] != owner[0]:
-                self._refuse(" ".join(target), below, (owner, value))
+            self._refuse(" ".join(target), below, (owner, value))
         for i in range(1, len(target)):
             self.below.setdefault(target[:i], []).append((owner, value))
         if owner[0] not in self.owners.setdefault(target, []):
@@ -763,7 +779,9 @@ class Group:
 
     :param inventories: Per service, the settings inventory of the group's
         aqueduct entry classes (see :mod:`lehrer.core.settings_inventory`).
-    :param slot_dir: The legacy slot config directory slot files resolve in.
+    :param slot_dir: The legacy slot config directory slot files resolve in,
+        whether or not it exists. ``None`` means the caller checks slot files
+        itself and this class does not.
     :param baseline: The group's ``build_config.yaml``, for dest/target
         conflicts with the unconditional customisation.
     """
@@ -866,6 +884,19 @@ class Group:
             _check_parameter_references(operations, definition.model.parameters)
         except ValueError as error:
             raise FeatureManifestError(f"{scope}: {name}: {error}") from None
+        # requires is not overridable, so an override cannot reach an MFE the
+        # definition does not name: the emitted artifacts and a self-served
+        # build would otherwise disagree about it.
+        built = set(operations.get("mfe_build_env", {})) | set(
+            operations.get("mfe_assets", {})
+        )
+        unrequired = built - set(definition.model.requires.frontends)
+        if unrequired:
+            msg = (
+                f"{scope}: {name}: operations override builds {sorted(unrequired)}, "
+                "which the definition's requires.frontends does not list"
+            )
+            raise FeatureManifestError(msg)
         return Adoption(name, params, operations, [w for w, _ in blocks])
 
     # -- resolution --------------------------------------------------------
@@ -1074,8 +1105,12 @@ class Group:
             source, _, dest = spec.partition(":")
             dest = dest or source
             if self.slot_dir is not None and not (self.slot_dir / source).is_file():
+                missing = (
+                    "" if self.slot_dir.is_dir() else " (the directory does not exist)"
+                )
                 msg = (
-                    f"{where}: slot file {source!r} for {mfe} is not in {self.slot_dir}"
+                    f"{where}: slot file {source!r} for {mfe} is not in "
+                    f"{self.slot_dir}{missing}"
                 )
                 raise FeatureManifestError(msg)
             slot_files.append({"source": source, "dest": dest})
@@ -1122,11 +1157,16 @@ class Group:
             for key, value in feature.settings.get(svc, {}).items():
                 for path, leaf in _leaves(value):
                     yield ("setting", svc, key, *path), leaf
+            # features.K is emitted as FEATURES[K], plus top-level K when the
+            # model declares it (§4.6), so it competes with settings.FEATURES.K
+            # and settings.K both.
             for key, value in feature.features.get(svc, {}).items():
                 found = self._field(svc, key)
-                canonical = found.key if found else key
+                name = found.name if found else key
                 for path, leaf in _leaves(value):
-                    yield ("setting", svc, canonical, *path), leaf
+                    yield ("setting", svc, "FEATURES", name, *path), leaf
+                    if found:
+                        yield ("setting", svc, found.key, *path), leaf
         for setting, value in feature.site_config.items():
             for path, leaf in _leaves(value):
                 yield ("setting", "lms", setting, *path), leaf
@@ -1241,20 +1281,40 @@ def _runtime_destinations(setting: str, path: tuple[str, ...]) -> list[tuple[str
     return []
 
 
+def merged_build_input(resolved: ResolvedScope, mfe: str) -> dict[str, Any]:
+    """The build input every adopted feature sends ``mfe``, merged.
+
+    Env vars by key, slot files by ``dest`` and bundles by target directory,
+    in feature-name order. Conflicts were refused at resolve time, so an
+    entry two features both send is the same value and appears once.
+    """
+    env: dict[str, str] = {}
+    slots: dict[str, dict[str, str]] = {}
+    bundles: dict[str, dict[str, str]] = {}
+    for feature in resolved.features:
+        env.update(feature.mfe_build_env.get(mfe, {}))
+        assets = feature.mfe_assets.get(mfe, {})
+        for slot in assets.get("extra_slot_files", []):
+            slots.setdefault(slot["dest"], slot)
+        for bundle in assets.get("extra_npm_bundles", []):
+            bundles.setdefault(bundle["target"], bundle)
+    return {
+        "env": env,
+        "extra_slot_files": list(slots.values()),
+        "extra_npm_bundles": list(bundles.values()),
+    }
+
+
 def build_digest(resolved: ResolvedScope, mfe: str) -> str:
-    """A stable hash of the build-time operations every feature sends ``mfe``."""
+    """A stable hash of the effective build input for ``mfe``.
+
+    Hashes what the build receives, not which feature sent it, so two scopes
+    that reach the same input through different features share a digest.
+    """
     import hashlib  # noqa: PLC0415
     import json  # noqa: PLC0415
 
-    payload = [
-        {
-            "feature": f.feature,
-            "env": f.mfe_build_env.get(mfe, {}),
-            "assets": f.mfe_assets.get(mfe, {}),
-        }
-        for f in resolved.features
-        if mfe in f.mfe_build_env or mfe in f.mfe_assets
-    ]
+    payload = merged_build_input(resolved, mfe)
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 

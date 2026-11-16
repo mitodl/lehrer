@@ -703,3 +703,114 @@ class TestReviewRegressions:
         group = _group([definition], {"mxo-ci": {"thing": {}}})
         with pytest.raises(FeatureManifestError, match="NOT_A_REAL_SETTING"):
             group.resolve("mxo-ci")
+
+
+class TestPrFeedback:
+    """Regressions for review comments on mitodl/lehrer#419."""
+
+    def test_one_feature_cannot_write_two_values_to_one_setting(self) -> None:
+        definition = _definition(
+            operations={
+                "features": {"lms": {"LOG_DIR": "/a"}},
+                "settings": {"lms": {"LOG_DIR": "/b"}},
+            }
+        )
+        with pytest.raises(FeatureManifestError, match="LOG_DIR"):
+            _group([definition], {"mxo-ci": {"thing": {}}}).resolve("mxo-ci")
+
+    def test_operations_is_not_a_parameter(self) -> None:
+        with pytest.raises(ValidationError, match="reserved"):
+            FeatureDefinition.model_validate(
+                _definition(parameters={"operations": {"type": "string"}})
+            )
+
+    def test_an_override_replaces_a_lookup_whole(self) -> None:
+        definition = _definition(
+            parameters=MODE,
+            operations={
+                "site_config": {
+                    "mfe_config": {
+                        "by_parameter": "mode",
+                        "cases": {"a": {"CHAT": 1}, "b": {"CHAT": 2}},
+                    }
+                }
+            },
+        )
+        adoption = {
+            "mxo-ci": {
+                "thing": {"operations": {"site_config": {"mfe_config": {"CHAT": 3}}}}
+            }
+        }
+        thing = _feature(_group([definition], adoption), "mxo-ci", "thing")
+        assert thing.site_config == {"MFE_CONFIG": {"CHAT": 3}}
+
+    def test_an_override_cannot_carry_two_differing_entries(self) -> None:
+        definition = _definition(
+            operations={"bootstrap": {"waffle_flags": [{"name": "x.y"}]}}
+        )
+        override = {
+            "bootstrap": {
+                "waffle_flags": [
+                    {"name": "x.y", "everyone": True},
+                    {"name": "x.y", "everyone": False},
+                ]
+            }
+        }
+        adoption = {"mxo-ci": {"thing": {"operations": override}}}
+        with pytest.raises(FeatureManifestError, match="two entries for 'x.y' differ"):
+            _group([definition], adoption).adopted("mxo-ci")
+
+    def test_an_override_cannot_build_an_unrequired_mfe(self) -> None:
+        adoption = {
+            "mxo-ci": {
+                "ai-drawer": {"operations": {"mfe_build_env": {"authn": {"X": "1"}}}}
+            }
+        }
+        with pytest.raises(FeatureManifestError, match=r"builds \['authn'\]"):
+            _group([AI_DRAWER], adoption).adopted("mxo-ci")
+
+    def test_a_missing_slot_dir_fails_a_slot_file(self, tmp_path: Path) -> None:
+        definition = _definition(
+            frontend_paths=["legacy"],
+            requires={"frontends": ["learning"]},
+            operations={"mfe_assets": {"learning": {"extra_slot_files": ["New.jsx"]}}},
+        )
+        group = _group([definition], {"mxo-ci": {"thing": {}}})
+        group.slot_dir = tmp_path / "absent"
+        with pytest.raises(FeatureManifestError, match="directory does not exist"):
+            group.resolve("mxo-ci")
+
+    def test_settings_features_competes_with_a_features_key(self) -> None:
+        group = _group(
+            [
+                _definition(
+                    feature="a",
+                    operations={"settings": {"lms": {"FEATURES": {"ENABLE_X": False}}}},
+                ),
+                _definition(
+                    feature="b", operations={"features": {"lms": {"ENABLE_X": True}}}
+                ),
+            ],
+            {"mxo-ci": {"a": {}, "b": {}}},
+        )
+        with pytest.raises(FeatureManifestError, match="FEATURES ENABLE_X"):
+            group.resolve("mxo-ci")
+
+    def test_build_digest_ignores_which_feature_sent_an_input(self) -> None:
+        twin = {**AI_DRAWER, "feature": "twin"}
+        scopes = {
+            "version": 1,
+            "scopes": {
+                name: {
+                    "cell": {"release": "master", "deployment": "mitxonline"},
+                    "frontends": {"learning": {"legacy": "shared"}},
+                }
+                for name in ("one", "two")
+            },
+        }
+        group = _group(
+            [AI_DRAWER, twin],
+            {"one": {"ai-drawer": {}}, "two": {"ai-drawer": {}, "twin": {}}},
+            scopes,
+        )
+        assert group.check() == []

@@ -102,7 +102,9 @@ def load_group(group: str) -> Group:
         adoption=load_adoption(features / "adoption.yaml"),
         manifest=load_manifest(root / "build_manifest.yaml"),
         inventories=settings_inventories(root),
-        slot_dir=slot_dir if slot_dir.is_dir() else None,
+        # Passed even when absent, so a slot file referenced by a feature fails
+        # rather than going unchecked.
+        slot_dir=slot_dir,
         baseline=baseline,
     )
 
