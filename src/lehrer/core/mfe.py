@@ -50,7 +50,12 @@ async def _feature_build_inputs(
     """
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        for relative in await features.glob("**/*.yaml"):
+        # Both patterns, so the top-level scopes.yaml and adoption.yaml are
+        # read whether or not this glob's ** also matches zero directories.
+        found = set(await features.glob("*.yaml")) | set(
+            await features.glob("**/*.yaml")
+        )
+        for relative in sorted(found):
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(await features.file(relative).contents())
@@ -287,18 +292,23 @@ class OpenedxMfe:
         # as pre-built bundles rather than as npm dependencies)
         import shlex
 
-        for bundle_spec in extra_npm_bundles:
+        # Each bundle is packed and unpacked in a directory of its own: with a
+        # shared one, the second bundle's `*.tgz` glob also matches the first
+        # tarball and its `package/` would be overwritten.
+        for index, bundle_spec in enumerate(extra_npm_bundles):
             pkg_spec, target_path = bundle_spec.split("|", 1)
             safe_target = shlex.quote(target_path)
+            unpack = f"/tmp/npm-bundle-{index}"
             container = (
-                container.with_exec(["npm", "pack", pkg_spec])
-                .with_exec(["sh", "-c", "tar -xvzf *.tgz"])
+                container.with_exec(["mkdir", "-p", unpack])
+                .with_exec(["npm", "pack", pkg_spec, "--pack-destination", unpack])
+                .with_exec(["sh", "-c", f"cd {unpack} && tar -xvzf *.tgz"])
                 .with_exec(["mkdir", "-p", target_path])
                 .with_exec(
                     [
                         "sh",
                         "-c",
-                        f"cp package/dist/bundles/* {safe_target}/",
+                        f"cp {unpack}/package/dist/bundles/* {safe_target}/",
                     ]
                 )
             )

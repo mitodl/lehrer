@@ -885,6 +885,19 @@ class Group:
             _check_parameter_references(operations, definition.model.parameters)
         except ValueError as error:
             raise FeatureManifestError(f"{scope}: {name}: {error}") from None
+        # requires is not overridable, so an override cannot reach an MFE the
+        # definition does not name: the emitted artifacts and a self-served
+        # build would otherwise disagree about it.
+        built = set(operations.get("mfe_build_env", {})) | set(
+            operations.get("mfe_assets", {})
+        )
+        unrequired = built - set(definition.model.requires.frontends)
+        if unrequired:
+            msg = (
+                f"{scope}: {name}: operations override builds {sorted(unrequired)}, "
+                "which the definition's requires.frontends does not list"
+            )
+            raise FeatureManifestError(msg)
         return Adoption(name, params, operations, [w for w, _ in blocks])
 
     # -- resolution --------------------------------------------------------
