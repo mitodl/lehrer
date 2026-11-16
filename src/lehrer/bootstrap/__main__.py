@@ -5,7 +5,12 @@ Runs inside the platform image, where lehrer bakes this package in as
 run ``manage.py`` from there)::
 
     DJANGO_SETTINGS_MODULE=lms.envs.aqueduct \\
-        python -m lehrer_bootstrap /path/to/bootstrap.yaml [--steps users,waffle_flags]
+        python -m lehrer_bootstrap /path/to/bootstrap.yaml [features.yaml ...] \\
+            [--steps users,waffle_flags]
+
+Several specs (an operator's base spec, then a compiled feature fragment) are
+merged by :func:`lehrer_bootstrap.spec.merge`; a conflict between them stops
+the run before anything is written.
 
 Every step converges the database on the spec, so re-running it is safe. Each
 object applied prints one JSON line on stdout (``{"step", "target",
@@ -38,7 +43,7 @@ from .spec import (
     Migration,
     from_env,
     from_env_optional,
-    load,
+    load_all,
     resolve,
 )
 
@@ -261,6 +266,14 @@ def apply_third_party_auth_providers(spec: BootstrapSpec, settings: Any) -> None
         client_id = from_env_optional(declared.client_id_env)
         client_secret = from_env_optional(declared.client_secret_env)
         if not (other_settings and client_id and client_secret):
+            if not declared.optional:
+                msg = (
+                    f"third_party_auth_providers {declared.backend_name} is not "
+                    f"optional, but {declared.client_id_env}, "
+                    f"{declared.client_secret_env} or "
+                    f"{declared.other_settings_env} is unset"
+                )
+                raise ValueError(msg)
             # Not an error: an install with no upstream IdP in front of it
             # leaves these unset, and creating the row anyway would put a login
             # button on the page that cannot work. See ThirdPartyAuthProvider.
@@ -354,6 +367,12 @@ def apply_service_access_tokens(spec: BootstrapSpec, settings: Any) -> None:  # 
     for declared in spec.service_access_tokens:
         token = from_env_optional(declared.token_env)
         if not token:
+            if not declared.optional:
+                msg = (
+                    f"service_access_tokens {declared.username} is not optional, "
+                    f"but {declared.token_env} is unset"
+                )
+                raise ValueError(msg)
             print(  # noqa: T201
                 f"service_access_tokens: skipping {declared.username} "
                 f"({declared.token_env} not supplied)",
@@ -528,6 +547,37 @@ APPLY = {
 }
 
 
+def check_resolved_collisions(
+    spec: BootstrapSpec, settings: Any, steps: list[str]
+) -> None:
+    """Refuse a spec whose entries only collide once resolved.
+
+    The spec validator compares names as written. Two collisions appear only
+    at apply time: an OAuth name placeholder that resolves to another
+    application's name, and two ``client_id_env`` variables holding the same
+    client ID. Either would have one ``update_or_create`` overwrite another's
+    application, and the per-application guard in
+    :func:`apply_oauth_applications` sees neither. Run before any step writes.
+    """
+    owners: dict[str, str] = {}
+
+    def claim(kind: str, value: str, owner: str) -> None:
+        held = owners.setdefault(f"{kind}:{value}", owner)
+        if held != owner:
+            msg = f"{held} and {owner} both resolve to the {kind} {value!r}"
+            raise ValueError(msg)
+
+    if "oauth_applications" in steps:
+        for app in spec.oauth_applications:
+            owner = f"oauth_applications {app.name!r}"
+            claim("application name", resolve(app.name, settings), owner)
+            claim("client ID", from_env(app.client_id_env), owner)
+    if "service_access_tokens" in steps:
+        for token in spec.service_access_tokens:
+            owner = f"service_access_tokens {token.username!r}"
+            claim("application name", token.application_name, owner)
+
+
 def _parse_steps(value: str) -> list[str]:
     steps = [step.strip() for step in value.split(",") if step.strip()]
     unknown = [step for step in steps if step not in STEPS]
@@ -539,7 +589,14 @@ def _parse_steps(value: str) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m lehrer_bootstrap")
-    parser.add_argument("spec", help="Path to a bootstrap spec (YAML).")
+    parser.add_argument(
+        "spec",
+        nargs="+",
+        help=(
+            "Path to a bootstrap spec (YAML). Several are merged in order, and "
+            "nothing is applied if they conflict."
+        ),
+    )
     parser.add_argument(
         "--steps",
         type=_parse_steps,
@@ -547,10 +604,12 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Comma-separated subset of {','.join(STEPS)}. Always run in that order.",
     )
     args = parser.parse_args(argv)
-    spec = load(args.spec)
+    spec = load_all(args.spec)
 
     import django  # type: ignore[import-not-found]  # noqa: PLC0415
     from django.conf import settings  # type: ignore[import-not-found]  # noqa: PLC0415
+
+    check_resolved_collisions(spec, settings, args.steps)
 
     # Only the steps that use the ORM need the app registry, so it is set up
     # just before the first of them. migrate and demo_course do their work in

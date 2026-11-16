@@ -186,6 +186,12 @@
           "description": "Lifetime from apply time. Long by default: this stands in for a credential a deployed environment would hold in a secret store.",
           "title": "Expires In Days",
           "type": "integer"
+        },
+        "optional": {
+          "default": true,
+          "description": "Skip the entry when token_env is unset or empty. False makes that an error.",
+          "title": "Optional",
+          "type": "boolean"
         }
       },
       "required": [
@@ -257,6 +263,12 @@
         "sync_learner_profile_data": {
           "default": false,
           "title": "Sync Learner Profile Data",
+          "type": "boolean"
+        },
+        "optional": {
+          "default": true,
+          "description": "Skip the entry when its variables are unset or empty. False makes that an error, which is what a feature's entries need: a skipped provider is a feature that silently is not there.",
+          "title": "Optional",
           "type": "boolean"
         }
       },
