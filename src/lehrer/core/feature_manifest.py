@@ -687,6 +687,24 @@ class ResolvedScope:
         return merge(*(f.bootstrap for f in self.features if f.bootstrap))
 
 
+@dataclass
+class LegacyBuildInputs:
+    """One legacy MFE's resolved feature input, in adoption (feature name) order."""
+
+    env: dict[str, str] = field(default_factory=dict)
+    slot_files: list[dict[str, str]] = field(default_factory=list)
+    npm_bundles: list[dict[str, str]] = field(default_factory=list)
+
+    def env_vars(self) -> list[str]:
+        return [f"{key}={value}" for key, value in sorted(self.env.items())]
+
+    def slot_specs(self) -> list[str]:
+        return [f"{s['source']}:{s['dest']}" for s in self.slot_files]
+
+    def bundle_specs(self) -> list[str]:
+        return [f"{b['spec']}|{b['target']}" for b in self.npm_bundles]
+
+
 _Owner = tuple[str, Path]
 _BASELINE: _Owner = ("build_config.yaml", Path("build_config.yaml"))
 
@@ -771,8 +789,9 @@ class Group:
     definitions: dict[str, Definition]
     scopes: ScopesFile
     adoption: AdoptionFile
-    manifest: BuildManifest
-    inventories: Mapping[str, Mapping[str, SettingField]]
+    manifest: BuildManifest | None = None
+    """Required by :meth:`resolve`; :meth:`mfe_build_inputs` runs without it."""
+    inventories: Mapping[str, Mapping[str, SettingField]] = field(default_factory=dict)
     slot_dir: Path | None = None
     baseline: BuildConfig | None = None
 
@@ -872,6 +891,9 @@ class Group:
 
     def cell(self, scope: str) -> Cell:
         ref = self.scopes.scopes[scope].cell
+        if self.manifest is None:
+            msg = f"{scope}: resolving a scope needs the group's build manifest"
+            raise FeatureManifestError(msg)
         try:
             return self.manifest.resolve_cell(ref.release, ref.deployment)
         except ValueError as error:
@@ -924,7 +946,7 @@ class Group:
             for svc, group in adoption.operations.get(group_name, {}).items():
                 for key in _written_keys(group):
                     self._check_not_reserved(where, svc, key)
-                    if group_name == "settings" and self._field(svc, key) is None:
+                    if group_name == "settings" and self.setting(svc, key) is None:
                         msg = (
                             f"{where}: {svc} setting {key!r} is not declared by "
                             "the settings model"
@@ -980,7 +1002,7 @@ class Group:
             build_env[mfe] = {key: _env_value(where, key, v) for key, v in env.items()}
         assets = {
             mfe: self._resolve_assets(
-                where, mfe, MfeBuildConfig.model_validate(raw), cell
+                where, mfe, MfeBuildConfig.model_validate(raw), cell.release
             )
             for mfe, raw in ops.get("mfe_assets", {}).items()
         }
@@ -1037,7 +1059,8 @@ class Group:
                 )
                 raise FeatureManifestError(msg)
 
-    def _field(self, svc: str, key: str) -> SettingField | None:
+    def setting(self, svc: str, key: str) -> SettingField | None:
+        """The declared setting ``key`` names in ``svc``, by name or alias."""
         inventory = self.inventories.get(svc, {})
         found = inventory.get(key)
         if found is not None:
@@ -1045,7 +1068,7 @@ class Group:
         return next((f for f in inventory.values() if f.alias == key), None)
 
     def _check_not_reserved(self, where: str, svc: str, key: str) -> None:
-        found = self._field(svc, key)
+        found = self.setting(svc, key)
         names = {key} | ({found.name, found.key} if found else set())
         if names & RESERVED_SETTINGS:
             msg = f"{where}: {svc} {key} may only be written through site_config"
@@ -1057,7 +1080,7 @@ class Group:
         """Key each setting by the name pydantic-settings reads (its alias)."""
         out: dict[str, Any] = {}
         for key, value in group.items():
-            found = self._field(svc, key)
+            found = self.setting(svc, key)
             if found is None:
                 msg = f"{where}: {svc} setting {key!r} is not declared by the settings model"
                 raise FeatureManifestError(msg)
@@ -1066,11 +1089,11 @@ class Group:
         return out
 
     def _resolve_assets(
-        self, where: str, mfe: str, assets: MfeBuildConfig, cell: Cell
+        self, where: str, mfe: str, assets: MfeBuildConfig, release: str
     ) -> dict[str, list[dict[str, str]]]:
         slot_files = []
         for item in assets.extra_slot_files:
-            spec = item if isinstance(item, str) else item.resolve(cell.release)
+            spec = item if isinstance(item, str) else item.resolve(release)
             source, _, dest = spec.partition(":")
             dest = dest or source
             if self.slot_dir is not None and not (self.slot_dir / source).is_file():
@@ -1094,15 +1117,8 @@ class Group:
         map lists every owner of each target for ``explain``.
         """
         claims = _Claims(resolved.scope)
-        baseline = self.baseline or BuildConfig()
         for mfe in sorted({m for f in resolved.features for m in f.mfe_assets}):
-            config = baseline.mfe(mfe)
-            for copy in config.resolve_extra_slot_files(resolved.cell.release):
-                origin, _, dest = copy.partition(":")
-                claims.add(("slot-file", mfe, dest or origin), _BASELINE, origin)
-            for line in config.extra_npm_bundles:
-                package, _, directory = line.partition("|")
-                claims.add(("npm-bundle", mfe, directory), _BASELINE, package)
+            self._claim_baseline(claims, mfe, resolved.cell.release)
         for feature in resolved.features:
             owner = (feature.feature, feature.source)
             for target, value in self._targets(feature):
@@ -1115,6 +1131,70 @@ class Group:
             raise FeatureManifestError(msg) from None
         return claims.owners
 
+    def _claim_baseline(self, claims: _Claims, mfe: str, release: str) -> None:
+        """Claim the dests and bundle targets ``build_config.yaml`` already uses."""
+        config = (self.baseline or BuildConfig()).mfe(mfe)
+        for copy in config.resolve_extra_slot_files(release):
+            origin, _, dest = copy.partition(":")
+            claims.add(("slot-file", mfe, dest or origin), _BASELINE, origin)
+        for line in config.extra_npm_bundles:
+            package, _, directory = line.partition("|")
+            claims.add(("npm-bundle", mfe, directory), _BASELINE, package)
+
+    def mfe_build_inputs(
+        self, scope: str, mfe: str, release: str, deployment: str
+    ) -> LegacyBuildInputs:
+        """The build-time input every feature ``scope`` adopts sends ``mfe``.
+
+        For ``build_legacy_configured``, which has the features tree and the
+        slot config but neither the build manifest nor the settings models.
+        So this runs adoption, substitution, the frontends check and the
+        build-input conflict checks, and leaves the plugin and settings checks
+        to ``lehrer features check``. The scope's cell must be the cell being
+        built, or a scope could be applied to a build it was never meant for.
+        """
+        adopted = self.adopted(scope)
+        ref = self.scopes.scopes[scope].cell
+        if (ref.release, ref.deployment) != (release, deployment):
+            msg = (
+                f"scope {scope!r} is cell {ref.release}/{ref.deployment}, but this "
+                f"build is {release}/{deployment}"
+            )
+            raise FeatureManifestError(msg)
+        frontends = self.scopes.scopes[scope].frontends
+        if mfe in frontends and binding_path(frontends[mfe]) != "legacy":
+            msg = f"scope {scope!r} builds {mfe!r} as a Site Project, not a legacy MFE"
+            raise FeatureManifestError(msg)
+        claims = _Claims(scope)
+        self._claim_baseline(claims, mfe, release)
+        inputs = LegacyBuildInputs()
+        for adoption in adopted.values():
+            definition = self.definitions[adoption.feature]
+            where = f"{scope}: {adoption.feature}"
+            self._check_frontends(where, frontends, definition.model)
+            try:
+                ops = substitute(adoption.operations, adoption.params)
+            except FeatureManifestError as error:
+                raise FeatureManifestError(f"{where}: {error}") from None
+            owner = (adoption.feature, definition.source)
+            for key, value in ops.get("mfe_build_env", {}).get(mfe, {}).items():
+                text = _env_value(where, key, value)
+                claims.add(("mfe-build-env", mfe, key), owner, text)
+                inputs.env[key] = text
+            raw = ops.get("mfe_assets", {}).get(mfe)
+            if raw is None:
+                continue
+            assets = self._resolve_assets(
+                where, mfe, MfeBuildConfig.model_validate(raw), release
+            )
+            for slot in assets["extra_slot_files"]:
+                claims.add(("slot-file", mfe, slot["dest"]), owner, slot["source"])
+                inputs.slot_files.append(slot)
+            for bundle in assets["extra_npm_bundles"]:
+                claims.add(("npm-bundle", mfe, bundle["target"]), owner, bundle["spec"])
+                inputs.npm_bundles.append(bundle)
+        return inputs
+
     def _targets(
         self, feature: ResolvedFeature
     ) -> Iterable[tuple[tuple[str, ...], Any]]:
@@ -1123,7 +1203,7 @@ class Group:
                 for path, leaf in _leaves(value):
                     yield ("setting", svc, key, *path), leaf
             for key, value in feature.features.get(svc, {}).items():
-                found = self._field(svc, key)
+                found = self.setting(svc, key)
                 canonical = found.key if found else key
                 for path, leaf in _leaves(value):
                     yield ("setting", svc, canonical, *path), leaf
@@ -1308,6 +1388,26 @@ def load_definitions(
             raise FeatureManifestError(msg)
         found[model.feature] = Definition(model, path)
     return found
+
+
+CATALOG = Path(__file__).parent.parent / "features"
+"""lehrer's shipped upstream-native definitions. May be absent while empty."""
+
+
+def load_tree(features: Path, slot_dir: Path | None = None) -> Group:
+    """A :class:`Group` from one ``features/`` tree and lehrer's catalog.
+
+    The build manifest, settings inventories and baseline are left for the
+    caller to attach; only :meth:`Group.resolve` needs the first two.
+    """
+    return Group(
+        definitions=load_definitions(
+            CATALOG, features / "definitions", features / "vendored"
+        ),
+        scopes=load_scopes(features / "scopes.yaml"),
+        adoption=load_adoption(features / "adoption.yaml"),
+        slot_dir=slot_dir,
+    )
 
 
 def load_scopes(path: Path) -> ScopesFile:

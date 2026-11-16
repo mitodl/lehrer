@@ -5,11 +5,14 @@ frontend-base stubs.
 """
 
 import posixpath
+import tempfile
+from pathlib import Path
 
 import dagger
 from dagger import dag, function, object_type
 from pydantic import ValidationError
 
+from lehrer.core.feature_manifest import LegacyBuildInputs, load_tree
 from lehrer.core.mfe_config import BuildConfig, json_schema
 
 
@@ -29,6 +32,31 @@ def _safe_mfe_path(path: str, *, field: str) -> str:
             f"{field} {path!r} must be a relative path within the MFE root"
         )
     return normalized
+
+
+async def _feature_build_inputs(
+    features: dagger.Directory,
+    scope: str,
+    mfe_name: str,
+    release_name: str,
+    deployment_name: str,
+    baseline: BuildConfig,
+) -> LegacyBuildInputs:
+    """Resolve what ``scope``'s features send ``mfe_name``, from a features tree.
+
+    The tree arrives as a Dagger directory, so its YAML is copied to a local
+    temporary directory and loaded with the same code ``lehrer features``
+    uses. Dagger's glob returns paths inside the directory only.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for relative in await features.glob("**/*.yaml"):
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(await features.file(relative).contents())
+        group = load_tree(root)
+    group.baseline = baseline
+    return group.mfe_build_inputs(scope, mfe_name, release_name, deployment_name)
 
 
 # Emitted by frontend-build's prod config, which templates public/index.html
@@ -310,6 +338,8 @@ class OpenedxMfe:
         node_version: str = "20",
         env_vars: list[str] | None = None,
         pre_build_commands: list[str] | None = None,
+        features: dagger.Directory | None = None,
+        scope: str = "",
     ) -> dagger.Directory:
         """Build a legacy MFE, resolving customizations from a YAML config file.
 
@@ -363,7 +393,15 @@ class OpenedxMfe:
             mfe_branch: Git branch (default: ``master``).
             node_version: Node.js version (default: ``20``).
             env_vars: Build-time environment variables in ``KEY=VALUE`` form.
+                Values no feature owns (domains, logos) still come in here; a
+                key a feature also sets must carry the same value.
             pre_build_commands: Shell commands run after ``npm install``.
+            features: A group's feature manifest tree (``scopes.yaml``,
+                ``adoption.yaml``, ``definitions/``). With ``scope``, the
+                build env vars, slot files and npm bundles the scope's
+                features send this MFE are added to the ones above.
+            scope: The scope in ``features`` to build for. Its cell must be
+                ``release_name``/``deployment_name``.
 
         Returns:
             Directory containing built MFE dist files.
@@ -380,6 +418,36 @@ class OpenedxMfe:
             raise ValueError(msg) from exc
 
         mfe_cfg = config.mfe(mfe_name)
+        slot_files = mfe_cfg.resolve_extra_slot_files(release_name)
+        bundles = list(mfe_cfg.extra_npm_bundles)
+        env = list(env_vars or [])
+
+        if (features is None) != (not scope):
+            msg = "--features and --scope are used together"
+            raise ValueError(msg)
+        if features is not None:
+            inputs = await _feature_build_inputs(
+                features, scope, mfe_name, release_name, deployment_name, config
+            )
+            for slot in inputs.slot_files:
+                if not await slot_config.exists(slot["source"]):
+                    msg = f"slot file {slot['source']!r} is not in the slot config"
+                    raise ValueError(msg)
+            explicit = {k: v for k, _, v in (item.partition("=") for item in env)}
+            for key, value in inputs.env.items():
+                if explicit.get(key, value) != value:
+                    msg = (
+                        f"--env-vars sets {key}={explicit[key]}, but scope "
+                        f"{scope!r} sets {key}={value}"
+                    )
+                    raise ValueError(msg)
+            env += [
+                item
+                for item in inputs.env_vars()
+                if item.partition("=")[0] not in explicit
+            ]
+            slot_files += inputs.slot_specs()
+            bundles += inputs.bundle_specs()
 
         return await self.build_legacy(  # type: ignore[attr-defined]
             mfe_name=mfe_name,
@@ -389,10 +457,10 @@ class OpenedxMfe:
             node_version=node_version,
             deployment_name=deployment_name,
             slot_config=slot_config,
-            extra_slot_files=mfe_cfg.resolve_extra_slot_files(release_name),
+            extra_slot_files=slot_files,
             styles_file=config.styles.get(deployment_name),
-            extra_npm_bundles=list(mfe_cfg.extra_npm_bundles),
-            env_vars=env_vars,
+            extra_npm_bundles=bundles,
+            env_vars=env or None,
             pre_build_commands=pre_build_commands,
         )
 

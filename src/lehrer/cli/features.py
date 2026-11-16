@@ -25,14 +25,15 @@ import lehrer
 from lehrer.bootstrap.spec import load as load_bootstrap
 from lehrer.bootstrap.spec import merge
 from lehrer.cli import _paths
+from lehrer.core import feature_artifacts
 from lehrer.core.build_manifest import load_manifest
 from lehrer.core.feature_manifest import (
+    CATALOG,
+    load_tree,
     FeatureManifestError,
     Group,
     ResolvedFeature,
-    load_adoption,
     load_definitions,
-    load_scopes,
 )
 from lehrer.core.mfe_config import BuildConfig
 from lehrer.core.settings_inventory import (
@@ -56,10 +57,7 @@ ScopeArg = Annotated[
     str, cyclopts.Parameter(name="--scope", help="A scope declared in scopes.yaml.")
 ]
 
-_PACKAGE = Path(lehrer.__file__).parent
-CATALOG = _PACKAGE / "features"
-"""lehrer's shipped upstream-native definitions. May be absent while empty."""
-SETTINGS_BASE = _PACKAGE / "settings" / "base.py"
+SETTINGS_BASE = Path(lehrer.__file__).parent / "settings" / "base.py"
 """Injected into the image as ``settings/<svc>/models/base.py``."""
 
 
@@ -94,17 +92,11 @@ def load_group(group: str) -> Group:
         if baseline_path.is_file()
         else None
     )
-    return Group(
-        definitions=load_definitions(
-            CATALOG, features / "definitions", features / "vendored"
-        ),
-        scopes=load_scopes(features / "scopes.yaml"),
-        adoption=load_adoption(features / "adoption.yaml"),
-        manifest=load_manifest(root / "build_manifest.yaml"),
-        inventories=settings_inventories(root),
-        slot_dir=slot_dir if slot_dir.is_dir() else None,
-        baseline=baseline,
-    )
+    loaded = load_tree(features, slot_dir if slot_dir.is_dir() else None)
+    loaded.manifest = load_manifest(root / "build_manifest.yaml")
+    loaded.inventories = settings_inventories(root)
+    loaded.baseline = baseline
+    return loaded
 
 
 def _dump(data: Any) -> None:
@@ -290,19 +282,15 @@ def _privilege(feature: ResolvedFeature) -> list[str]:
 def compile_(group: GroupArg, scope: ScopeArg, *, out: Path) -> None:
     """Resolve and validate one scope and write its artifacts to --out.
 
-    The artifact emitters (settings fragments, bootstrap.yaml, legacy MFE
-    build inputs, checklist.yaml, manifest.json) are not implemented yet, so
-    this validates the scope and then fails rather than report a success
-    that wrote nothing.
+    The layout is documented in :mod:`lehrer.core.feature_artifacts`. A
+    previous compile's output in --out is replaced; any other non-empty
+    directory is refused.
     """
     try:
-        load_group(group).resolve(scope)
+        loaded = load_group(group)
+        files = feature_artifacts.emit(loaded, loaded.resolve(scope), group)
+        feature_artifacts.write(files, out)
     except (FeatureManifestError, ValueError) as error:
         _fail(error)
         return
-    _fail(
-        NotImplementedError(
-            f"{scope} validates, but artifact emitters are not implemented yet; "
-            f"nothing was written to {out}"
-        )
-    )
+    sys.stdout.write(f"{scope}: wrote {len(files)} files to {out}\n")
