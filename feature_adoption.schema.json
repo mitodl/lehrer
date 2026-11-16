@@ -1,0 +1,34 @@
+{
+  "additionalProperties": false,
+  "description": "A group's ``features/adoption.yaml``: scope or set -> feature -> values.\n\nA feature block holds parameter values, plus the reserved keys\n``enabled`` (false records a deliberate non-adoption) and ``operations``\n(an override merged over the definition).",
+  "properties": {
+    "version": {
+      "const": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "adoption": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": "object"
+      },
+      "title": "Adoption",
+      "type": "object"
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "title": "AdoptionFile",
+  "type": "object"
+}

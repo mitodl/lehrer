@@ -1,0 +1,121 @@
+{
+  "$defs": {
+    "CellRef": {
+      "additionalProperties": false,
+      "description": "A ``build_manifest.yaml`` cell coordinate.",
+      "properties": {
+        "release": {
+          "title": "Release",
+          "type": "string"
+        },
+        "deployment": {
+          "title": "Deployment",
+          "type": "string"
+        }
+      },
+      "required": [
+        "release",
+        "deployment"
+      ],
+      "title": "CellRef",
+      "type": "object"
+    },
+    "Scope": {
+      "additionalProperties": false,
+      "description": "An operator-chosen label lehrer stores and matches but never parses.",
+      "properties": {
+        "cell": {
+          "$ref": "#/$defs/CellRef"
+        },
+        "frontends": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "const": "legacy",
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/SharedLegacy"
+              },
+              {
+                "$ref": "#/$defs/SiteProject"
+              }
+            ]
+          },
+          "description": "How each MFE features may touch is built: legacy (for this scope alone), {legacy: label} (one build shared under label) or {site: label} (a Site Project artifact).",
+          "title": "Frontends",
+          "type": "object"
+        }
+      },
+      "required": [
+        "cell"
+      ],
+      "title": "Scope",
+      "type": "object"
+    },
+    "SharedLegacy": {
+      "additionalProperties": false,
+      "description": "A legacy MFE built once under ``legacy`` and served by several scopes.",
+      "properties": {
+        "legacy": {
+          "title": "Legacy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "legacy"
+      ],
+      "title": "SharedLegacy",
+      "type": "object"
+    },
+    "SiteProject": {
+      "additionalProperties": false,
+      "description": "An MFE served from the frontend-base Site Project artifact ``site``.",
+      "properties": {
+        "site": {
+          "title": "Site",
+          "type": "string"
+        }
+      },
+      "required": [
+        "site"
+      ],
+      "title": "SiteProject",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A group's ``features/scopes.yaml``.",
+  "properties": {
+    "version": {
+      "const": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "scopes": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Scope"
+      },
+      "minProperties": 1,
+      "title": "Scopes",
+      "type": "object"
+    },
+    "sets": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "description": "Named, unordered lists of scopes. Sets cannot contain sets.",
+      "title": "Sets",
+      "type": "object"
+    }
+  },
+  "required": [
+    "version",
+    "scopes"
+  ],
+  "title": "ScopesFile",
+  "type": "object"
+}
