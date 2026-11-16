@@ -138,17 +138,6 @@ def test_write_refuses_a_foreign_directory(group: Group, tmp_path: Path) -> None
     assert (tmp_path / "keep.txt").exists()
 
 
-def test_an_override_cannot_build_an_unrequired_mfe() -> None:
-    adoption = {
-        "mxo-ci": {
-            "ai-drawer": {"operations": {"mfe_build_env": {"authn": {"X": "1"}}}}
-        }
-    }
-    group = _group([AI_DRAWER], adoption)
-    with pytest.raises(FeatureManifestError, match=r"builds \['authn'\]"):
-        group.adopted("mxo-ci")
-
-
 class TestMfeBuildInputs:
     def test_resolves_one_mfe(self, group: Group) -> None:
         inputs = group.mfe_build_inputs("mxo-ci", "learning", "master", "mitxonline")

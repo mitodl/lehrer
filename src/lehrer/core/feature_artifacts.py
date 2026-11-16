@@ -34,6 +34,7 @@ from lehrer.core.feature_manifest import (
     ResolvedScope,
     binding_path,
     build_digest,
+    merged_build_input,
 )
 
 CONTRACT_VERSION = 1
@@ -119,26 +120,21 @@ def emit(group: Group, resolved: ResolvedScope, group_name: str) -> dict[str, st
         mfe for mfe, b in resolved.frontends.items() if binding_path(b) == "legacy"
     )
     for mfe in legacy:
-        env: dict[str, str] = {}
-        slot_files: list[dict[str, str]] = []
-        bundles: list[dict[str, str]] = []
-        for feature in resolved.features:
-            env.update(feature.mfe_build_env.get(mfe, {}))
-            assets = feature.mfe_assets.get(mfe, {})
-            slot_files += assets.get("extra_slot_files", [])
-            bundles += assets.get("extra_npm_bundles", [])
-        for key, value in env.items():
+        # The same merged input build_digest hashes, so the digest in
+        # manifest.json always describes these two files.
+        merged = merged_build_input(resolved, mfe)
+        for key, value in merged["env"].items():
             if "\n" in value:
                 msg = f"{resolved.scope}: mfe_build_env {mfe} {key} contains a newline"
                 raise FeatureManifestError(msg)
         files[f"mfe_build_env/{mfe}.env"] = "".join(
-            f"{key}={value}\n" for key, value in sorted(env.items())
+            f"{key}={value}\n" for key, value in sorted(merged["env"].items())
         )
         files[f"mfe_assets/{mfe}.yaml"] = _yaml(
             {
                 "contract_version": CONTRACT_VERSION,
-                "extra_slot_files": slot_files,
-                "extra_npm_bundles": bundles,
+                "extra_slot_files": merged["extra_slot_files"],
+                "extra_npm_bundles": merged["extra_npm_bundles"],
             }
         )
 
