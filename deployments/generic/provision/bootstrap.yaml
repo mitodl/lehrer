@@ -24,8 +24,16 @@ migrate:
 # the enterprise-integrated-channels apps of those names, without depending on
 # them. An existing database has those tables already; on a fresh one the full
 # migrate reaches the conversions first and fails with "table doesn't exist".
-# Migrating the two apps first creates the tables. Drop these two entries once
-# every release carries https://github.com/openedx/edx-enterprise/pull/2703.
+# Migrating the two apps first creates the tables.
+# enterprise comes before them: both apps depend on
+# enterprise-integrated-channels' channel_integration.0001_initial, which has a
+# foreign key to enterprise.EnterpriseCustomer but no dependency on the
+# enterprise app, so migrating them first on a fresh database fails with
+# "Related model 'enterprise.enterprisecustomer' cannot be resolved".
+# Drop all three entries once every release carries
+# https://github.com/openedx/edx-enterprise/pull/2703.
+- service: lms
+  app_label: enterprise
 - service: lms
   app_label: blackboard_channel
 - service: lms
