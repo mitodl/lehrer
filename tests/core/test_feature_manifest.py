@@ -628,6 +628,43 @@ class TestReviewRegressions:
         ):
             group.resolve("mxo-ci")
 
+    def test_a_legacy_override_inside_a_global_mapping_conflicts(self) -> None:
+        group = _group(
+            [
+                _definition(
+                    feature="a",
+                    operations={"site_config": {"mfe_config": {"CHAT": {"x": 1}}}},
+                ),
+                _definition(
+                    feature="b",
+                    operations={
+                        "site_config": {
+                            "mfe_config_overrides": {"learning": {"CHAT": 5}}
+                        }
+                    },
+                ),
+            ],
+            {"mxo-ci": {"a": {}, "b": {}}},
+        )
+        with pytest.raises(FeatureManifestError, match="legacy MFE config CHAT"):
+            group.resolve("mxo-ci")
+
+    def test_an_empty_mapping_does_not_conflict(self) -> None:
+        group = _group(
+            [
+                _definition(
+                    feature="a",
+                    operations={"site_config": {"mfe_config": {"CHAT": {}}}},
+                ),
+                _definition(
+                    feature="b",
+                    operations={"site_config": {"mfe_config": {"CHAT": {"x": 1}}}},
+                ),
+            ],
+            {"mxo-ci": {"a": {}, "b": {}}},
+        )
+        group.resolve("mxo-ci")
+
     def test_a_null_enum_omits_its_lookup(self) -> None:
         definition = _definition(
             parameters={"mode": {**MODE["mode"], "default": None}},

@@ -728,10 +728,19 @@ class _Claims:
         for target, (owner, value) in self.held.items():
             if target[0] != "legacy-config" or target[1] == "*":
                 continue
-            everywhere = shared.get(target[2:])
-            if everywhere and everywhere[0][0] != owner[0] and everywhere[1] != value:
+            path = target[2:]
+            for other, everywhere in shared.items():
+                if everywhere[0][0] == owner[0]:
+                    continue
+                depth = min(len(other), len(path))
+                if other[:depth] != path[:depth]:
+                    continue
+                # Same path: a conflict only if the values differ. One path
+                # inside the other: one replaces the other whatever they are.
+                if other == path and everywhere[1] == value:
+                    continue
                 self._refuse(
-                    f"legacy MFE config {'.'.join(target[2:])} for {target[1]}",
+                    f"legacy MFE config {'.'.join(path)} for {target[1]}",
                     everywhere,
                     (owner, value),
                 )
@@ -1195,8 +1204,12 @@ def _resolve_site_config(
 def _leaves(
     value: Any, path: tuple[str, ...] = ()
 ) -> Iterable[tuple[tuple[str, ...], Any]]:
-    """Mapping leaves individually; lists and scalars whole."""
-    if isinstance(value, dict) and value:
+    """Mapping leaves individually; lists and scalars whole.
+
+    An empty mapping yields nothing: deep-merged into the settings, it writes
+    nothing, so it cannot compete with another feature's value.
+    """
+    if isinstance(value, dict):
         for key, item in value.items():
             yield from _leaves(item, (*path, str(key)))
     else:
