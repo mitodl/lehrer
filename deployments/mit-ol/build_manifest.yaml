@@ -50,9 +50,9 @@ cells:
   - ol-social-auth==0.3.1
   - pydantic-settings[yaml]==2.16.2
   - django-aqueduct==0.15.1
-  - ol-openedx-chat==0.7.0
-  - ol-openedx-chat-xblock==0.5.0
-  - ol-openedx-feedback==0.3.1
+  - ol-openedx-chat==0.7.1
+  - ol-openedx-chat-xblock==0.5.1
+  - ol-openedx-feedback==0.3.2
   - ol-openedx-lti-utilities==0.2.1
   - ol-openedx-events-handler==0.6.1
   - ol-openedx-course-sync
@@ -67,8 +67,13 @@ cells:
   - setuptools==81.0.0
   - edx-sga==0.31.0
   - invideoquiz-xblock==2.0.0
-  - ol-openedx-canvas-integration==0.9.1
+  - ol-openedx-canvas-integration==0.10.1
   - ol-openedx-rapid-response-reports==0.6.2
+  # Held at 0.12.0 while mitxonline still loads MathJax 2.7.5 (see the
+  # xblocks-contrib pin below): 0.12.1+ (mitodl/open-edx-plugins#969) reworks
+  # rapid.js for MathJax 4 and its MathJax 2 path is untested. Bump to match
+  # the master mitx cells once mitxonline builds a platform commit that loads
+  # MathJax 4.
   - rapid-response-xblock==0.12.0
   overrides:
   # Remove once https://github.com/openedx/edx-submissions/pull/366 merges
@@ -104,7 +109,7 @@ cells:
   - edx-sysadmin==0.5.1
   - invideoquiz-xblock==2.0.0
   - nodeenv>=1.7.0
-  - ol-openedx-canvas-integration==0.9.1
+  - ol-openedx-canvas-integration==0.10.1
   - ol-openedx-course-export==0.5.0
   - ol-openedx-course-structure-api==0.3.1
   - ol-openedx-logging==0.4.0
@@ -115,9 +120,9 @@ cells:
   - pip==26.2
   - pydantic-settings[yaml]==2.16.2
   - django-aqueduct==0.15.1
-  - rapid-response-xblock==0.12.0
-  - ol-openedx-chat==0.7.0
-  - ol-openedx-chat-xblock==0.5.0
+  - rapid-response-xblock==0.12.2
+  - ol-openedx-chat==0.7.1
+  - ol-openedx-chat-xblock==0.5.1
   - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
@@ -143,7 +148,7 @@ cells:
   - edx-sysadmin==0.5.1
   - invideoquiz-xblock==2.0.0
   - nodeenv>=1.7.0
-  - ol-openedx-canvas-integration==0.9.1
+  - ol-openedx-canvas-integration==0.10.1
   - ol-openedx-course-export==0.5.0
   - ol-openedx-course-structure-api==0.3.1
   - ol-openedx-git-auto-export==0.12.0
@@ -154,9 +159,9 @@ cells:
   - pip==26.2
   - pydantic-settings[yaml]==2.16.2
   - django-aqueduct==0.15.1
-  - rapid-response-xblock==0.12.0
-  - ol-openedx-chat==0.7.0
-  - ol-openedx-chat-xblock==0.5.0
+  - rapid-response-xblock==0.12.2
+  - ol-openedx-chat==0.7.1
+  - ol-openedx-chat-xblock==0.5.1
   - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
@@ -192,8 +197,8 @@ cells:
   - ol-social-auth==0.3.1
   - openedx-scorm-xblock==19.0.5
   - pydantic-settings[yaml]==2.16.2
-  - ol-openedx-chat==0.7.0
-  - ol-openedx-chat-xblock==0.5.0
+  - ol-openedx-chat==0.7.1
+  - ol-openedx-chat-xblock==0.5.1
   - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
@@ -222,7 +227,7 @@ cells:
   - edx-sysadmin==0.5.1
   - invideoquiz-xblock==2.0.0
   - nodeenv>=1.7.0
-  - ol-openedx-canvas-integration==0.9.1
+  - ol-openedx-canvas-integration==0.10.1
   - ol-openedx-course-export==0.5.0
   - ol-openedx-course-structure-api==0.3.1
   - ol-openedx-logging==0.4.0
@@ -232,9 +237,12 @@ cells:
   - pip==26.2
   - pydantic-settings[yaml]==2.16.2
   - django-aqueduct==0.15.1
+  # Held at 0.12.0 while this release loads MathJax 2: 0.12.1+
+  # (mitodl/open-edx-plugins#969) reworks rapid.js for MathJax 4 and its
+  # MathJax 2 path is untested.
   - rapid-response-xblock==0.12.0
-  - ol-openedx-chat==0.7.0
-  - ol-openedx-chat-xblock==0.5.0
+  - ol-openedx-chat==0.7.1
+  - ol-openedx-chat-xblock==0.5.1
   - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
@@ -269,7 +277,7 @@ cells:
   - edx-sysadmin==0.5.1
   - invideoquiz-xblock==2.0.0
   - nodeenv>=1.7.0
-  - ol-openedx-canvas-integration==0.9.1
+  - ol-openedx-canvas-integration==0.10.1
   - ol-openedx-course-export==0.5.0
   - ol-openedx-course-structure-api==0.3.1
   - ol-openedx-git-auto-export==0.12.0
@@ -280,9 +288,12 @@ cells:
   - pip==26.2
   - pydantic-settings[yaml]==2.16.2
   - django-aqueduct==0.15.1
+  # Held at 0.12.0 while this release loads MathJax 2: 0.12.1+
+  # (mitodl/open-edx-plugins#969) reworks rapid.js for MathJax 4 and its
+  # MathJax 2 path is untested.
   - rapid-response-xblock==0.12.0
-  - ol-openedx-chat==0.7.0
-  - ol-openedx-chat-xblock==0.5.0
+  - ol-openedx-chat==0.7.1
+  - ol-openedx-chat-xblock==0.5.1
   - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
@@ -328,8 +339,8 @@ cells:
   - openedx-scorm-xblock==19.0.5
   - pydantic-settings[yaml]==2.16.2
   - django-aqueduct==0.15.1
-  - ol-openedx-chat==0.7.0
-  - ol-openedx-chat-xblock==0.5.0
+  - ol-openedx-chat==0.7.1
+  - ol-openedx-chat-xblock==0.5.1
   - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
   - opentelemetry-distro
   - opentelemetry-exporter-otlp-proto-http
