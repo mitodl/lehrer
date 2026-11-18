@@ -138,6 +138,36 @@ def test_write_refuses_a_foreign_directory(group: Group, tmp_path: Path) -> None
     assert (tmp_path / "keep.txt").exists()
 
 
+def test_write_refuses_a_manifest_json_compile_did_not_write(
+    group: Group, tmp_path: Path
+) -> None:
+    (tmp_path / "manifest.json").write_text('{"name": "web app"}')
+    (tmp_path / "settings").mkdir()
+    (tmp_path / "settings" / "keep.txt").write_text("x")
+    with pytest.raises(FeatureManifestError, match="refusing"):
+        write(_emitted(group), tmp_path)
+    assert (tmp_path / "settings" / "keep.txt").exists()
+
+
+def test_write_refuses_a_file(group: Group, tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    out.write_text("x")
+    with pytest.raises(FeatureManifestError, match="not a directory"):
+        write(_emitted(group), out)
+
+
+def test_an_env_key_must_be_an_environment_variable_name() -> None:
+    drawer = {
+        **AI_DRAWER,
+        "operations": {"mfe_build_env": {"learning": {"A=B": "1"}}},
+    }
+    group = _group([drawer], {"mxo-ci": {"ai-drawer": {}}})
+    with pytest.raises(FeatureManifestError, match="not an environment variable"):
+        group.resolve("mxo-ci")
+    with pytest.raises(FeatureManifestError, match="not an environment variable"):
+        group.mfe_build_inputs("mxo-ci", "learning", "master", "mitxonline")
+
+
 class TestMfeBuildInputs:
     def test_resolves_one_mfe(self, group: Group) -> None:
         inputs = group.mfe_build_inputs("mxo-ci", "learning", "master", "mitxonline")
@@ -157,6 +187,17 @@ class TestMfeBuildInputs:
         group = _group([], {})
         with pytest.raises(FeatureManifestError, match="Site Project"):
             group.mfe_build_inputs("site-ci", "learning", "master", "mitxonline")
+
+    def test_refuses_a_feature_without_its_required_features(self) -> None:
+        dependent = {
+            **AI_DRAWER,
+            "requires": {**AI_DRAWER["requires"], "features": ["thing"]},
+        }
+        group = _group([_definition(), dependent], {"mxo-ci": {"ai-drawer": {}}})
+        with pytest.raises(
+            FeatureManifestError, match=r"requires features \['thing'\]"
+        ):
+            group.mfe_build_inputs("mxo-ci", "learning", "master", "mitxonline")
 
 
 class _Dir:

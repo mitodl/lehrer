@@ -942,17 +942,22 @@ class Group:
             self._resolve_feature(scope, cell, frontends, adoption)
             for adoption in adopted.values()
         ]
-        for feature in features:
-            missing = set(feature.requires.features) - set(adopted)
-            if missing:
-                msg = (
-                    f"{scope}: {feature.feature} requires features "
-                    f"{sorted(missing)}, which this scope does not adopt"
-                )
-                raise FeatureManifestError(msg)
+        self._check_required_features(scope, adopted)
         resolved = ResolvedScope(scope, cell, frontends, features)
         resolved.owners = self._conflicts(resolved)
         return resolved
+
+    def _check_required_features(
+        self, scope: str, adopted: Mapping[str, Adoption]
+    ) -> None:
+        for name in adopted:
+            missing = set(self.definitions[name].model.requires.features) - set(adopted)
+            if missing:
+                msg = (
+                    f"{scope}: {name} requires features "
+                    f"{sorted(missing)}, which this scope does not adopt"
+                )
+                raise FeatureManifestError(msg)
 
     def _resolve_feature(
         self,
@@ -1196,6 +1201,7 @@ class Group:
                 f"build is {release}/{deployment}"
             )
             raise FeatureManifestError(msg)
+        self._check_required_features(scope, adopted)
         frontends = self.scopes.scopes[scope].frontends
         if mfe in frontends and binding_path(frontends[mfe]) != "legacy":
             msg = f"scope {scope!r} builds {mfe!r} as a Site Project, not a legacy MFE"
@@ -1303,6 +1309,11 @@ class Group:
 
 
 def _env_value(where: str, key: str, value: Any) -> str:
+    # Written as KEY=VALUE lines, so a key holding "=" or a newline would be
+    # misread by whatever splits them.
+    if not _ENV_NAME.fullmatch(key):
+        msg = f"{where}: mfe_build_env {key!r} is not an environment variable name"
+        raise FeatureManifestError(msg)
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, (str, int)):

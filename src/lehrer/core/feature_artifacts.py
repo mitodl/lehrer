@@ -210,16 +210,38 @@ def emit(group: Group, resolved: ResolvedScope, group_name: str) -> dict[str, st
     return files
 
 
+def _is_compile_output(out: Path) -> bool:
+    """Whether ``out`` holds a ``manifest.json`` that compile wrote.
+
+    A web or static tree often has a ``manifest.json`` of its own, so the
+    name alone does not mark a directory as compile's.
+    """
+    try:
+        manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    except (FileNotFoundError, IsADirectoryError, json.JSONDecodeError):
+        return False
+    return isinstance(manifest, dict) and {"contract_version", "generated_from"} <= set(
+        manifest
+    )
+
+
 def write(files: Mapping[str, str], out: Path) -> None:
     """Write ``files`` under ``out``, replacing a previous compile's output.
 
-    Refuses a non-empty directory that holds no ``manifest.json``, so a
-    mistyped ``--out`` cannot delete anything compile did not write. Within
-    a previous output only the entries in :data:`MANAGED` are replaced, so
-    an MFE dropped from the scope does not leave a stale file behind.
+    Refuses a non-empty directory unless it holds a ``manifest.json`` compile
+    wrote, so a mistyped ``--out`` cannot delete anything compile did not
+    write. Within a previous output only the entries in :data:`MANAGED` are
+    replaced, so an MFE dropped from the scope does not leave a stale file
+    behind.
     """
-    if out.exists() and any(out.iterdir()) and not (out / "manifest.json").is_file():
-        msg = f"{out} is not empty and holds no manifest.json; refusing to overwrite it"
+    if out.exists() and not out.is_dir():
+        msg = f"{out} is not a directory"
+        raise FeatureManifestError(msg)
+    if out.exists() and any(out.iterdir()) and not _is_compile_output(out):
+        msg = (
+            f"{out} is not empty and holds no manifest.json from "
+            "`lehrer features compile`; refusing to overwrite it"
+        )
         raise FeatureManifestError(msg)
     for name in MANAGED:
         target = out / name
