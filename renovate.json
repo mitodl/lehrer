@@ -21,12 +21,6 @@
       "description": "Bump react-router, react-router-dom, and @remix-run/router together. Updating only one leaves the others pinned to an older exact version in the lockfile, which npm cannot dedupe against the bumped package - producing two separate copies of react-router with two distinct DataRouterContext instances, and a hard crash on every page (see mitodl/lehrer#75)."
     },
     {
-      "matchFileNames": ["deployments/mit-ol/build_manifest.yaml"],
-      "matchDepNames": ["xblocks-contrib"],
-      "enabled": false,
-      "description": "mitxonline pins xblocks-contrib to 1.0.7, the last release that works with MathJax 2, while it is held at an edx-platform commit that still loads MathJax 2.7.5. Remove this rule together with that pin."
-    },
-    {
       "matchDepNames": ["setuptools", "pip", "wheel"],
       "enabled": false,
       "description": "setuptools is deliberately pinned <82 for pkg_resources; pip/wheel are managed manually. Renovate must not bump these in build_manifest.yaml."
