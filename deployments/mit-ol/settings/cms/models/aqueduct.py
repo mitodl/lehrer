@@ -808,6 +808,10 @@ class AqueductSettings(BaseSettings):
                 "openedx.core.apidocs.untag_deprecated_operations",
             ],
             "SCHEMA_PATH_PREFIX": "/api/(contentstore|authoring)",
+            "ENUM_NAME_OVERRIDES": {
+                "ContentTypeEnum": ["video/mp4", "video/webm", "video/ogg"],
+                "VideoUploadContentTypeEnum": "cms.djangoapps.contentstore.rest_api.v1.serializers.video_uploads.SUPPORTED_UPLOAD_CONTENT_TYPES",  # noqa: E501
+            },
             "SWAGGER_UI_DIST": "SIDECAR",
             "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
             "REDOC_DIST": "SIDECAR",
