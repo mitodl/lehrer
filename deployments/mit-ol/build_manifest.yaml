@@ -223,7 +223,7 @@ cells:
   # Held at 0.12.0 while this release loads MathJax 2: 0.12.1+
   # (mitodl/open-edx-plugins#969) reworks rapid.js for MathJax 4 and its
   # MathJax 2 path is untested.
-  - rapid-response-xblock==0.12.0
+  - rapid-response-xblock==0.12.2
   - ol-openedx-chat==0.7.1
   - ol-openedx-chat-xblock==0.5.1
   - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
@@ -274,7 +274,7 @@ cells:
   # Held at 0.12.0 while this release loads MathJax 2: 0.12.1+
   # (mitodl/open-edx-plugins#969) reworks rapid.js for MathJax 4 and its
   # MathJax 2 path is untested.
-  - rapid-response-xblock==0.12.0
+  - rapid-response-xblock==0.12.2
   - ol-openedx-chat==0.7.1
   - ol-openedx-chat-xblock==0.5.1
   - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
