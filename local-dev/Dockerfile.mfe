@@ -1,4 +1,4 @@
-FROM nginx:1.31-alpine@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3
+FROM nginx:1.31-alpine@sha256:fb4658584bd9a916ffb6f6e365f97c25cfdb2923801f551ea08356e695f14ff7
 # dist/ is pre-exported by `dagger call mfe build-site ... export --path ...`
 # into local-dev/tmp-dist/<site-name>/dist/ and the build context is set to
 # local-dev/tmp-dist/<site-name>/ so that this COPY picks it up correctly.
