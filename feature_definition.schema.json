@@ -1,0 +1,342 @@
+{
+  "$defs": {
+    "Command": {
+      "additionalProperties": false,
+      "description": "Work that cannot converge on declared state. Listed, never run.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "service": {
+          "title": "Service",
+          "type": "string"
+        },
+        "argv": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Argv",
+          "type": "array"
+        },
+        "recurring": {
+          "default": false,
+          "title": "Recurring",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "service",
+        "argv"
+      ],
+      "title": "Command",
+      "type": "object"
+    },
+    "MfeBuildConfig": {
+      "additionalProperties": false,
+      "description": "Per-MFE build customizations, keyed by MFE application name.",
+      "properties": {
+        "extra_slot_files": {
+          "description": "Files injected from the slot config into the MFE root before building. A plain string copies a file as-is, or use 'source:dest' to rename on copy; a mapping selects the source by release name.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/SlotFileByRelease"
+              }
+            ]
+          },
+          "title": "Extra Slot Files",
+          "type": "array"
+        },
+        "extra_npm_bundles": {
+          "description": "Pre-built npm bundles to pack and copy as static assets. Each entry has the form 'npm_package_spec|target_directory'.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra Npm Bundles",
+          "type": "array"
+        }
+      },
+      "title": "MfeBuildConfig",
+      "type": "object"
+    },
+    "Operations": {
+      "additionalProperties": false,
+      "description": "A feature's complete fan-out.\n\nValues may use ``${parameter}`` or a ``{by_parameter, cases}`` lookup on\nan enum parameter (except inside ``mfe_assets``, which takes\n``${parameter}`` in strings only).",
+      "properties": {
+        "settings": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "propertyNames": {
+            "enum": [
+              "lms",
+              "cms"
+            ]
+          },
+          "title": "Settings",
+          "type": "object"
+        },
+        "features": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "description": "FEATURES dict entries.",
+          "propertyNames": {
+            "enum": [
+              "lms",
+              "cms"
+            ]
+          },
+          "title": "Features",
+          "type": "object"
+        },
+        "bootstrap": {
+          "additionalProperties": true,
+          "description": "A lehrer.bootstrap BootstrapSpec fragment.",
+          "title": "Bootstrap",
+          "type": "object"
+        },
+        "mfe_build_env": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "description": "Build-time env vars per legacy MFE.",
+          "title": "Mfe Build Env",
+          "type": "object"
+        },
+        "mfe_assets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/MfeBuildConfig"
+          },
+          "description": "Slot files and npm bundles per legacy MFE.",
+          "title": "Mfe Assets",
+          "type": "object"
+        },
+        "site_config": {
+          "additionalProperties": true,
+          "description": "Runtime config API keys: frontend_site_config, mfe_config, mfe_config_overrides, or by_release over blocks of those.",
+          "title": "Site Config",
+          "type": "object"
+        },
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/Command"
+          },
+          "title": "Commands",
+          "type": "array"
+        }
+      },
+      "title": "Operations",
+      "type": "object"
+    },
+    "Parameter": {
+      "additionalProperties": false,
+      "description": "A typed value a definition accepts from adoption.",
+      "properties": {
+        "type": {
+          "enum": [
+            "integer",
+            "string",
+            "boolean",
+            "enum"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "choices": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Allowed values; required for, and only for, enum.",
+          "title": "Choices"
+        },
+        "default": {
+          "default": null,
+          "description": "Value when adoption supplies none. Null omits every key that uses it. Leave unset to make the parameter required.",
+          "title": "Default"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Parameter",
+      "type": "object"
+    },
+    "Requires": {
+      "additionalProperties": false,
+      "description": "What must hold wherever the feature is adopted. Not overridable.",
+      "properties": {
+        "plugins": {
+          "description": "Distributions the scope's build cell must install.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Plugins",
+          "type": "array"
+        },
+        "services": {
+          "description": "Services the deployment must run, e.g. notes.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Services",
+          "type": "array"
+        },
+        "frontends": {
+          "description": "MFEs the feature touches; each must be in the scope's frontends.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Frontends",
+          "type": "array"
+        },
+        "features": {
+          "description": "Features that must also be adopted in the same scope.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Features",
+          "type": "array"
+        },
+        "secret_settings": {
+          "description": "Secret-valued settings the operator supplies out of band.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Secret Settings",
+          "type": "array"
+        }
+      },
+      "title": "Requires",
+      "type": "object"
+    },
+    "SlotFileByRelease": {
+      "additionalProperties": false,
+      "description": "A slot file whose source filename is selected by Open edX release name.",
+      "properties": {
+        "dest": {
+          "description": "Destination filename, relative to the MFE build root.",
+          "title": "Dest",
+          "type": "string"
+        },
+        "by_release": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Map of release name to source filename in the slot config. The 'default' key is the fallback used when no release matches.",
+          "minProperties": 1,
+          "title": "By Release",
+          "type": "object"
+        }
+      },
+      "required": [
+        "dest",
+        "by_release"
+      ],
+      "title": "SlotFileByRelease",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The contract for one feature, independent of where it is on.",
+  "properties": {
+    "version": {
+      "const": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "feature": {
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "title": "Feature",
+      "type": "string"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    },
+    "origin": {
+      "enum": [
+        "upstream",
+        "plugin",
+        "operator"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
+    "provided_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The distribution; required when origin is plugin.",
+      "title": "Provided By"
+    },
+    "frontend_paths": {
+      "items": {
+        "enum": [
+          "legacy",
+          "site"
+        ],
+        "type": "string"
+      },
+      "title": "Frontend Paths",
+      "type": "array"
+    },
+    "parameters": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Parameter"
+      },
+      "title": "Parameters",
+      "type": "object"
+    },
+    "requires": {
+      "$ref": "#/$defs/Requires"
+    },
+    "operations": {
+      "$ref": "#/$defs/Operations"
+    }
+  },
+  "required": [
+    "version",
+    "feature",
+    "summary",
+    "origin"
+  ],
+  "title": "FeatureDefinition",
+  "type": "object"
+}

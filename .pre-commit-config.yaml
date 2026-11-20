@@ -134,6 +134,12 @@ repos:
       \ json_schema; print(json.dumps(json_schema(), indent=2))\" > bootstrap.schema.json'"
     files: ^(src/lehrer/bootstrap/spec\.py|bootstrap\.schema\.json)$
     pass_filenames: false
+  - id: feature-manifest-schema
+    name: regenerate feature manifest JSON schemas from the Pydantic models
+    language: system
+    entry: "uv run python -m lehrer.core.feature_manifest"
+    files: ^(src/lehrer/(core/(feature_manifest|mfe_config)|bootstrap/spec)\.py|feature_[a-z]+\.schema\.json)$
+    pass_filenames: false
 - repo: https://github.com/hadolint/hadolint
   rev: v2.15.1
   hooks:

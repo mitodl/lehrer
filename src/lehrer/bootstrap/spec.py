@@ -29,12 +29,13 @@ import only pydantic, PyYAML and the standard library.
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+import string
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 STEPS = (
     "migrate",
@@ -47,6 +48,42 @@ STEPS = (
 )
 """Step names in the order they run. Everything after migrate needs the schema,
 and OAuth applications are owned by a user, so users come before them."""
+
+PLACEHOLDER_SETTINGS = frozenset(
+    {"LMS_ROOT_URL", "CMS_ROOT_URL", "EDXNOTES_CLIENT_NAME"}
+)
+"""Django settings a spec may reference as ``{SETTING}``.
+
+An allowlist rather than any identifier: the runner prints each resolved OAuth
+application name in its report and stores resolved redirect URIs where any
+Django admin can read them, so ``{SECRET_KEY}`` would publish the secret.
+Widening this is a reviewed change to lehrer, not something a spec can do.
+"""
+
+
+def _check_placeholders(template: str) -> str:
+    """Return ``template`` if every ``{...}`` in it is an allowlisted bare name.
+
+    ``str.format_map`` would also honour attribute and index lookups
+    (``{X.y}``, ``{X[0]}``), conversions and format specs, none of which a spec
+    needs and each of which widens what a placeholder can reach.
+    """
+    try:
+        fields = list(string.Formatter().parse(template))
+    except ValueError as error:
+        msg = f"{template!r} is not a valid template: {error}"
+        raise ValueError(msg) from None
+    for _, name, spec, conversion in fields:
+        if name is None:
+            continue
+        if spec or conversion or name not in PLACEHOLDER_SETTINGS:
+            msg = (
+                f"{template!r} references {{{name}}}; a spec may only reference "
+                f"one of {', '.join(sorted(PLACEHOLDER_SETTINGS))} as a bare "
+                "{SETTING}"
+            )
+            raise ValueError(msg)
+    return template
 
 
 class Migration(BaseModel):
@@ -171,6 +208,16 @@ class OAuthApplication(BaseModel):
         default=False, description="Public client type; confidential otherwise."
     )
 
+    @field_validator("name")
+    @classmethod
+    def _name_placeholders(cls, value: str) -> str:
+        return _check_placeholders(value)
+
+    @field_validator("redirect_uris")
+    @classmethod
+    def _redirect_uri_placeholders(cls, value: list[str]) -> list[str]:
+        return [_check_placeholders(uri) for uri in value]
+
 
 class ThirdPartyAuthProvider(BaseModel):
     """An ``OAuth2ProviderConfig``: an external IdP the LMS federates login to.
@@ -222,6 +269,14 @@ class ThirdPartyAuthProvider(BaseModel):
     )
     skip_email_verification: bool = True
     sync_learner_profile_data: bool = False
+    optional: bool = Field(
+        default=True,
+        description=(
+            "Skip the entry when its variables are unset or empty. False makes "
+            "that an error, which is what a feature's entries need: a skipped "
+            "provider is a feature that silently is not there."
+        ),
+    )
 
 
 class ServiceAccessToken(BaseModel):
@@ -272,6 +327,13 @@ class ServiceAccessToken(BaseModel):
         description=(
             "Lifetime from apply time. Long by default: this stands in for a "
             "credential a deployed environment would hold in a secret store."
+        ),
+    )
+    optional: bool = Field(
+        default=True,
+        description=(
+            "Skip the entry when token_env is unset or empty. False makes that "
+            "an error."
         ),
     )
 
@@ -368,10 +430,175 @@ class BootstrapSpec(BaseModel):
     waffle_flags: list[WaffleFlag] = Field(default_factory=list)
     demo_course: DemoCourse | None = None
 
+    @model_validator(mode="after")
+    def _identities_are_unique(self) -> BootstrapSpec:
+        """Collapse repeated entries and refuse ones that disagree.
+
+        Each list is applied by upserting on one key, so two entries sharing
+        it would have the second silently rewrite the first. Identical
+        repeats are harmless and are collapsed, which is what lets the same
+        flag arrive from two features (or a feature and a base spec) at all.
+        Run on every spec, so a hand-written file and a :func:`merge` result
+        fail the same way.
+        """
+        for field, key in IDENTITIES.items():
+            setattr(self, field, _collapse(field, getattr(self, field), key))
+        self.migrate = _collapse(
+            "migrate", self.migrate, lambda m: tuple(m.model_dump().items())
+        )
+
+        _unique(
+            "oauth_applications.client_id_env",
+            [(a.client_id_env, a.name) for a in self.oauth_applications],
+        )
+        app_names = {a.name for a in self.oauth_applications}
+        user_names = {u.username for u in self.users}
+        _unique(
+            "service_access_tokens.application_name",
+            [(t.application_name, t.username) for t in self.service_access_tokens],
+        )
+        for token in self.service_access_tokens:
+            # Each of these is upserted by name by another step, so the
+            # second write would reassign what the first created.
+            if token.application_name in app_names:
+                msg = (
+                    f"service_access_tokens {token.username!r} names application "
+                    f"{token.application_name!r}, which oauth_applications also "
+                    "declares"
+                )
+                raise ValueError(msg)
+            if token.username in user_names:
+                msg = (
+                    f"service_access_tokens {token.username!r} is also declared "
+                    "under users; the token step owns its account"
+                )
+                raise ValueError(msg)
+        return self
+
+
+IDENTITIES: dict[str, Callable[[Any], object]] = {
+    "users": lambda e: e.username,
+    "oauth_applications": lambda e: e.name,
+    "third_party_auth_providers": lambda e: e.backend_name,
+    "service_access_tokens": lambda e: e.username,
+    "waffle_flags": lambda e: e.name,
+}
+"""The key each list is upserted on, and so compared on when specs combine.
+
+``third_party_auth_providers`` is keyed on ``backend_name``, not ``slug``: the
+runner looks up the newest row for ``(SITE_ID, backend_name)``.
+"""
+
+
+# A TypeVar rather than PEP 695 `def _collapse[T: ...]`: this package is
+# compiled into every platform image, and ulmo's runs Python 3.11.
+_Entry = TypeVar("_Entry", bound=BaseModel)
+
+
+def _collapse(
+    field: str, entries: list[_Entry], key: Callable[[_Entry], object]
+) -> list[_Entry]:
+    kept: dict[object, _Entry] = {}
+    for entry in entries:
+        identity = key(entry)
+        if identity not in kept:
+            kept[identity] = entry
+        elif kept[identity].model_dump() != entry.model_dump():
+            msg = (
+                f"{field}: two entries for {identity!r} differ: "
+                f"{kept[identity].model_dump(exclude_defaults=True)} vs "
+                f"{entry.model_dump(exclude_defaults=True)}"
+            )
+            raise ValueError(msg)
+    return list(kept.values())
+
+
+def _unique(what: str, pairs: list[tuple[str, str]]) -> None:
+    """Refuse two different owners sharing one value of ``what``."""
+    owners: dict[str, str] = {}
+    for value, owner in pairs:
+        if owners.setdefault(value, owner) != owner:
+            msg = f"{what} {value!r} is used by both {owners[value]!r} and {owner!r}"
+            raise ValueError(msg)
+
+
+def merge(*specs: BootstrapSpec) -> BootstrapSpec:
+    """Combine specs in order into one, refusing any conflict.
+
+    Lists concatenate and then go through the same identity checks as a
+    single spec. ``demo_course`` is one value, so two specs that set it must
+    agree. The runner and ``lehrer features compile`` both call this, so the
+    two cannot disagree about what a set of specs means.
+    """
+    combined: dict[str, Any] = {}
+    for spec in specs:
+        for field in BootstrapSpec.model_fields:
+            value = getattr(spec, field)
+            if field == "demo_course":
+                if value is None:
+                    continue
+                if combined.get(field, value) != value:
+                    msg = (
+                        f"demo_course differs between specs: "
+                        f"{combined[field].model_dump()} vs {value.model_dump()}"
+                    )
+                    raise ValueError(msg)
+                combined[field] = value
+            else:
+                combined.setdefault(field, []).extend(value)
+    return BootstrapSpec.model_validate(
+        {
+            field: [e.model_dump() for e in value] if isinstance(value, list) else value
+            for field, value in combined.items()
+        }
+    )
+
+
+FRAGMENT_FIELDS = frozenset(
+    {
+        "users",
+        "oauth_applications",
+        "third_party_auth_providers",
+        "service_access_tokens",
+        "waffle_flags",
+    }
+)
+"""What a feature's fragment may declare. Migrations and the demo course are
+the operator's to schedule, not something one feature can add."""
+
+
+def check_fragment(spec: BootstrapSpec) -> None:
+    """Refuse what only an operator's base spec may declare.
+
+    A superuser or a password is the operator's decision. Other privilege (a
+    staff service account, a long-lived token) stays allowed and is listed by
+    ``lehrer features explain``.
+    """
+    extra = [
+        field
+        for field in BootstrapSpec.model_fields
+        if field not in FRAGMENT_FIELDS and getattr(spec, field)
+    ]
+    if extra:
+        msg = f"a feature fragment may not declare {', '.join(extra)}"
+        raise ValueError(msg)
+    for user in spec.users:
+        if user.superuser or user.password_env:
+            msg = (
+                f"users {user.username!r}: superuser and password_env belong to "
+                "the operator's base spec, not a feature fragment"
+            )
+            raise ValueError(msg)
+
 
 def load(path: str | Path) -> BootstrapSpec:
     """Read and validate a bootstrap spec from a YAML file."""
     return BootstrapSpec.model_validate(yaml.safe_load(Path(path).read_text()) or {})
+
+
+def load_all(paths: list[str] | list[Path]) -> BootstrapSpec:
+    """Read several specs and :func:`merge` them in the order given."""
+    return merge(*(load(path) for path in paths))
 
 
 def from_env(name: str) -> str:
