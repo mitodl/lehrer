@@ -473,9 +473,11 @@ const checkContactUsGate = (courseKey) => {
   gateSeq += 1;
   const mySeq = gateSeq;
   gateLastCheck = Date.now();
+  // Send the session cookie: the LMS redirects anonymous requests on this path
+  // to SSO login, which fails CORS and hides the launcher.
   fetch(
     `${getConfig().LMS_BASE_URL}/ol-openedx-chat/api/contact-us-enabled/${courseKey}`,
-    { credentials: 'omit' },
+    { credentials: 'include' },
   )
     .then((response) => (response.ok ? response.json() : null))
     .then((data) => {
