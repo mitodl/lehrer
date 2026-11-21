@@ -35,8 +35,26 @@ data:
   MONGODB_REPLICASET: "mongodb"
   MONGODB_AUTH_SOURCE: "admin"
 
-  ELASTIC_SEARCH_HOST: "opensearch-cluster-master.openedx.svc.cluster.local"
-  ELASTIC_SEARCH_PORT: "9200"
+  # Typesense (local-dev/manifests/search/typesense.yaml) as edx-search's
+  # engine. The CMS indexes courseware through it on publish only once
+  # ENABLE_COURSEWARE_INDEX is on, which local dev leaves at its default
+  # (off). TYPESENSE_API_KEY comes from openedx-secrets.
+  SEARCH_ENGINE: "search.typesense.TypesenseEngine"
+  TYPESENSE_URLS: '["http://typesense.openedx.svc.cluster.local:8108"]'
+  TYPESENSE_COLLECTION_PREFIX: "openedx_"
+
+  # Studio content search (Libraries V2) on Meilisearch
+  # (local-dev/manifests/search/meilisearch.yaml). MEILISEARCH_API_KEY comes
+  # from openedx-secrets; the meilisearch-key Job creates it. The CMS migrate
+  # creates and configures the indexes in a post_migrate hook, and runs under
+  # edxapp-migrate with lms-config's environment, so job-migrate.yaml maps
+  # ENABLED and URL from here rather than restating them.
+  MEILISEARCH_ENABLED: "true"
+  MEILISEARCH_URL: "http://meilisearch.openedx.svc.cluster.local:7700"
+  # The browser queries Meilisearch directly with a tenant token Studio signs.
+  # lehrer-core.star port-forwards 7700 when Traefik is the ingress; a caller
+  # with its own ingress overrides this.
+  MEILISEARCH_PUBLIC_URL: "http://localhost:7700"
 
   LMS_BASE_URL: "http://localhost:8000"
   CMS_BASE_URL: "http://localhost:8010"

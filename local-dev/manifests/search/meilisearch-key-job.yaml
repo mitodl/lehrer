@@ -1,0 +1,77 @@
+---
+# Creates the Meilisearch API key Studio and notes present (MEILISEARCH_API_KEY
+# in openedx-secrets), with a fixed uid so its value is known in advance:
+# Meilisearch derives a key's value as hex(HMAC-SHA256(master key, uid)).
+# mitodl/ol-infrastructure#7097 proposes creating edxapp's production key the
+# same way, with the same uid.
+#
+# 201 creates it and 409 means it already exists; either way the Job then
+# reads the key back and fails if its value is not MEILISEARCH_API_KEY, which
+# is what an overridden MEILISEARCH_MASTER_KEY without a matching
+# MEILISEARCH_API_KEY looks like. The key lives in Meilisearch's data
+# directory, so trigger this Job again after that volume is deleted.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: meilisearch-key
+  namespace: openedx
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: meilisearch-key
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: create-key
+        # Same image as the server, for its curl.
+        image: docker.io/getmeili/meilisearch:v1.56.2
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          base=http://meilisearch.openedx.svc.cluster.local:7700
+          uid=be0444d7-0b85-4dde-a512-0fd3e205902a
+          # The master key goes in a header file rather than argv, where any
+          # process listing would show it.
+          printf 'Authorization: Bearer %s\n' "$MEILISEARCH_MASTER_KEY" > /tmp/auth
+          code=$(curl -sS -o /tmp/response -w '%{http_code}' -H @/tmp/auth \
+            -H 'Content-Type: application/json' --data "$KEY_REQUEST" "$base/keys")
+          case "$code" in
+            201|409) echo "==> Meilisearch key $uid present (HTTP $code)" ;;
+            *) echo "==> creating the Meilisearch key failed (HTTP $code)"
+               cat /tmp/response
+               exit 1 ;;
+          esac
+          curl -sSf -o /tmp/key -H @/tmp/auth "$base/keys/$uid"
+          if ! grep -q "\"key\":\"$MEILISEARCH_API_KEY\"" /tmp/key; then
+            echo "==> Meilisearch key $uid does not match MEILISEARCH_API_KEY." \
+                 "MEILISEARCH_API_KEY has to be hex(HMAC-SHA256(MEILISEARCH_MASTER_KEY, $uid));" \
+                 "see local-dev/secret-defaults.yaml."
+            exit 1
+          fi
+          echo "==> MEILISEARCH_API_KEY matches"
+        env:
+        - name: MEILISEARCH_MASTER_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openedx-secrets
+              key: MEILISEARCH_MASTER_KEY
+        - name: MEILISEARCH_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openedx-secrets
+              key: MEILISEARCH_API_KEY
+        - name: KEY_REQUEST
+          value: >-
+            {"uid": "be0444d7-0b85-4dde-a512-0fd3e205902a",
+            "name": "edxapp", "description": "Studio content search and notes",
+            "actions": ["*"], "indexes": ["*"], "expiresAt": null}
+        resources:
+          requests:
+            memory: "16Mi"
+            cpu: "10m"
+          limits:
+            memory: "64Mi"

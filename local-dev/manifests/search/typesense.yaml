@@ -1,0 +1,85 @@
+---
+# Typesense backs forum search (openedx-forum's TypesenseBackend) and is
+# edx-search's engine (TypesenseEngine) for courseware search, which local dev
+# leaves switched off (ENABLE_COURSEWARE_INDEX / ENABLE_COURSEWARE_SEARCH).
+# edx-search has a Typesense engine from 5.0.0, which master and verawood pin;
+# Ulmo's 4.4.0 has none.
+#
+# lehrer runs it in its own namespace whether or not it manages the rest of the
+# infrastructure: a cluster this stack composes into (ol-infrastructure's
+# local-dev) has no Typesense of its own.
+#
+# A StatefulSet so the forum collection survives a pod restart. The
+# edxapp-search-indices Job creates it when `tilt up` starts; after that the
+# Job waits for a trigger, so an emptied data directory leaves the forum
+# without its collection until the Job is triggered again.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: typesense
+  namespace: openedx
+spec:
+  serviceName: typesense
+  replicas: 1
+  selector:
+    matchLabels:
+      app: typesense
+  template:
+    metadata:
+      labels:
+        app: typesense
+    spec:
+      containers:
+      - name: typesense
+        # The version ol-infrastructure's edxapp clusters run
+        # (TYPESENSE_VERSION in src/bridge/lib/versions.py).
+        image: docker.io/typesense/typesense:30.2
+        args:
+        - --data-dir=/data
+        - --api-port=8108
+        env:
+        - name: TYPESENSE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openedx-secrets
+              key: TYPESENSE_API_KEY
+        ports:
+        - containerPort: 8108
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8108
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "512Mi"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: typesense
+  namespace: openedx
+spec:
+  selector:
+    app: typesense
+  ports:
+  - name: http
+    port: 8108
+    targetPort: 8108
+  type: ClusterIP

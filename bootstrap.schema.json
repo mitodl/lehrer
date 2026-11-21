@@ -145,6 +145,20 @@
       "title": "OAuthApplication",
       "type": "object"
     },
+    "SearchIndices": {
+      "additionalProperties": false,
+      "description": "Search indexes a service writes to without creating them first.",
+      "properties": {
+        "forum": {
+          "default": false,
+          "description": "Create openedx-forum's indexes in whichever backend FORUM_SEARCH_BACKEND names, with initialize_forum_indices. Its Typesense backend upserts into a collection it never creates, so every post fails to index until this has run. Existing indexes are left in place.",
+          "title": "Forum",
+          "type": "boolean"
+        }
+      },
+      "title": "SearchIndices",
+      "type": "object"
+    },
     "ServiceAccessToken": {
       "additionalProperties": false,
       "description": "A long-lived OAuth2 bearer token for an upstream service integration.\n\nSome integrations do not perform an OAuth2 exchange at all: they are handed\none opaque token and send it as ``Authorization: Bearer`` forever. MITx\nOnline's ``OPENEDX_SERVICE_WORKER_API_TOKEN`` is the example -- it is read\nstraight out of settings and used to enrol learners through the LMS API, so\nwithout a matching ``AccessToken`` row here every enrolment silently fails\nand the upstream records ``edx_enrolled=False``.\n\nSelf-contained on purpose: the entry owns its service account and its\napplication as well as the token, because all three exist only to serve one\nintegration and should appear and disappear together. **Skipped entirely\nwhen ``token_env`` is unset or empty**, so an install with no such\nintegration does not grow an unused staff account.\n\nThe account gets an unusable password: it authenticates only by this token.",
@@ -432,6 +446,9 @@
       },
       "title": "Waffle Flags",
       "type": "array"
+    },
+    "search_indices": {
+      "$ref": "#/$defs/SearchIndices"
     },
     "demo_course": {
       "anyOf": [

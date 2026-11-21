@@ -3,9 +3,9 @@
 #
 # What a fresh local-dev database needs before the stack is usable, applied
 # with the lehrer_bootstrap runner baked into the platform image
-# (src/lehrer/bootstrap). Three Jobs each run a slice of it: edxapp-migrate
-# (migrate), edxapp-provision (users through waffle_flags) and
-# edxapp-demo-course (demo_course). Every step is idempotent, so trigger the
+# (src/lehrer/bootstrap). Four Jobs each run a slice of it: edxapp-migrate
+# (migrate), edxapp-search-indices (search_indices), edxapp-provision (users
+# through waffle_flags) and edxapp-demo-course (demo_course). Every step is idempotent, so trigger the
 # matching Job again after editing this file.
 #
 # Values ending in _env name a key of the openedx-secrets Secret
@@ -143,6 +143,11 @@ waffle_flags:
   everyone: true
 - name: notifications.enable_notifications
   everyone: true
+
+# The forum's Typesense backend (FORUM_SEARCH_BACKEND in local-dev's
+# lms-config) upserts into a collection it never creates.
+search_indices:
+  forum: true
 
 # Branch probed from the platform's RELEASE_LINE; set branch: to pin one.
 demo_course: {}

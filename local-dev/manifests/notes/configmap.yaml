@@ -20,12 +20,11 @@ data:
   DB_USER: "edxapp"
   DB_PORT: "3306"
 
-  # Substituted by lehrer-core.star from the caller's opensearch_host, since a
-  # caller sharing an existing OpenSearch (ol-infrastructure does) runs it
-  # outside this namespace.
-  ELASTICSEARCH_DSL_HOST: "__OPENSEARCH_HOST__"
-  ELASTICSEARCH_DSL_PORT: "9200"
-  ELASTICSEARCH_DSL_USE_SSL: "false"
-  ELASTICSEARCH_DSL_VERIFY_CERTS: "false"
+  # Search on Meilisearch (local-dev/manifests/search/meilisearch.yaml).
+  # env_config.py only takes the Meilisearch path with Elasticsearch
+  # disabled. MEILISEARCH_API_KEY comes from openedx-secrets.
+  ELASTICSEARCH_DSL_DISABLED: "true"
+  MEILISEARCH_ENABLED: "true"
+  MEILISEARCH_URL: "http://meilisearch.openedx.svc.cluster.local:7700"
 
   ALLOWED_HOSTS: "*"

@@ -434,6 +434,17 @@ class ProductionSettingsMixin(BaseSettings):
     # common.py's memcached on localhost:11211.
     CACHE_REDIS_DB: int | None = Field(default=None)
 
+    # Typesense connection for openedx-forum's TypesenseBackend and edx-search's
+    # TypesenseEngine, which read these three directly off settings. Neither
+    # openedx/envs/common.py nor either plugin's plugin_settings() assigns
+    # them, so codegen never declares them and a ConfigMap could not set them
+    # otherwise. Both readers are reached only when FORUM_SEARCH_BACKEND or
+    # SEARCH_ENGINE names the Typesense class, so None here reads the same as
+    # the setting being absent.
+    TYPESENSE_URLS: list[str] | None = Field(default=None)
+    TYPESENSE_API_KEY: str | None = Field(default=None)
+    TYPESENSE_COLLECTION_PREFIX: str | None = Field(default=None)
+
     # JWT signing keys — merged into JWT_AUTH by merge_jwt_signing_keys. JWT_AUTH
     # is a common.py dict the model never declares, so only a post_configure
     # hook can see it to merge into; a validator here would replace it whole.

@@ -508,6 +508,18 @@ def apply_demo_course(spec: BootstrapSpec, settings: Any) -> None:  # noqa: ARG0
     _report("demo_course", f"{declared.repo}@{branch}", "imported")
 
 
+def apply_search_indices(spec: BootstrapSpec, settings: Any) -> None:  # noqa: ARG001
+    if not spec.search_indices.forum:
+        return
+    # Without --force, which would drop and recreate an existing index.
+    subprocess.run(  # noqa: S603
+        _manage("lms", "initialize_forum_indices"),
+        check=True,
+        stdout=sys.stderr,
+    )
+    _report("search_indices", "forum", "applied")
+
+
 IN_PROCESS = {
     "users",
     "oauth_applications",
@@ -519,6 +531,7 @@ IN_PROCESS = {
 
 APPLY = {
     "migrate": apply_migrate,
+    "search_indices": apply_search_indices,
     "users": apply_users,
     "oauth_applications": apply_oauth_applications,
     "third_party_auth_providers": apply_third_party_auth_providers,

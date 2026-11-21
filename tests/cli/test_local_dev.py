@@ -437,6 +437,7 @@ class TestProvisioningManifests:
                     "waffle_flags",
                 },
             ),
+            ("job-search-indices.yaml", {"search_indices"}),
             ("job-demo-course.yaml", {"demo_course"}),
         ],
     )
@@ -455,7 +456,7 @@ class TestProvisioningManifests:
         # migrate and import the demo course.
         assert command[4] == "--steps"
         assert set(command[5].split(",")) == steps
-        env = {e["name"]: e["value"] for e in container["env"]}
+        env = {e["name"]: e.get("value") for e in container["env"]}
         assert env["DJANGO_SETTINGS_MODULE"].endswith(".envs.aqueduct")
 
     def test_the_jobs_split_the_spec_between_them(self) -> None:
@@ -463,6 +464,7 @@ class TestProvisioningManifests:
         for manifest in (
             "job-migrate.yaml",
             "job-provision.yaml",
+            "job-search-indices.yaml",
             "job-demo-course.yaml",
         ):
             command = _manifest(manifest)["spec"]["template"]["spec"]["containers"][0][
@@ -1340,6 +1342,7 @@ class TestConfigOverrideLayer:
             ("deployment-cms-worker.yaml", "cms"),
             ("job-migrate.yaml", "lms"),
             ("job-provision.yaml", "lms"),
+            ("job-search-indices.yaml", "lms"),
             # Reads cms-config, so its override must be the cms one — naming it
             # from the filename gets this wrong.
             ("job-demo-course.yaml", "cms"),
@@ -1367,6 +1370,7 @@ class TestConfigOverrideLayer:
             "deployment-cms-worker.yaml",
             "job-migrate.yaml",
             "job-provision.yaml",
+            "job-search-indices.yaml",
             "job-demo-course.yaml",
         ],
     )
@@ -1668,7 +1672,9 @@ esac
         # pod runs as app, which can only replace it, not write into it.
         assert f'"cp --remove-destination {lms}" +\n            " {cms}"' in star
 
-    @pytest.mark.parametrize("job", ["edxapp-migrate", "edxapp-provision"])
+    @pytest.mark.parametrize(
+        "job", ["edxapp-migrate", "edxapp-search-indices", "edxapp-provision"]
+    )
     def test_platform_image_jobs_wait_for_a_trigger(self, job: str) -> None:
         # A finished Job's pod cannot be live-updated, and Tilt rebuilds the
         # image for that resource instead, undoing the live update.
@@ -1687,7 +1693,12 @@ esac
             if doc and "openedx-platform" in json.dumps(doc)
         }
         # edxapp-demo-course is manual already (it clones over the network).
-        assert jobs == {"edxapp-migrate", "edxapp-provision", "edxapp-demo-course"}
+        assert jobs == {
+            "edxapp-migrate",
+            "edxapp-search-indices",
+            "edxapp-provision",
+            "edxapp-demo-course",
+        }
 
 
 # Real first lines from each tool, so a format change shows up as a parse

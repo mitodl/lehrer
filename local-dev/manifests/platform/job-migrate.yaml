@@ -43,14 +43,29 @@ spec:
         # (cms.envs.aqueduct for the CMS).
         - name: DJANGO_SETTINGS_MODULE
           value: "lms.envs.aqueduct"
+        # The CMS migrate creates and configures Studio's Meilisearch indexes
+        # in a post_migrate hook, which runs only when the CMS settings see
+        # Meilisearch enabled. Those settings live in cms-config, which this
+        # Job does not read; mapped here instead of restated in lms-config.
+        # MEILISEARCH_API_KEY arrives with openedx-secrets.
+        - name: MEILISEARCH_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: cms-config
+              key: MEILISEARCH_ENABLED
+        - name: MEILISEARCH_URL
+          valueFrom:
+            configMapKeyRef:
+              name: cms-config
+              key: MEILISEARCH_URL
         envFrom:
         - configMapRef:
             name: lms-config
         - secretRef:
             name: openedx-secrets
         # Last wins: a caller composing this stack into its own cluster
-        # supplies only the keys it needs to change (shared Valkey/
-        # OpenSearch hosts, public URLs) instead of copying the whole
+        # supplies only the keys it needs to change (the shared Valkey
+        # host, public URLs) instead of copying the whole
         # ConfigMap above and drifting from it.
         - configMapRef:
             name: lms-config-overrides

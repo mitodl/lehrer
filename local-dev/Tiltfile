@@ -43,7 +43,6 @@ setup({
     "deploy_config":   cfg.get("deployment-config") or config.main_dir + "/../deployments/generic",
     "registry":        "localhost:5100",
     "registry_k8s":    "lehrer-registry:5000",
-    "opensearch_host": "opensearch-cluster-master.openedx.svc.cluster.local",
     "namespace":       "openedx",
     "manage_infra":    True,
     "mysql_managed":   True,

@@ -12,8 +12,8 @@ When a step runs is the caller's decision, not the spec's: a caller passes
 ``--steps`` (e.g. migrate on every deploy, the demo course only when a
 developer asks for it), so one spec serves all of them.
 
-The same file drives local dev (the edxapp-migrate, edxapp-provision and
-edxapp-demo-course Jobs), a deployed environment's pre-deploy Job, and later
+The same file drives local dev (the edxapp-migrate, edxapp-search-indices,
+edxapp-provision and edxapp-demo-course Jobs), a deployed environment's pre-deploy Job, and later
 an operator reconciling the same fields from a CRD, so that none of them
 carries bootstrap logic of its own.
 
@@ -38,6 +38,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 STEPS = (
     "migrate",
+    "search_indices",
     "users",
     "oauth_applications",
     "third_party_auth_providers",
@@ -45,8 +46,9 @@ STEPS = (
     "waffle_flags",
     "demo_course",
 )
-"""Step names in the order they run. Everything after migrate needs the schema,
-and OAuth applications are owned by a user, so users come before them."""
+"""Step names in the order they run. Everything after migrate needs the schema
+(search_indices only for the system checks its manage.py child runs), and OAuth
+applications are owned by a user, so users come before them."""
 
 
 class Migration(BaseModel):
@@ -106,6 +108,23 @@ class DemoCourse(BaseModel):
             "Branch to import. Omitted, the first of release/<line>, "
             "open-release/<line>.master and <line> that exists, where <line> is "
             "the platform's own RELEASE_LINE (e.g. verawood, master)."
+        ),
+    )
+
+
+class SearchIndices(BaseModel):
+    """Search indexes a service writes to without creating them first."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    forum: bool = Field(
+        default=False,
+        description=(
+            "Create openedx-forum's indexes in whichever backend "
+            "FORUM_SEARCH_BACKEND names, with initialize_forum_indices. Its "
+            "Typesense backend upserts into a collection it never creates, so "
+            "every post fails to index until this has run. Existing indexes "
+            "are left in place."
         ),
     )
 
@@ -366,6 +385,7 @@ class BootstrapSpec(BaseModel):
     )
     service_access_tokens: list[ServiceAccessToken] = Field(default_factory=list)
     waffle_flags: list[WaffleFlag] = Field(default_factory=list)
+    search_indices: SearchIndices = Field(default_factory=SearchIndices)
     demo_course: DemoCourse | None = None
 
 
