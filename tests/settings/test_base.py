@@ -49,6 +49,9 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "SOCIAL_AUTH_REDIRECT_IS_HTTPS",
         "SOCIAL_AUTH_EDX_OAUTH2_KEY",
         "SOCIAL_AUTH_EDX_OAUTH2_PUBLIC_URL_ROOT",
+        "TYPESENSE_URLS",
+        "TYPESENSE_API_KEY",
+        "TYPESENSE_COLLECTION_PREFIX",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -629,6 +632,17 @@ class TestDropUnservableSpectacularAssets:
         }
         apply_base_post_configure(merged, ProductionSettingsMixin())
         assert merged["SPECTACULAR_SETTINGS"] == {"TITLE": "Authoring API"}
+
+
+def test_typesense_settings_arrive_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The values local-dev's platform ConfigMaps and openedx-secrets supply.
+    monkeypatch.setenv("TYPESENSE_URLS", '["http://typesense:8108"]')
+    monkeypatch.setenv("TYPESENSE_API_KEY", "key")  # pragma: allowlist secret
+    monkeypatch.setenv("TYPESENSE_COLLECTION_PREFIX", "openedx_")
+    settings = ProductionSettingsMixin()
+    assert settings.TYPESENSE_URLS == ["http://typesense:8108"]
+    assert settings.TYPESENSE_API_KEY == "key"  # pragma: allowlist secret
+    assert settings.TYPESENSE_COLLECTION_PREFIX == "openedx_"
 
 
 def test_redirect_is_https_parses_false(monkeypatch: pytest.MonkeyPatch) -> None:

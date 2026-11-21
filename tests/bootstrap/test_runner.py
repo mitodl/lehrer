@@ -277,3 +277,34 @@ def test_demo_course_reports_nothing_when_the_import_fails(
     with pytest.raises(subprocess.CalledProcessError):
         runner.apply_demo_course(spec, None)
     assert capsys.readouterr().out == ""
+
+
+def test_search_indices_initializes_the_forum_indexes_without_force(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "lms.envs.aqueduct")
+    commands: list[list[str]] = []
+
+    def run(command: list[str], **_: Any) -> SimpleNamespace:
+        commands.append(command)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(runner.subprocess, "run", run)
+    spec = BootstrapSpec.model_validate({"search_indices": {"forum": True}})
+    runner.apply_search_indices(spec, None)
+
+    (manage,) = commands
+    assert manage[1:4] == ["manage.py", "lms", "initialize_forum_indices"]
+    # --force drops and recreates an index that already holds posts.
+    assert "--force" not in manage
+    assert _lines(capsys) == [
+        {"step": "search_indices", "target": "forum", "result": "applied"}
+    ]
+
+
+def test_search_indices_does_nothing_unless_declared(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(runner.subprocess, "run", pytest.fail)
+    runner.apply_search_indices(BootstrapSpec(), None)
+    assert capsys.readouterr().out == ""

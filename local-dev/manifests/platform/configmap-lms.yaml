@@ -39,9 +39,18 @@ data:
   MONGODB_REPLICASET: "mongodb"
   MONGODB_AUTH_SOURCE: "admin"
 
-  # OpenSearch
-  ELASTIC_SEARCH_HOST: "opensearch-cluster-master.openedx.svc.cluster.local"
-  ELASTIC_SEARCH_PORT: "9200"
+  # Typesense (local-dev/manifests/search/typesense.yaml) for forum search,
+  # and as edx-search's engine for courseware search, which stays off until
+  # ENABLE_COURSEWARE_SEARCH is turned on. TYPESENSE_API_KEY comes from
+  # openedx-secrets; TYPESENSE_URLS is JSON because the field is list[str].
+  #
+  # FORUM_SEARCH_BACKEND is set rather than left to forum's plugin_settings(),
+  # which picks its backend from TYPESENSE_ENABLED and then MEILISEARCH_ENABLED
+  # and so would follow Studio's Meilisearch flag wherever both are on.
+  FORUM_SEARCH_BACKEND: "forum.search.typesense.TypesenseBackend"
+  SEARCH_ENGINE: "search.typesense.TypesenseEngine"
+  TYPESENSE_URLS: '["http://typesense.openedx.svc.cluster.local:8108"]'
+  TYPESENSE_COLLECTION_PREFIX: "openedx_"
 
   # Codejail service
   CODE_JAIL_REST_SERVICE_HOST: "http://codejail.openedx.svc.cluster.local:8000"

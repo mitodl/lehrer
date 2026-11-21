@@ -14,12 +14,8 @@
 #     "deploy_config":   "/abs/path/to/deployments/generic",
 #     "registry":        "localhost:5100",         # host-side push URL
 #     "registry_k8s":    "lehrer-registry:5000",   # cluster-side pull URL
-#     # Host for the notes ConfigMap. The platform's own OpenSearch/Redis/URL
-#     # settings come from the platform configmaps, which a caller running on
-#     # different infrastructure supplies itself (apply_platform_configmaps).
-#     "opensearch_host": "opensearch-cluster-master.openedx.svc.cluster.local",
 #     "namespace":       "openedx",
-#     "manage_infra":    True,   # install MySQL/MongoDB/Redis/OpenSearch via Helm
+#     "manage_infra":    True,   # install MySQL/MongoDB/Redis via Helm
 #     "mysql_managed":   True,   # install MySQL (independent of manage_infra)
 #     "mongo_managed":   True,   # install MongoDB (independent of manage_infra)
 #     "ingress":         "traefik",   # or "apisix"
@@ -200,7 +196,6 @@ def setup(cfg):
     release_name = take("release_name")
     deploy_name = take("deploy_name")
     settings_ns = take("settings_ns")
-    opensearch_host = take("opensearch_host")
     notes_repo = take("notes_repo")
     helm_override_dir = take("helm_override_dir")
     local_dev = take("local_dev_dir")
@@ -284,12 +279,6 @@ def setup(cfg):
     # resources named in its resource_deps, so every chart install names its
     # repo there; otherwise it races the add and fails with "repo not found".
 
-    helm_repo(
-        "opensearch-helm",
-        "https://opensearch-project.github.io/helm-charts",
-        labels=["infra"],
-    )
-
     # The MariaDB CR reads MYSQL_ROOT_PASSWORD from this Secret and the MongoDB
     # CR reads MONGO_PASSWORD, so it has to land before either operator CR is
     # applied — hence its own resource, named in their resource_deps below.
@@ -371,18 +360,6 @@ def setup(cfg):
             resource_deps=["valkey"],
             labels=["infra"],
         )
-        helm_resource(
-            "opensearch",
-            "opensearch-helm/opensearch",
-            namespace=namespace,
-            flags=[
-                "--values",
-                helm_values("opensearch-values.yaml"),
-                "--create-namespace",
-            ],
-            resource_deps=["opensearch-helm"],
-            labels=["infra"],
-        )
 
     # Platform depends on the database CRs being submitted (not just the operators),
     # so Tilt won't start platform pods before the MariaDB/MongoDB CRDs exist.
@@ -393,7 +370,32 @@ def setup(cfg):
         infra_deps.append("mongodb-cr")
     if manage_infra:
         infra_deps.append("redis")
-        infra_deps.append("opensearch")
+
+    # Typesense (forum search, and edx-search's engine) and Meilisearch (notes
+    # and Studio content search) are not gated on manage_infra: a cluster this
+    # stack composes into runs neither, so lehrer runs both in its own
+    # namespace either way. Their keys come from openedx-secrets.
+    k8s_yaml(local_dev + "/manifests/search/typesense.yaml")
+    k8s_resource("typesense", resource_deps=secret_deps, labels=["infra"])
+    k8s_yaml(local_dev + "/manifests/search/meilisearch.yaml")
+    # The browser queries Meilisearch directly (MEILISEARCH_PUBLIC_URL in
+    # cms-config). Behind Traefik that is this port-forward; a caller with its
+    # own ingress routes to the Service and overrides the URL instead.
+    k8s_resource(
+        "meilisearch",
+        port_forwards=["7700:7700"] if ingress == "traefik" else [],
+        resource_deps=secret_deps,
+        labels=["infra"],
+    )
+    # Studio and notes both fail without their API key, so everything that
+    # waits for Meilisearch waits for the key.
+    k8s_yaml(local_dev + "/manifests/search/meilisearch-key-job.yaml")
+    k8s_resource(
+        "meilisearch-key",
+        resource_deps=["meilisearch"],
+        labels=["infra"],
+    )
+    infra_deps += ["typesense", "meilisearch", "meilisearch-key"]
 
     # ------------------------------------------------------------------ #
     # Namespace
@@ -420,7 +422,8 @@ def setup(cfg):
     # - assets.py, i18n.py, the *.env.yml files and build_manifest.yaml feed
     #   collectstatic or dependency resolution.
     # - lehrer_bootstrap (src/lehrer/bootstrap) is run by the edxapp-migrate,
-    #   edxapp-provision and edxapp-demo-course Jobs, whose pods start from the
+    #   edxapp-search-indices, edxapp-provision and edxapp-demo-course Jobs,
+    #   whose pods start from the
     #   image, so an edit has to reach the image. Nothing long-running imports
     #   it, set_waffle_flags.py, process_scheduled_emails.py or saml_pull.py,
     #   so syncing them would only update copies nothing executes.
@@ -701,9 +704,10 @@ def setup(cfg):
         "sha256sum " + provision_dir + "/bootstrap.yaml | cut -c1-16",
         quiet=True,
     )).strip()
-    k8s_yaml(blob(str(read_file(
-        local_dev + "/manifests/platform/job-provision.yaml"
-    )).replace("__BOOTSTRAP_SPEC_CHECKSUM__", bootstrap_spec_checksum)))
+    for spec_job in ["job-provision.yaml", "job-search-indices.yaml"]:
+        k8s_yaml(blob(str(read_file(
+            local_dev + "/manifests/platform/" + spec_job
+        )).replace("__BOOTSTRAP_SPEC_CHECKSUM__", bootstrap_spec_checksum)))
 
     k8s_yaml(local_dev + "/manifests/platform/job-demo-course.yaml")
     k8s_yaml(local_dev + "/manifests/platform/service-lms.yaml")
@@ -749,7 +753,7 @@ def setup(cfg):
             local_dev + "/manifests/platform/" + name
         )).replace("__PLATFORM_CONFIG_CHECKSUM__", platform_config_checksum)))
 
-    # The spec all three Jobs mount. Its own resource, applied automatically,
+    # The spec all four Jobs mount. Its own resource, applied automatically,
     # because each Job resource waits for a trigger after the first run and
     # would hold back a spec edit until then. Attached to edxapp-provision, it
     # would also never be applied ahead of edxapp-migrate, which needs it first.
@@ -783,6 +787,16 @@ def setup(cfg):
     # stack is not usable until it has run, so it gates them too.
     k8s_resource(
         "edxapp-provision",
+        resource_deps=["edxapp-migrate", "edxapp-bootstrap-spec"],
+        trigger_mode=TRIGGER_MODE_MANUAL,
+        labels=["platform"],
+    )
+
+    # The forum's search collection. Not in platform_deps: a cell whose forum
+    # cannot use the configured backend (Ulmo, see job-search-indices.yaml)
+    # fails this Job and nothing else.
+    k8s_resource(
+        "edxapp-search-indices",
         resource_deps=["edxapp-migrate", "edxapp-bootstrap-spec"],
         trigger_mode=TRIGGER_MODE_MANUAL,
         labels=["platform"],
@@ -845,20 +859,14 @@ def setup(cfg):
     # ------------------------------------------------------------------ #
 
     notes_configmap = local_dev + "/manifests/notes/configmap.yaml"
-    k8s_yaml(blob(str(read_file(notes_configmap)).replace(
-        "__OPENSEARCH_HOST__", opensearch_host
-    )))
+    k8s_yaml(notes_configmap)
     k8s_yaml(local_dev + "/manifests/notes/job-migrate.yaml")
 
     # Stamp the ConfigMap's hash into the notes pod template. Without it a
     # config edit re-runs notes-migrate against the new values while the
     # running pod keeps the old ones — envFrom does not trigger a rollout.
-    # Hashed over the file *and* the substituted host, so changing either
-    # rolls the pod; hashing the file alone would miss an opensearch_host
-    # change.
     notes_config_checksum = str(local(
-        "{ cat " + notes_configmap + "; printf '%s' '" + opensearch_host +
-        "'; } | sha256sum | cut -c1-16",
+        "sha256sum " + notes_configmap + " | cut -c1-16",
         quiet=True,
     )).strip()
     k8s_yaml(blob(str(read_file(
