@@ -2034,6 +2034,11 @@ class AqueductSettings(BaseSettings):
         json_schema_extra={"aqueduct_plugin": "openedx-platform"},
         description=".. toggle_name: DISPLAY_ANALYTICS_ENROLLMENTS\n.. toggle_implementation: DjangoSetting\n.. toggle_default: True\n.. toggle_description: Enable display of enrollment counts in instructor dashboard and\nanalytics section.\n.. toggle_use_cases: opt_out\n.. toggle_creation_date: 2014-11-12\n.. toggle_tickets: https://github.com/openedx/edx-platform/pull/5838",  # noqa: E501
     )
+    ENABLE_ASYNC_ANSWER_DISTRIBUTION: bool = Field(
+        default=False,
+        json_schema_extra={"aqueduct_plugin": "openedx-platform"},
+        description=".. toggle_name: ENABLE_ASYNC_ANSWER_DISTRIBUTION\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When enabled, the Data Download tab of the instructor dashboard\nshows a paragraph above the report list explaining that the answer distribution report\nis generated several times a day by an external background process and is cumulative.\nThe platform does not generate that report; this flag only adds the explanatory text\nfor deployments that produce it elsewhere.\n.. toggle_use_cases: opt_in\n.. toggle_creation_date: 2014-03-18",  # noqa: E501
+    )
     ENABLE_AUTOMATED_SIGNUPS_EXTRA_FIELDS: bool = Field(
         default=False,
         json_schema_extra={"aqueduct_plugin": "openedx-platform"},
