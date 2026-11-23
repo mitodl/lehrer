@@ -9,6 +9,7 @@ import pytest
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from lehrer.core.settings_inventory import module_fields
 from lehrer.settings import base
 from lehrer.settings.base import (
     ProductionSettingsMixin,
@@ -418,21 +419,17 @@ def _declared_field(path: Path, name: str) -> tuple[str, dict[str, Any]]:
     edx-platform symbols, neither of which this suite has. Keywords whose value
     is not a literal (``default_factory=lambda: ...``) are omitted.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.AnnAssign)
-            and isinstance(node.target, ast.Name)
-            and node.target.id == name
-        ):
-            kwargs: dict[str, Any] = {}
-            for kw in getattr(node.value, "keywords", []):
-                try:
-                    kwargs[str(kw.arg)] = ast.literal_eval(kw.value)
-                except ValueError:
-                    continue
-            return ast.unparse(node.annotation), kwargs
-    pytest.fail(f"{name} is not declared in {path}")
+    declared = module_fields(path).get(name)
+    if declared is None:
+        pytest.fail(f"{name} is not declared in {path}")
+    node = declared.statement
+    kwargs: dict[str, Any] = {}
+    for kw in getattr(node.value, "keywords", []):
+        try:
+            kwargs[str(kw.arg)] = ast.literal_eval(kw.value)
+        except ValueError:
+            continue
+    return ast.unparse(node.annotation), kwargs
 
 
 @pytest.mark.parametrize(

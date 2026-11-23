@@ -32,6 +32,7 @@ Top-level command groups:
 | `lehrer dev`    | Manage the local k3d Open edX dev environment |
 | `lehrer build`  | Run the Dagger build pipelines |
 | `lehrer compat` | Enumerate the build cells a diff affects, for the CI matrices |
+| `lehrer features` | Validate and inspect feature manifests (`plans/08-feature-manifest.md`) |
 
 ### Local development
 
