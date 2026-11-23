@@ -231,7 +231,10 @@ All four edxapp Jobs apply a slice of the selected deployment's
 unless `--deployment-config` names another), picked with `--steps`:
 
 - `edxapp-migrate` runs its `migrate` step: LMS and CMS migrations, and the
-  csmh database, which `migrate` never touches unless asked by alias.
+  csmh database, which `migrate` never touches unless asked by alias. The LMS
+  entries run in an init container with the LMS's ConfigMaps, then the CMS
+  entries (`--service cms`) with Studio's, so the CMS `post_migrate` hook
+  creates Studio's search indexes from the settings Studio itself runs with.
   `enterprise` and then two enterprise-integrated-channels apps are migrated
   first: two edx-enterprise migrations alter those apps' tables without
   depending on them, and the apps in turn need `enterprise`'s tables without

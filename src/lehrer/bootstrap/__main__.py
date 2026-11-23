@@ -7,6 +7,9 @@ run ``manage.py`` from there)::
     DJANGO_SETTINGS_MODULE=lms.envs.aqueduct \\
         python -m lehrer_bootstrap /path/to/bootstrap.yaml [--steps users,waffle_flags]
 
+``--steps migrate --service cms`` runs only the CMS migrations, for a process
+given Studio's environment rather than the LMS's.
+
 Every step converges the database on the spec, so re-running it is safe. Each
 object applied prints one JSON line on stdout (``{"step", "target",
 "result"}``), which is what a Job's caller, and later an operator, reads to
@@ -559,8 +562,23 @@ def main(argv: list[str] | None = None) -> int:
         default=list(STEPS),
         help=f"Comma-separated subset of {','.join(STEPS)}. Always run in that order.",
     )
+    parser.add_argument(
+        "--service",
+        choices=("lms", "cms"),
+        help=(
+            "With --steps migrate only: run just this service's migrate entries, "
+            "so each service can migrate in a process given its own environment."
+        ),
+    )
     args = parser.parse_args(argv)
     spec = load(args.spec)
+    if args.service:
+        if args.steps != ["migrate"]:
+            parser.error("--service applies only to --steps migrate")
+        migrate = [m for m in spec.migrate if m.service == args.service]
+        if not migrate:
+            parser.error(f"the spec has no migrate entries for {args.service}")
+        spec = spec.model_copy(update={"migrate": migrate})
 
     import django  # type: ignore[import-not-found]  # noqa: PLC0415
     from django.conf import settings  # type: ignore[import-not-found]  # noqa: PLC0415

@@ -24,8 +24,14 @@ spec:
         app: edxapp-migrate
     spec:
       restartPolicy: Never
-      containers:
-      - name: migrate
+      # Each service migrates in its own container, under the environment its
+      # Deployment runs with: the CMS migrate's post_migrate hook creates
+      # Studio's Meilisearch indexes from Studio's settings, so it has to see
+      # cms-config and cms-config-overrides, not the LMS's. The LMS goes first,
+      # as an init container, matching the spec, which lists the default
+      # database's LMS migrations ahead of the CMS's.
+      initContainers:
+      - name: migrate-lms
         # Image tag is managed by Tilt via custom_build (same ref as the
         # platform deployments).
         image: openedx-platform
@@ -36,28 +42,13 @@ spec:
         - /openedx/bootstrap/bootstrap.yaml
         - --steps
         - migrate
+        - --service
+        - lms
         env:
         # The runner calls django.setup() directly rather than going through
         # manage.py, so the settings module has to come from the environment.
-        # It runs each migrate under the matching service's module
-        # (cms.envs.aqueduct for the CMS).
         - name: DJANGO_SETTINGS_MODULE
           value: "lms.envs.aqueduct"
-        # The CMS migrate creates and configures Studio's Meilisearch indexes
-        # in a post_migrate hook, which runs only when the CMS settings see
-        # Meilisearch enabled. Those settings live in cms-config, which this
-        # Job does not read; mapped here instead of restated in lms-config.
-        # MEILISEARCH_API_KEY arrives with openedx-secrets.
-        - name: MEILISEARCH_ENABLED
-          valueFrom:
-            configMapKeyRef:
-              name: cms-config
-              key: MEILISEARCH_ENABLED
-        - name: MEILISEARCH_URL
-          valueFrom:
-            configMapKeyRef:
-              name: cms-config
-              key: MEILISEARCH_URL
         envFrom:
         - configMapRef:
             name: lms-config
@@ -69,6 +60,38 @@ spec:
         # ConfigMap above and drifting from it.
         - configMapRef:
             name: lms-config-overrides
+            optional: true
+        volumeMounts:
+        - name: bootstrap
+          mountPath: /openedx/bootstrap
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+      containers:
+      - name: migrate-cms
+        image: openedx-platform
+        command:
+        - python
+        - -m
+        - lehrer_bootstrap
+        - /openedx/bootstrap/bootstrap.yaml
+        - --steps
+        - migrate
+        - --service
+        - cms
+        env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: "cms.envs.aqueduct"
+        envFrom:
+        - configMapRef:
+            name: cms-config
+        - secretRef:
+            name: openedx-secrets
+        - configMapRef:
+            name: cms-config-overrides
             optional: true
         volumeMounts:
         - name: bootstrap

@@ -459,6 +459,32 @@ class TestProvisioningManifests:
         env = {e["name"]: e.get("value") for e in container["env"]}
         assert env["DJANGO_SETTINGS_MODULE"].endswith(".envs.aqueduct")
 
+    @pytest.mark.parametrize("deployment", _deployments(), ids=lambda d: d.name)
+    def test_migrate_runs_each_service_under_its_own_config(
+        self, deployment: Path
+    ) -> None:
+        # The CMS post_migrate hook creates Studio's Meilisearch indexes from
+        # whatever settings the migrating process has, so the CMS entries must
+        # run with the ConfigMaps Studio runs with, after the LMS's.
+        pod = _manifest("job-migrate.yaml")["spec"]["template"]["spec"]
+        ordered = pod["initContainers"] + pod["containers"]
+        services = []
+        for container in ordered:
+            command = container["command"]
+            service = command[command.index("--service") + 1]
+            services.append(service)
+            env = {e["name"]: e.get("value") for e in container["env"]}
+            assert env["DJANGO_SETTINGS_MODULE"] == f"{service}.envs.aqueduct"
+            config_maps = [
+                ref["configMapRef"]["name"]
+                for ref in container["envFrom"]
+                if "configMapRef" in ref
+            ]
+            assert config_maps == [f"{service}-config", f"{service}-config-overrides"]
+        assert services == ["lms", "cms"]
+        spec = load_bootstrap_spec(_paths.bootstrap_spec(deployment))
+        assert {m.service for m in spec.migrate} == set(services)
+
     def test_the_jobs_split_the_spec_between_them(self) -> None:
         covered = set()
         for manifest in (
@@ -1340,7 +1366,9 @@ class TestConfigOverrideLayer:
             ("deployment-cms.yaml", "cms"),
             ("deployment-worker.yaml", "lms"),
             ("deployment-cms-worker.yaml", "cms"),
+            # One container per service, each reading its own pair.
             ("job-migrate.yaml", "lms"),
+            ("job-migrate.yaml", "cms"),
             ("job-provision.yaml", "lms"),
             ("job-search-indices.yaml", "lms"),
             # Reads cms-config, so its override must be the cms one — naming it
@@ -1351,15 +1379,18 @@ class TestConfigOverrideLayer:
     def test_override_matches_the_base_configmap(
         self, manifest: str, variant: str
     ) -> None:
+        reads_variant = False
         for block in self._env_from_blocks(manifest):
             names = [
                 ref["configMapRef"]["name"] for ref in block if "configMapRef" in ref
             ]
             if f"{variant}-config" not in names:
                 continue
+            reads_variant = True
             assert f"{variant}-config-overrides" in names, (
                 f"{manifest} reads {variant}-config but offers no matching override"
             )
+        assert reads_variant, f"{manifest} does not read {variant}-config"
 
     @pytest.mark.parametrize(
         "manifest",
