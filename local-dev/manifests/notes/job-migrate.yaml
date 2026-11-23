@@ -103,9 +103,13 @@ spec:
           # here means an unreachable Meilisearch or a rejected key fails this
           # Job, which keeps the notes Deployment down, instead of surfacing as
           # a 500 on the first annotation.
+          #
+          # Saves index only from then on, so reindex() copies in the notes
+          # already in MySQL (a cluster whose notes were indexed in OpenSearch
+          # before this switch). It upserts by note id, so a rerun is harmless.
           echo "==> notes search index"
           python manage.py shell -c \
-            "from notesapi.v1.views.meilisearch import Client; print(Client().meilisearch_index.uid)"
+            "from notesapi.v1.views.meilisearch import Client, reindex; print(Client().meilisearch_index.uid); reindex()"
         envFrom:
         - configMapRef:
             name: notes-config

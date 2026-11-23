@@ -278,9 +278,11 @@ stderr.
 
 `notes-migrate` creates the tables in the `notes` database (the MariaDB CR
 creates the database and the grant, but nothing creates the schema) and the
-Meilisearch index. edx-notes-api writes to the index on every save, so the Job
-fails if Meilisearch is unreachable or rejects the key, rather than leave a
-notes service running that cannot be written to.
+Meilisearch index, then indexes the notes already in the database (on a
+cluster that used OpenSearch, those would otherwise drop out of search).
+edx-notes-api writes to the index on every save, so the Job fails if
+Meilisearch is unreachable or rejects the key, rather than leave a notes
+service running that cannot be written to.
 
 `edxapp-demo-course` resolves the demo course branch from the platform's own
 `RELEASE_LINE`, so a named-release stack does not import master content. Set
