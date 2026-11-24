@@ -328,7 +328,8 @@ def migrated_services(
         "migrate:\n"
         "- {service: lms, app_label: enterprise}\n"
         "- {service: cms, app_label: search}\n"
-        "- {service: lms, app_label: coursewarehistoryextended}\n"
+        "- {service: lms, app_label: coursewarehistoryextended,"
+        " database: student_module_history}\n"
     )
     return spec, seen
 
@@ -358,6 +359,25 @@ def test_service_refuses_steps_other_than_migrate(
     with pytest.raises(SystemExit):
         runner.main([str(spec), "--steps", "migrate,users", "--service", "cms"])
     assert seen == []
+
+
+def test_service_refuses_an_lms_entry_after_a_cms_one_on_its_database(
+    migrated_services: tuple[Path, list[str]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The LMS container runs all of its entries before the CMS container
+    # starts, so this enterprise migrate would run ahead of the CMS one the
+    # spec puts first.
+    spec, seen = migrated_services
+    spec.write_text(
+        "migrate:\n"
+        "- {service: cms, app_label: search}\n"
+        "- {service: lms, app_label: enterprise}\n"
+    )
+    with pytest.raises(SystemExit):
+        runner.main([str(spec), "--steps", "migrate", "--service", "lms"])
+    assert seen == []
+    assert "before enterprise (default)" in capsys.readouterr().err
 
 
 def test_service_refuses_a_spec_without_its_migrations(

@@ -553,6 +553,23 @@ def _parse_steps(value: str) -> list[str]:
     return steps
 
 
+def _lms_after_cms(migrate: list[Migration]) -> str | None:
+    """The first LMS entry the spec lists after a CMS entry on its database.
+
+    edxapp-migrate runs the LMS's entries (``--service lms``) to completion
+    before the CMS's, so such an entry would run earlier than the spec says.
+    Entries on different databases do not depend on each other's order.
+    """
+    cms_seen: set[str] = set()
+    for migration in migrate:
+        if migration.service == "cms":
+            cms_seen.add(migration.database)
+        elif migration.database in cms_seen:
+            label = migration.app_label or "the full LMS migrate"
+            return f"{label} ({migration.database})"
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m lehrer_bootstrap")
     parser.add_argument("spec", help="Path to a bootstrap spec (YAML).")
@@ -575,6 +592,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.service:
         if args.steps != ["migrate"]:
             parser.error("--service applies only to --steps migrate")
+        if late := _lms_after_cms(spec.migrate):
+            parser.error(
+                "--service runs every LMS entry before any CMS entry, but the spec "
+                f"lists a CMS entry before {late} on the same database. Move the "
+                "LMS entries ahead of the CMS entries for that database."
+            )
         migrate = [m for m in spec.migrate if m.service == args.service]
         if not migrate:
             parser.error(f"the spec has no migrate entries for {args.service}")
