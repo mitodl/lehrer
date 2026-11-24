@@ -471,6 +471,15 @@ class TestProvisioningManifests:
         services = []
         for container in ordered:
             command = container["command"]
+            # test_each_job_runs_its_slice_of_the_spec reads only containers[0]
+            # (the CMS), so the LMS init container's spec mount and steps are
+            # checked here.
+            assert command[:3] == ["python", "-m", "lehrer_bootstrap"]
+            mount = container["volumeMounts"][0]
+            assert command[3] == f"{mount['mountPath']}/{_paths.SPEC_NAME}"
+            volume = next(v for v in pod["volumes"] if v["name"] == mount["name"])
+            assert volume["configMap"]["name"] == "edxapp-bootstrap"
+            assert command[command.index("--steps") + 1] == "migrate"
             service = command[command.index("--service") + 1]
             services.append(service)
             env = {e["name"]: e.get("value") for e in container["env"]}
