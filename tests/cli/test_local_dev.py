@@ -437,6 +437,7 @@ class TestProvisioningManifests:
                     "waffle_flags",
                 },
             ),
+            ("job-search-indices.yaml", {"search_indices"}),
             ("job-demo-course.yaml", {"demo_course"}),
         ],
     )
@@ -455,14 +456,50 @@ class TestProvisioningManifests:
         # migrate and import the demo course.
         assert command[4] == "--steps"
         assert set(command[5].split(",")) == steps
-        env = {e["name"]: e["value"] for e in container["env"]}
+        env = {e["name"]: e.get("value") for e in container["env"]}
         assert env["DJANGO_SETTINGS_MODULE"].endswith(".envs.aqueduct")
+
+    @pytest.mark.parametrize("deployment", _deployments(), ids=lambda d: d.name)
+    def test_migrate_runs_each_service_under_its_own_config(
+        self, deployment: Path
+    ) -> None:
+        # The CMS post_migrate hook creates Studio's Meilisearch indexes from
+        # whatever settings the migrating process has, so the CMS entries must
+        # run with the ConfigMaps Studio runs with, after the LMS's.
+        pod = _manifest("job-migrate.yaml")["spec"]["template"]["spec"]
+        ordered = pod["initContainers"] + pod["containers"]
+        services = []
+        for container in ordered:
+            command = container["command"]
+            # test_each_job_runs_its_slice_of_the_spec reads only containers[0]
+            # (the CMS), so the LMS init container's spec mount and steps are
+            # checked here.
+            assert command[:3] == ["python", "-m", "lehrer_bootstrap"]
+            mount = container["volumeMounts"][0]
+            assert command[3] == f"{mount['mountPath']}/{_paths.SPEC_NAME}"
+            volume = next(v for v in pod["volumes"] if v["name"] == mount["name"])
+            assert volume["configMap"]["name"] == "edxapp-bootstrap"
+            assert command[command.index("--steps") + 1] == "migrate"
+            service = command[command.index("--service") + 1]
+            services.append(service)
+            env = {e["name"]: e.get("value") for e in container["env"]}
+            assert env["DJANGO_SETTINGS_MODULE"] == f"{service}.envs.aqueduct"
+            config_maps = [
+                ref["configMapRef"]["name"]
+                for ref in container["envFrom"]
+                if "configMapRef" in ref
+            ]
+            assert config_maps == [f"{service}-config", f"{service}-config-overrides"]
+        assert services == ["lms", "cms"]
+        spec = load_bootstrap_spec(_paths.bootstrap_spec(deployment))
+        assert {m.service for m in spec.migrate} == set(services)
 
     def test_the_jobs_split_the_spec_between_them(self) -> None:
         covered = set()
         for manifest in (
             "job-migrate.yaml",
             "job-provision.yaml",
+            "job-search-indices.yaml",
             "job-demo-course.yaml",
         ):
             command = _manifest(manifest)["spec"]["template"]["spec"]["containers"][0][
@@ -1338,8 +1375,11 @@ class TestConfigOverrideLayer:
             ("deployment-cms.yaml", "cms"),
             ("deployment-worker.yaml", "lms"),
             ("deployment-cms-worker.yaml", "cms"),
+            # One container per service, each reading its own pair.
             ("job-migrate.yaml", "lms"),
+            ("job-migrate.yaml", "cms"),
             ("job-provision.yaml", "lms"),
+            ("job-search-indices.yaml", "lms"),
             # Reads cms-config, so its override must be the cms one — naming it
             # from the filename gets this wrong.
             ("job-demo-course.yaml", "cms"),
@@ -1348,15 +1388,18 @@ class TestConfigOverrideLayer:
     def test_override_matches_the_base_configmap(
         self, manifest: str, variant: str
     ) -> None:
+        reads_variant = False
         for block in self._env_from_blocks(manifest):
             names = [
                 ref["configMapRef"]["name"] for ref in block if "configMapRef" in ref
             ]
             if f"{variant}-config" not in names:
                 continue
+            reads_variant = True
             assert f"{variant}-config-overrides" in names, (
                 f"{manifest} reads {variant}-config but offers no matching override"
             )
+        assert reads_variant, f"{manifest} does not read {variant}-config"
 
     @pytest.mark.parametrize(
         "manifest",
@@ -1367,6 +1410,7 @@ class TestConfigOverrideLayer:
             "deployment-cms-worker.yaml",
             "job-migrate.yaml",
             "job-provision.yaml",
+            "job-search-indices.yaml",
             "job-demo-course.yaml",
         ],
     )
@@ -1668,7 +1712,9 @@ esac
         # pod runs as app, which can only replace it, not write into it.
         assert f'"cp --remove-destination {lms}" +\n            " {cms}"' in star
 
-    @pytest.mark.parametrize("job", ["edxapp-migrate", "edxapp-provision"])
+    @pytest.mark.parametrize(
+        "job", ["edxapp-migrate", "edxapp-search-indices", "edxapp-provision"]
+    )
     def test_platform_image_jobs_wait_for_a_trigger(self, job: str) -> None:
         # A finished Job's pod cannot be live-updated, and Tilt rebuilds the
         # image for that resource instead, undoing the live update.
@@ -1687,7 +1733,12 @@ esac
             if doc and "openedx-platform" in json.dumps(doc)
         }
         # edxapp-demo-course is manual already (it clones over the network).
-        assert jobs == {"edxapp-migrate", "edxapp-provision", "edxapp-demo-course"}
+        assert jobs == {
+            "edxapp-migrate",
+            "edxapp-search-indices",
+            "edxapp-provision",
+            "edxapp-demo-course",
+        }
 
 
 # Real first lines from each tool, so a format change shows up as a parse

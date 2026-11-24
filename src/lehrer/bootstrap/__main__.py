@@ -7,6 +7,9 @@ run ``manage.py`` from there)::
     DJANGO_SETTINGS_MODULE=lms.envs.aqueduct \\
         python -m lehrer_bootstrap /path/to/bootstrap.yaml [--steps users,waffle_flags]
 
+``--steps migrate --service cms`` runs only the CMS migrations, for a process
+given Studio's environment rather than the LMS's.
+
 Every step converges the database on the spec, so re-running it is safe. Each
 object applied prints one JSON line on stdout (``{"step", "target",
 "result"}``), which is what a Job's caller, and later an operator, reads to
@@ -508,6 +511,18 @@ def apply_demo_course(spec: BootstrapSpec, settings: Any) -> None:  # noqa: ARG0
     _report("demo_course", f"{declared.repo}@{branch}", "imported")
 
 
+def apply_search_indices(spec: BootstrapSpec, settings: Any) -> None:  # noqa: ARG001
+    if not spec.search_indices.forum:
+        return
+    # Without --force, which would drop and recreate an existing index.
+    subprocess.run(  # noqa: S603
+        _manage("lms", "initialize_forum_indices"),
+        check=True,
+        stdout=sys.stderr,
+    )
+    _report("search_indices", "forum", "applied")
+
+
 IN_PROCESS = {
     "users",
     "oauth_applications",
@@ -519,6 +534,7 @@ IN_PROCESS = {
 
 APPLY = {
     "migrate": apply_migrate,
+    "search_indices": apply_search_indices,
     "users": apply_users,
     "oauth_applications": apply_oauth_applications,
     "third_party_auth_providers": apply_third_party_auth_providers,
@@ -537,6 +553,23 @@ def _parse_steps(value: str) -> list[str]:
     return steps
 
 
+def _lms_after_cms(migrate: list[Migration]) -> str | None:
+    """The first LMS entry the spec lists after a CMS entry on its database.
+
+    edxapp-migrate runs the LMS's entries (``--service lms``) to completion
+    before the CMS's, so such an entry would run earlier than the spec says.
+    Entries on different databases do not depend on each other's order.
+    """
+    cms_seen: set[str] = set()
+    for migration in migrate:
+        if migration.service == "cms":
+            cms_seen.add(migration.database)
+        elif migration.database in cms_seen:
+            label = migration.app_label or "the full LMS migrate"
+            return f"{label} ({migration.database})"
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m lehrer_bootstrap")
     parser.add_argument("spec", help="Path to a bootstrap spec (YAML).")
@@ -546,8 +579,29 @@ def main(argv: list[str] | None = None) -> int:
         default=list(STEPS),
         help=f"Comma-separated subset of {','.join(STEPS)}. Always run in that order.",
     )
+    parser.add_argument(
+        "--service",
+        choices=("lms", "cms"),
+        help=(
+            "With --steps migrate only: run just this service's migrate entries, "
+            "so each service can migrate in a process given its own environment."
+        ),
+    )
     args = parser.parse_args(argv)
     spec = load(args.spec)
+    if args.service:
+        if args.steps != ["migrate"]:
+            parser.error("--service applies only to --steps migrate")
+        if late := _lms_after_cms(spec.migrate):
+            parser.error(
+                "--service runs every LMS entry before any CMS entry, but the spec "
+                f"lists a CMS entry before {late} on the same database. Move the "
+                "LMS entries ahead of the CMS entries for that database."
+            )
+        migrate = [m for m in spec.migrate if m.service == args.service]
+        if not migrate:
+            parser.error(f"the spec has no migrate entries for {args.service}")
+        spec = spec.model_copy(update={"migrate": migrate})
 
     import django  # type: ignore[import-not-found]  # noqa: PLC0415
     from django.conf import settings  # type: ignore[import-not-found]  # noqa: PLC0415

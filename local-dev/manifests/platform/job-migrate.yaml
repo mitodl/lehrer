@@ -24,8 +24,14 @@ spec:
         app: edxapp-migrate
     spec:
       restartPolicy: Never
-      containers:
-      - name: migrate
+      # Each service migrates in its own container, under the environment its
+      # Deployment runs with: the CMS migrate's post_migrate hook creates
+      # Studio's Meilisearch indexes from Studio's settings, so it has to see
+      # cms-config and cms-config-overrides, not the LMS's. The LMS goes first,
+      # as an init container, matching the spec, which lists the default
+      # database's LMS migrations ahead of the CMS's.
+      initContainers:
+      - name: migrate-lms
         # Image tag is managed by Tilt via custom_build (same ref as the
         # platform deployments).
         image: openedx-platform
@@ -36,11 +42,11 @@ spec:
         - /openedx/bootstrap/bootstrap.yaml
         - --steps
         - migrate
+        - --service
+        - lms
         env:
         # The runner calls django.setup() directly rather than going through
         # manage.py, so the settings module has to come from the environment.
-        # It runs each migrate under the matching service's module
-        # (cms.envs.aqueduct for the CMS).
         - name: DJANGO_SETTINGS_MODULE
           value: "lms.envs.aqueduct"
         envFrom:
@@ -49,11 +55,43 @@ spec:
         - secretRef:
             name: openedx-secrets
         # Last wins: a caller composing this stack into its own cluster
-        # supplies only the keys it needs to change (shared Valkey/
-        # OpenSearch hosts, public URLs) instead of copying the whole
+        # supplies only the keys it needs to change (the shared Valkey
+        # host, public URLs) instead of copying the whole
         # ConfigMap above and drifting from it.
         - configMapRef:
             name: lms-config-overrides
+            optional: true
+        volumeMounts:
+        - name: bootstrap
+          mountPath: /openedx/bootstrap
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+      containers:
+      - name: migrate-cms
+        image: openedx-platform
+        command:
+        - python
+        - -m
+        - lehrer_bootstrap
+        - /openedx/bootstrap/bootstrap.yaml
+        - --steps
+        - migrate
+        - --service
+        - cms
+        env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: "cms.envs.aqueduct"
+        envFrom:
+        - configMapRef:
+            name: cms-config
+        - secretRef:
+            name: openedx-secrets
+        - configMapRef:
+            name: cms-config-overrides
             optional: true
         volumeMounts:
         - name: bootstrap

@@ -277,3 +277,118 @@ def test_demo_course_reports_nothing_when_the_import_fails(
     with pytest.raises(subprocess.CalledProcessError):
         runner.apply_demo_course(spec, None)
     assert capsys.readouterr().out == ""
+
+
+def test_search_indices_initializes_the_forum_indexes_without_force(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "lms.envs.aqueduct")
+    commands: list[list[str]] = []
+
+    def run(command: list[str], **_: Any) -> SimpleNamespace:
+        commands.append(command)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(runner.subprocess, "run", run)
+    spec = BootstrapSpec.model_validate({"search_indices": {"forum": True}})
+    runner.apply_search_indices(spec, None)
+
+    (manage,) = commands
+    assert manage[1:4] == ["manage.py", "lms", "initialize_forum_indices"]
+    # --force drops and recreates an index that already holds posts.
+    assert "--force" not in manage
+    assert _lines(capsys) == [
+        {"step": "search_indices", "target": "forum", "result": "applied"}
+    ]
+
+
+def test_search_indices_does_nothing_unless_declared(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(runner.subprocess, "run", pytest.fail)
+    runner.apply_search_indices(BootstrapSpec(), None)
+    assert capsys.readouterr().out == ""
+
+
+@pytest.fixture
+def migrated_services(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> tuple[Path, list[str]]:
+    """A spec migrating both services, and the services ``migrate`` was given."""
+    monkeypatch.setitem(sys.modules, "django", SimpleNamespace(setup=pytest.fail))
+    monkeypatch.setitem(sys.modules, "django.conf", SimpleNamespace(settings=None))
+    seen: list[str] = []
+
+    def apply_migrate(spec: BootstrapSpec, _settings: Any) -> None:
+        seen.extend(f"{m.service} {m.app_label}" for m in spec.migrate)
+
+    monkeypatch.setitem(runner.APPLY, "migrate", apply_migrate)
+    spec = tmp_path / "spec.yaml"
+    spec.write_text(
+        "migrate:\n"
+        "- {service: lms, app_label: enterprise}\n"
+        "- {service: cms, app_label: search}\n"
+        "- {service: lms, app_label: coursewarehistoryextended,"
+        " database: student_module_history}\n"
+    )
+    return spec, seen
+
+
+@pytest.mark.parametrize(
+    ("service", "expected"),
+    [
+        ("lms", ["lms enterprise", "lms coursewarehistoryextended"]),
+        ("cms", ["cms search"]),
+    ],
+)
+def test_service_migrates_only_that_service_in_spec_order(
+    migrated_services: tuple[Path, list[str]], service: str, expected: list[str]
+) -> None:
+    # edxapp-migrate runs each service in its own container, with that
+    # service's ConfigMaps, so Studio's post_migrate index setup sees Studio's
+    # Meilisearch settings.
+    spec, seen = migrated_services
+    runner.main([str(spec), "--steps", "migrate", "--service", service])
+    assert seen == expected
+
+
+def test_service_refuses_steps_other_than_migrate(
+    migrated_services: tuple[Path, list[str]],
+) -> None:
+    spec, seen = migrated_services
+    with pytest.raises(SystemExit):
+        runner.main([str(spec), "--steps", "migrate,users", "--service", "cms"])
+    assert seen == []
+
+
+def test_service_refuses_an_lms_entry_after_a_cms_one_on_its_database(
+    migrated_services: tuple[Path, list[str]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The LMS container runs all of its entries before the CMS container
+    # starts, so this enterprise migrate would run ahead of the CMS one the
+    # spec puts first.
+    spec, seen = migrated_services
+    spec.write_text(
+        "migrate:\n"
+        "- {service: cms, app_label: search}\n"
+        "- {service: lms, app_label: enterprise}\n"
+    )
+    with pytest.raises(SystemExit):
+        runner.main([str(spec), "--steps", "migrate", "--service", "lms"])
+    assert seen == []
+    assert "before enterprise (default)" in capsys.readouterr().err
+
+
+def test_service_refuses_a_spec_without_its_migrations(
+    migrated_services: tuple[Path, list[str]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # A container that migrated nothing would pass while leaving its schema
+    # behind.
+    spec, seen = migrated_services
+    spec.write_text("migrate:\n- {service: lms}\n")
+    with pytest.raises(SystemExit):
+        runner.main([str(spec), "--steps", "migrate", "--service", "cms"])
+    assert seen == []
+    assert "no migrate entries for cms" in capsys.readouterr().err

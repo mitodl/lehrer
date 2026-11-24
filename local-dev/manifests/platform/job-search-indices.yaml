@@ -1,0 +1,75 @@
+---
+# Creates the search indexes a service writes to without creating them first:
+# the search_indices step of the deployment's provision/bootstrap.yaml, which
+# today is openedx-forum's collection in the backend FORUM_SEARCH_BACKEND
+# names (Typesense in local dev). The runner is lehrer_bootstrap, baked into
+# the platform image from src/lehrer/bootstrap.
+#
+# Its own Job, and not a step of edxapp-provision, so the platform does not
+# wait on it (see lehrer-core.star). A cell whose forum cannot reach its
+# backend shows this Job failed while the LMS and Studio still come up: Ulmo
+# pins openedx-forum 0.4.1.post1, whose Typesense backend imports
+# typesense.client, against typesense 2.0.0, which no longer has that module.
+# On master and verawood forum indexes every post into this collection, so
+# posting fails until this Job has run once.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: edxapp-search-indices
+  namespace: openedx
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      annotations:
+        # Stamped by lehrer-core.star with a hash of bootstrap.yaml. A Job's
+        # pod template is immutable, so a spec edit changes the Job and Tilt
+        # replaces it, which is what re-runs it. Without this, editing the spec
+        # only updates the ConfigMap of a Job that has already finished.
+        lehrer.mit.edu/bootstrap-spec-checksum: "__BOOTSTRAP_SPEC_CHECKSUM__"
+      labels:
+        app: edxapp-search-indices
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: search-indices
+        # Image tag is managed by Tilt via custom_build (same ref as the
+        # platform deployments).
+        image: openedx-platform
+        command:
+        - python
+        - -m
+        - lehrer_bootstrap
+        - /openedx/bootstrap/bootstrap.yaml
+        - --steps
+        - search_indices
+        env:
+        # The runner calls django.setup() directly rather than going through
+        # manage.py, so the settings module has to come from the environment.
+        - name: DJANGO_SETTINGS_MODULE
+          value: "lms.envs.aqueduct"
+        envFrom:
+        - configMapRef:
+            name: lms-config
+        - secretRef:
+            name: openedx-secrets
+        # Last wins: a caller composing this stack into its own cluster
+        # supplies only the keys it needs to change (the shared Valkey
+        # host, public URLs) instead of copying the whole
+        # ConfigMap above and drifting from it.
+        - configMapRef:
+            name: lms-config-overrides
+            optional: true
+        volumeMounts:
+        - name: bootstrap
+          mountPath: /openedx/bootstrap
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+      volumes:
+      - name: bootstrap
+        configMap:
+          name: edxapp-bootstrap

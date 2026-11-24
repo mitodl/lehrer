@@ -1,0 +1,85 @@
+---
+# Meilisearch backs Studio content search (Libraries V2), which needs it on
+# master and verawood until openedx-search's Typesense backend replaces it, and
+# edx-notes-api search. Both present the API key meilisearch-key-job.yaml
+# creates, not the master key.
+#
+# lehrer runs it in its own namespace whether or not it manages the rest of the
+# infrastructure: a cluster this stack composes into (ol-infrastructure's
+# local-dev) has no Meilisearch of its own.
+#
+# A StatefulSet so the notes index survives a pod restart. edx-notes-api
+# indexes a note when it is saved and creates the index on first use, so an
+# emptied data directory would come back with an index missing every earlier
+# note.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: meilisearch
+  namespace: openedx
+spec:
+  serviceName: meilisearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app: meilisearch
+  template:
+    metadata:
+      labels:
+        app: meilisearch
+    spec:
+      containers:
+      - name: meilisearch
+        # The version ol-infrastructure's edxapp clusters run
+        # (MEILISEARCH_VERSION in src/bridge/lib/versions.py).
+        image: docker.io/getmeili/meilisearch:v1.56.2
+        env:
+        - name: MEILI_MASTER_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openedx-secrets
+              key: MEILISEARCH_MASTER_KEY
+        - name: MEILI_DB_PATH
+          value: /meili_data/data.ms
+        - name: MEILI_NO_ANALYTICS
+          value: "true"
+        ports:
+        - containerPort: 7700
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 7700
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "512Mi"
+        volumeMounts:
+        - name: data
+          mountPath: /meili_data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: meilisearch
+  namespace: openedx
+spec:
+  selector:
+    app: meilisearch
+  ports:
+  - name: http
+    port: 7700
+    targetPort: 7700
+  type: ClusterIP

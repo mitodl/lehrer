@@ -150,6 +150,40 @@ That includes the RSA pair the LMS signs every JWT with
 (`JWT_PRIVATE_SIGNING_JWK` / `JWT_PUBLIC_SIGNING_JWK_SET`). Without it no login
 completes.
 
+Search runs on Typesense (forum search, and edx-search's engine) and
+Meilisearch (Studio content search for Libraries V2, and notes) in the
+`openedx` namespace, keyed by `TYPESENSE_API_KEY`, `MEILISEARCH_MASTER_KEY` and
+`MEILISEARCH_API_KEY`. A cluster set up before those keys existed has a Secret
+without them, and the search pods stay in `CreateContainerConfigError` until
+`lehrer dev setup` is re-run to rewrite the Secret. Tilt also leaves the
+OpenSearch Helm release such a cluster used to run in place; remove it with
+`helm --kube-context k3d-lehrer-dev uninstall opensearch -n openedx`.
+
+Courseware search stays off: `ENABLE_COURSEWARE_INDEX` (Studio) and
+`ENABLE_COURSEWARE_SEARCH` (LMS) keep their default of false, and turning them
+on indexes into Typesense on the next Studio publish. edx-search has a
+Typesense engine only from 5.0.0 (master and verawood), so on an Ulmo cell
+neither courseware search nor forum search has a working backend here (see
+`edxapp-search-indices` below).
+
+Studio content search is on. The `meilisearch-key` Job creates the key Studio
+and notes present, and `edxapp-migrate` creates Studio's indexes, in a CMS
+`post_migrate` hook that only logs a warning if Meilisearch fails it. If Studio
+search reports a missing index, look for "Meilisearch reconciliation" in the
+`edxapp-migrate` log and trigger that Job again. Content created after that is
+indexed as it is saved. A cluster that already had courses or libraries before
+this has to index them once:
+
+```bash
+kubectl --context k3d-lehrer-dev -n openedx exec deploy/cms -- \
+    python manage.py cms reindex_studio --settings=aqueduct
+```
+
+The browser queries Meilisearch directly, at `MEILISEARCH_PUBLIC_URL`
+(`http://localhost:7700`, port-forwarded by Tilt). The Libraries V2 pages
+themselves are in the course-authoring MFE, which ol-infrastructure's composed
+stack builds and this standalone one does not.
+
 > **Existing clusters:** the MariaDB CR used to carry its own root-password
 > Secret, and `spec.rootPasswordSecretKeyRef` is immutable. A cluster created
 > before that change rejects the new manifest and `lehrer dev start` fails on
@@ -176,33 +210,42 @@ credentials when the referenced Secret changes.
 
 #### Provisioning
 
-`edxapp-migrate` creates the edxapp schema; three more Jobs turn that into a
+`edxapp-migrate` creates the edxapp schema; four more Jobs turn that into a
 usable stack:
 
 | Job | Trigger | What it does |
 |---|---|---|
+| `edxapp-search-indices` | on `tilt up`, then manual | Forum search collection in Typesense |
 | `edxapp-provision`  | on `tilt up`, then manual | Superuser, notes and Studio OAuth clients, waffle flags |
 | `notes-migrate`     | automatic | edx-notes-api schema and search index |
 | `edxapp-demo-course`| manual    | Imports the Open edX demo course |
 
-`edxapp-migrate` and `edxapp-provision` run by themselves when `tilt up`
-starts; after that they wait for a trigger (see
+`edxapp-migrate`, `edxapp-search-indices` and `edxapp-provision` run by
+themselves when `tilt up` starts; after that they wait for a trigger (see
 [Iterating on platform settings](#iterating-on-platform-settings) for why).
 Trigger `edxapp-migrate` after a change that brings new migrations, such as a
 `build_manifest.yaml` bump.
 
-All three edxapp Jobs apply a slice of the selected deployment's
+All four edxapp Jobs apply a slice of the selected deployment's
 `provision/bootstrap.yaml` (`deployments/generic/provision/bootstrap.yaml`
 unless `--deployment-config` names another), picked with `--steps`:
 
 - `edxapp-migrate` runs its `migrate` step: LMS and CMS migrations, and the
-  csmh database, which `migrate` never touches unless asked by alias.
+  csmh database, which `migrate` never touches unless asked by alias. The LMS
+  entries run in an init container with the LMS's ConfigMaps, then the CMS
+  entries (`--service cms`) with Studio's, so the CMS `post_migrate` hook
+  creates Studio's search indexes from the settings Studio itself runs with.
   `enterprise` and then two enterprise-integrated-channels apps are migrated
   first: two edx-enterprise migrations alter those apps' tables without
   depending on them, and the apps in turn need `enterprise`'s tables without
   depending on it. edx-submissions' `0006_mariadb_uuid_conversion`, which
   cannot run on MariaDB, is recorded as applied (`fake:`) rather than run. The
   spec's comments say why each entry exists and when it can go.
+- `edxapp-search-indices` runs `search_indices`: the forum's Typesense
+  collection, which forum indexes every post into and never creates. The LMS
+  and Studio do not wait for it, so a cell whose forum cannot use Typesense
+  (Ulmo: its forum predates the typesense client it pins) fails this Job and
+  nothing else.
 - `edxapp-provision` runs `users`, `oauth_applications`,
   `third_party_auth_providers`, `service_access_tokens` and `waffle_flags`: the
   `edx` / `edx` superuser (override the password with
@@ -238,10 +281,11 @@ stderr.
 
 `notes-migrate` creates the tables in the `notes` database (the MariaDB CR
 creates the database and the grant, but nothing creates the schema) and the
-OpenSearch index. Both are required: edx-notes-api indexes on every save via
-`RealTimeSignalProcessor`, so a missing index breaks annotation writes and not
-just search. The Job fails rather than leave a notes service running that
-cannot be written to.
+Meilisearch index, then indexes the notes already in the database (on a
+cluster that used OpenSearch, those would otherwise drop out of search).
+edx-notes-api writes to the index on every save, so the Job fails if
+Meilisearch is unreachable or rejects the key, rather than leave a notes
+service running that cannot be written to.
 
 `edxapp-demo-course` resolves the demo course branch from the platform's own
 `RELEASE_LINE`, so a named-release stack does not import master content. Set
