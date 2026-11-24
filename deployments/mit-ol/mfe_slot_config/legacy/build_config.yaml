@@ -50,9 +50,11 @@ mfes:
         verawood: useFeedbackEnrichment.verawood.js
         default: useFeedbackEnrichment.js
     # Also the only copy of contactUsLauncher.umd.js: Footer.jsx loads it from
-    # /learn/ for every MFE, so this bundle has to be >= 6.42.0: 6.39.0 first
+    # /learn/ for every MFE, so this bundle has to be >= 6.43.0: 6.39.0 first
     # shipped it, 6.40.0 made it paint above host page content and go modal
     # below the sm breakpoint, 6.41.0 added the "Contact the support team"
-    # button, and 6.42.0 added Send request and Cancel to the ticket review.
+    # button, 6.42.0 added Send request and Cancel to the ticket review, and
+    # 6.43.0 pinned the support button above the input and starts a new
+    # thread after a ticket is filed.
     extra_npm_bundles:
-    - "@mitodl/smoot-design@^6.42.0|public/static/smoot-design"
+    - "@mitodl/smoot-design@^6.43.0|public/static/smoot-design"
