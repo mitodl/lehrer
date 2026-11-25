@@ -164,7 +164,11 @@ class TestStudioSettings:
 
 
 class _StudioWithAuthoringSchema(StudioSettingsMixin):
-    """The mixin plus the two fields the generated CMS model contributes."""
+    """The mixin plus the two fields a CMS model declares.
+
+    The setting is an operator-supplied trimmed value without ``SERVERS``, in
+    the shape verawood's ``cms.envs.production`` uses.
+    """
 
     AUTHORING_API_URL: str = Field(default="")
     SPECTACULAR_SETTINGS: dict[str, Any] = Field(
@@ -175,26 +179,33 @@ class _StudioWithAuthoringSchema(StudioSettingsMixin):
     )
 
 
+class _MasterStudioWithAuthoringSchema(_StudioWithAuthoringSchema):
+    """The generated model's shape (master's ``common.py``): a regex, no trim."""
+
+    SPECTACULAR_SETTINGS: dict[str, Any] = Field(
+        default_factory=lambda: {"SCHEMA_PATH_PREFIX": r"/api/(contentstore|authoring)"}
+    )
+
+
 def test_spectacular_servers_put_the_trimmed_prefix_back() -> None:
-    # The shape of the LMS Enrollment API schema: every path is under the prefix.
-    enrollment = {
-        "TITLE": "LMS",
-        "SCHEMA_PATH_PREFIX": "/api/enrollment",
-        "SCHEMA_PATH_PREFIX_TRIM": "/api/enrollment",
+    verawood_cms = {
+        "TITLE": "Authoring API",
+        "SCHEMA_PATH_PREFIX": "/api/contentstore",
+        "SCHEMA_PATH_PREFIX_TRIM": "/api/contentstore",
     }
     derived = spectacular_with_servers(
-        enrollment, "https://lms.example.com/", "LMS-enrollment"
+        verawood_cms, "https://studio.example.com/", "CMS-contentstore"
     )
     assert derived["SERVERS"] == [
         {
-            "url": "https://lms.example.com/api/enrollment",
-            "description": "LMS-enrollment",
+            "url": "https://studio.example.com/api/contentstore",
+            "description": "CMS-contentstore",
         },
-        {"url": "https://lms.example.com", "description": "Local"},
+        {"url": "https://studio.example.com", "description": "Local"},
     ]
-    assert derived["TITLE"] == "LMS"
+    assert derived["TITLE"] == "Authoring API"
     # A copy, so the caller has to assign it for the overlay to keep it.
-    assert "SERVERS" not in enrollment
+    assert "SERVERS" not in verawood_cms
 
 
 def test_spectacular_servers_read_the_prefix_not_the_trim_flag() -> None:
@@ -216,7 +227,10 @@ def test_spectacular_servers_read_the_prefix_not_the_trim_flag() -> None:
         {"SCHEMA_PATH_PREFIX": "/api/contentstore", "SCHEMA_PATH_PREFIX_TRIM": False},
         {"SCHEMA_PATH_PREFIX": "/api/contentstore"},
         {"SCHEMA_PATH_PREFIX": None, "SCHEMA_PATH_PREFIX_TRIM": True},
+        {"SCHEMA_PATH_PREFIX": r"/api/(contentstore|authoring)"},
+        {"SCHEMA_PATH_PREFIX": "/api/enrollment"},
     ],
+    ids=["trim-false", "no-trim", "no-prefix", "master-cms", "master-lms"],
 )
 def test_spectacular_servers_without_a_trimmed_prefix_offer_only_the_root(
     spectacular: dict[str, Any],
@@ -292,6 +306,18 @@ class TestSpectacularServers:
             == "https://studio.example.com/api/courses/x/bulk_enable_disable_discussions"
         )
         assert len(servers) == 2
+
+    def test_master_paths_resolve_on_the_root_and_public_servers(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("CMS_BASE_URL", "https://studio.example.com/")
+        monkeypatch.setenv("AUTHORING_API_URL", "https://api.example.com/authoring")
+        servers = _MasterStudioWithAuthoringSchema().SPECTACULAR_SETTINGS["SERVERS"]
+        # The regex is never turned into a server URL.
+        assert servers == [
+            {"url": "https://studio.example.com", "description": "Local"},
+            {"url": "https://api.example.com/authoring", "description": "Public"},
+        ]
 
     def test_the_derived_value_overrides_the_base(self) -> None:
         # django-aqueduct lets a field the base also carries through only when
