@@ -78,7 +78,8 @@ def test_clone_fails_loudly_when_no_ref_matches(
     result = _clone(notes_remote, "zebrawood", dest)
 
     assert result.returncode == 1
-    assert "has none of the refs: zebrawood, release/zebrawood" in result.stderr
+    assert "Remote has none of the refs: zebrawood, release/zebrawood" in result.stderr
+    assert notes_remote.as_uri() not in result.stderr
     assert not dest.exists()
 
 

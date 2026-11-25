@@ -43,7 +43,8 @@ def notes_clone_script(repo: str, release_name: str, dest: str) -> str:
     """
     candidates = notes_ref_candidates(release_name)
     q_repo, q_dest = shlex.quote(repo), shlex.quote(dest)
-    missing = shlex.quote(f"{repo} has none of the refs: {', '.join(candidates)}")
+    # No URL: a credentialed notes_repo would otherwise land in the build log.
+    missing = shlex.quote(f"Remote has none of the refs: {', '.join(candidates)}")
     return (
         f"for ref in {' '.join(shlex.quote(c) for c in candidates)}; do "
         f'git ls-remote --exit-code {q_repo} "refs/heads/$ref" "refs/tags/$ref"'
@@ -85,11 +86,10 @@ class OpenedxNotes:
         Args:
             release_name: Git branch/tag to use (e.g., master, open-release/sumac.master),
                 or a bare release name (e.g. verawood) resolved by notes_ref_candidates
-            python_version: Python version (defaults: master=3.12, others=3.11)
+            python_version: Python version (defaults to 3.12)
             notes_code: Local directory with edx-notes-api source (optional)
             notes_repo: Git repository URL (required if notes_code not provided)
-            notes_config: Directory containing env_config.py (defaults to
-
+            notes_config: Directory containing env_config.py (required)
 
         Returns:
             Built edx-notes container
