@@ -76,7 +76,7 @@ dagger call notes build \
 
 # teak
 dagger call notes build \
-  --release-name open-release/teak.master \
+  --release-name teak \
   --notes-repo https://github.com/openedx/edx-notes-api \
   --notes-config ./deployments/mit-ol/notes_config
 ```
