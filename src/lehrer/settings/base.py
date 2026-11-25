@@ -962,16 +962,24 @@ def spectacular_with_servers(
 ) -> dict[str, Any]:
     """Return *spectacular* with the ``SERVERS`` its published paths resolve on.
 
-    edx-platform's ``SPECTACULAR_SETTINGS`` trim a shared prefix
+    edx-platform's ``SPECTACULAR_SETTINGS`` may trim a shared prefix
     (``SCHEMA_PATH_PREFIX``, removed when the ``SCHEMA_PATH_PREFIX_TRIM`` flag
     is truthy) from the published paths and rely on ``SERVERS`` to put it
-    back. Upstream sets ``SERVERS`` in
-    ``<svc>.envs.production``; lehrer overlays ``<svc>.envs.common`` directly,
-    so without this Swagger's "Try it out" requests the trimmed path and gets
-    a 404. The root server is for documented paths outside the prefix, which
-    are published untrimmed, and is the only one listed when nothing is
-    trimmed. drf-spectacular treats ``SCHEMA_PATH_PREFIX`` as a regex; the
-    prefixed server assumes it is a literal path, as edx-platform's are.
+    back. Upstream sets ``SERVERS`` in ``<svc>.envs.production``; lehrer
+    overlays ``<svc>.envs.common`` directly, so without this Swagger's "Try it
+    out" requests a trimmed path and gets a 404. The root server is for
+    documented paths outside the prefix, which are published untrimmed, and
+    is the only one listed when nothing is trimmed.
+
+    The generated models carry master's ``common.py`` shape: no trim flag, and
+    a ``SCHEMA_PATH_PREFIX`` that only shapes tags and operationIds, which
+    drf-spectacular reads as a regex (``/api/(contentstore|authoring)`` for
+    the CMS, ``/api/enrollment`` for the LMS). Those paths are published whole
+    and resolve on the root server. The trimmed shape arrives only in a value
+    an operator supplies without ``SERVERS`` (verawood's
+    ``cms.envs.production`` setting trims ``/api/contentstore`` but lists its
+    own servers). The prefixed server takes the prefix as a literal path, as
+    every release that trims has set it.
 
     Callers must assign the result rather than edit the setting in place:
     django-aqueduct keeps a field the base also carries only when it is in
