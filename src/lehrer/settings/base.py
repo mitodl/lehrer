@@ -475,6 +475,8 @@ class ProductionSettingsMixin(BaseSettings):
     # dropped there and capa problems fall back to in-process codejail. While
     # unset it defers to common.py; on master it adds an unread False.
     ENABLE_CODEJAIL_REST_SERVICE: bool = Field(default=False)
+    # Codegen renders master's None default as `Any`.
+    CODE_JAIL_REST_SERVICE_HOST: str | None = Field(default=None)
 
     # ------------------------------------------------------------------
     # Source customisation

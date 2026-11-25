@@ -56,6 +56,12 @@ data:
   # with the default name each login would overwrite the other's session.
   SESSION_COOKIE_NAME: "studio_sessionid"
 
+  # Codejail service, for previewing Python-scripted problems. Master has no
+  # in-process fallback: with no host, those previews raise ImproperlyConfigured.
+  # Older releases still need the enable flag to use the service.
+  CODE_JAIL_REST_SERVICE_HOST: "http://codejail.openedx.svc.cluster.local:8000"
+  ENABLE_CODEJAIL_REST_SERVICE: "true"
+
   STATIC_ROOT_BASE: "/openedx/staticfiles"
 
   LOG_DIR: "/openedx/data/var/log/edx"

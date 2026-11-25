@@ -38,6 +38,7 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "CORS_ORIGIN_WHITELIST",
         "CELERY_TIMEZONE",
         "ENABLE_CODEJAIL_REST_SERVICE",
+        "CODE_JAIL_REST_SERVICE_HOST",
         "LANGUAGES",
         "TIME_ZONE",
         "AUTHORING_API_URL",
@@ -359,9 +360,17 @@ class TestCodejailRestServiceFlag:
         assert ProductionSettingsMixin().ENABLE_CODEJAIL_REST_SERVICE is True
 
     def test_is_left_to_the_base_while_unset(self) -> None:
+        fields_set = ProductionSettingsMixin().model_fields_set
+        assert "ENABLE_CODEJAIL_REST_SERVICE" not in fields_set
+        assert "CODE_JAIL_REST_SERVICE_HOST" not in fields_set
+
+    def test_host_arrives_from_env_as_a_string(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("CODE_JAIL_REST_SERVICE_HOST", "http://codejail:8000")
         assert (
-            "ENABLE_CODEJAIL_REST_SERVICE"
-            not in ProductionSettingsMixin().model_fields_set
+            ProductionSettingsMixin().CODE_JAIL_REST_SERVICE_HOST
+            == "http://codejail:8000"
         )
 
 
