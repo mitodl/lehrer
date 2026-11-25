@@ -37,6 +37,7 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "CORS_ORIGIN_ALLOW_ALL",
         "CORS_ORIGIN_WHITELIST",
         "CELERY_TIMEZONE",
+        "ENABLE_CODEJAIL_REST_SERVICE",
         "LANGUAGES",
         "TIME_ZONE",
         "AUTHORING_API_URL",
@@ -348,6 +349,20 @@ def test_theme_dirs_arrive_from_env_colon_separated(
         "/openedx/themes",
         "/extra/themes",
     ]
+
+
+class TestCodejailRestServiceFlag:
+    """Master's models no longer declare it; older cells sharing them still read it."""
+
+    def test_arrives_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ENABLE_CODEJAIL_REST_SERVICE", "true")
+        assert ProductionSettingsMixin().ENABLE_CODEJAIL_REST_SERVICE is True
+
+    def test_is_left_to_the_base_while_unset(self) -> None:
+        assert (
+            "ENABLE_CODEJAIL_REST_SERVICE"
+            not in ProductionSettingsMixin().model_fields_set
+        )
 
 
 class _GeneratedConsentAge(BaseSettings):

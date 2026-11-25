@@ -468,6 +468,14 @@ class ProductionSettingsMixin(BaseSettings):
         default_factory=list
     )
 
+    # Master dropped this flag (openedx-platform 3ae28f70ba5): the codejail
+    # service is the only interface, chosen by CODE_JAIL_REST_SERVICE_HOST.
+    # Older releases still read it, and a settings tree pinned to master's
+    # models also serves those cells, so without this an env-delivered value is
+    # dropped there and capa problems fall back to in-process codejail. While
+    # unset it defers to common.py; on master it adds an unread False.
+    ENABLE_CODEJAIL_REST_SERVICE: bool = Field(default=False)
+
     # ------------------------------------------------------------------
     # Source customisation
     # ------------------------------------------------------------------
