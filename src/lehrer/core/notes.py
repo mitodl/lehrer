@@ -1,9 +1,59 @@
 """Generic edx-notes-api service build for Open edX operators."""
 
+import shlex
+
 import dagger
 from dagger import dag, function, object_type
 
 from lehrer.core.pip_compile_bridge import python_deps_install_script
+
+
+def notes_ref_candidates(release_name: str) -> list[str]:
+    """The edx-notes-api refs a release name may correspond to, in probe order.
+
+    edx-notes-api names its release branches ``release/<name>`` from Teak on and
+    ``open-release/<name>.master`` before that, while local dev passes the bare
+    release name (e.g. ``verawood``). The name itself goes first so that callers
+    passing a full ref (``master``, ``release/verawood``, a tag) get exactly it.
+
+    :param release_name: A bare release name or a full branch/tag name.
+    :returns: Distinct candidate refs, most specific first.
+    :rtype: list[str]
+    """
+    return list(
+        dict.fromkeys(
+            [
+                release_name,
+                f"release/{release_name}",
+                f"open-release/{release_name}.master",
+            ]
+        )
+    )
+
+
+def notes_clone_script(repo: str, release_name: str, dest: str) -> str:
+    """A POSIX sh script that shallow-clones the first ref of ``repo`` that exists.
+
+    Probing beats a release-to-branch mapping that goes stale. The probe runs in
+    the build container because that is where git is installed.
+
+    :param repo: The edx-notes-api git URL.
+    :param release_name: A bare release name or a full branch/tag name.
+    :param dest: The directory to clone into.
+    :returns: The script, for ``sh -c``.
+    :rtype: str
+    """
+    candidates = notes_ref_candidates(release_name)
+    q_repo, q_dest = shlex.quote(repo), shlex.quote(dest)
+    missing = shlex.quote(f"{repo} has none of the refs: {', '.join(candidates)}")
+    return (
+        f"for ref in {' '.join(shlex.quote(c) for c in candidates)}; do "
+        f'if git ls-remote --exit-code {q_repo} "refs/heads/$ref" "refs/tags/$ref"'
+        " >/dev/null; then "
+        f'exec git clone --depth 1 --branch "$ref" {q_repo} {q_dest}; '
+        "fi; done; "
+        f"echo {missing} >&2; exit 1"
+    )
 
 
 @object_type
@@ -33,7 +83,8 @@ class OpenedxNotes:
         for Open edX courses.
 
         Args:
-            release_name: Git branch/tag to use (e.g., master, open-release/sumac.master)
+            release_name: Git branch/tag to use (e.g., master, open-release/sumac.master),
+                or a bare release name (e.g. verawood) resolved by notes_ref_candidates
             python_version: Python version (defaults: master=3.12, others=3.11)
             notes_code: Local directory with edx-notes-api source (optional)
             notes_repo: Git repository URL (required if notes_code not provided)
@@ -135,14 +186,9 @@ class OpenedxNotes:
         elif notes_repo:
             container = container.with_exec(
                 [
-                    "git",
-                    "clone",
-                    notes_repo,
-                    "--branch",
-                    release_name,
-                    "--depth",
-                    "1",
-                    "/app/edx-notes-api",
+                    "sh",
+                    "-c",
+                    notes_clone_script(notes_repo, release_name, "/app/edx-notes-api"),
                 ]
             )
         else:
