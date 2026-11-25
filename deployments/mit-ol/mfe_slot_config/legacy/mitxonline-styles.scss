@@ -253,12 +253,6 @@
   }
 }
 
-// Hide the settings/gear icon (and its wrapping link) in the notifications tray popover header.
-// Rendered by @edx/frontend-plugin-notifications: a[href*="#notifications"] > Icon[data-testid="setting-icon"].
-#notificationTray a[href*="#notifications"] {
-  display: none !important;
-}
-
 // ResponsiveCourseTabs styles.
 #courseTabsNavigation {
   // Hide content/courseware search
