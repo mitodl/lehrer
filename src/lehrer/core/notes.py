@@ -17,25 +17,23 @@ def notes_ref_candidates(release_name: str) -> list[str]:
     passing a full ref (``master``, ``release/verawood``, a tag) get exactly it.
 
     :param release_name: A bare release name or a full branch/tag name.
-    :returns: Distinct candidate refs, most specific first.
+    :returns: Candidate refs, most specific first.
     :rtype: list[str]
     """
-    return list(
-        dict.fromkeys(
-            [
-                release_name,
-                f"release/{release_name}",
-                f"open-release/{release_name}.master",
-            ]
-        )
-    )
+    return [
+        release_name,
+        f"release/{release_name}",
+        f"open-release/{release_name}.master",
+    ]
 
 
 def notes_clone_script(repo: str, release_name: str, dest: str) -> str:
     """A POSIX sh script that shallow-clones the first ref of ``repo`` that exists.
 
     Probing beats a release-to-branch mapping that goes stale. The probe runs in
-    the build container because that is where git is installed.
+    the build container because that is where git is installed. ``ls-remote``
+    exits 2 only when no ref matched, so any other failure (network, auth) ends
+    the probe with git's own error instead of trying the next candidate.
 
     :param repo: The edx-notes-api git URL.
     :param release_name: A bare release name or a full branch/tag name.
@@ -48,11 +46,13 @@ def notes_clone_script(repo: str, release_name: str, dest: str) -> str:
     missing = shlex.quote(f"{repo} has none of the refs: {', '.join(candidates)}")
     return (
         f"for ref in {' '.join(shlex.quote(c) for c in candidates)}; do "
-        f'if git ls-remote --exit-code {q_repo} "refs/heads/$ref" "refs/tags/$ref"'
-        " >/dev/null; then "
+        f'git ls-remote --exit-code {q_repo} "refs/heads/$ref" "refs/tags/$ref"'
+        " >/dev/null; rc=$?; "
+        'if [ "$rc" -eq 0 ]; then '
         f'exec git clone --depth 1 --branch "$ref" {q_repo} {q_dest}; '
+        'elif [ "$rc" -ne 2 ]; then exit "$rc"; '
         "fi; done; "
-        f"echo {missing} >&2; exit 1"
+        f"printf '%s\\n' {missing} >&2; exit 1"
     )
 
 
@@ -259,7 +259,8 @@ class OpenedxNotes:
         service is provisioned and wired in.
 
         Args:
-            release_name: Git branch/tag (e.g., master, open-release/sumac.master).
+            release_name: Git branch/tag (e.g., master, open-release/sumac.master),
+                or a bare release name (e.g. verawood) resolved by notes_ref_candidates.
             python_version: Python version (defaults: 3.12).
             notes_code: Local edx-notes-api source (optional).
             notes_repo: Git repository URL (required if notes_code not provided).

@@ -48,10 +48,6 @@ def test_candidates_put_the_exact_name_first() -> None:
     ]
 
 
-def test_candidates_are_distinct() -> None:
-    assert len(set(notes_ref_candidates("master"))) == 3
-
-
 @pytest.mark.parametrize(
     ("release_name", "expected_branch"),
     [
@@ -84,3 +80,14 @@ def test_clone_fails_loudly_when_no_ref_matches(
     assert result.returncode == 1
     assert "has none of the refs: zebrawood, release/zebrawood" in result.stderr
     assert not dest.exists()
+
+
+def test_clone_stops_on_an_unreachable_repo(tmp_path: Path) -> None:
+    dest = tmp_path / "checkout"
+
+    result = _clone(tmp_path / "missing", "verawood", dest)
+
+    # git's own failure, after one probe, not the "none of the refs" fallback.
+    assert result.returncode == 128
+    assert result.stderr.count("does not appear to be a git repository") == 1
+    assert "has none of the refs" not in result.stderr
