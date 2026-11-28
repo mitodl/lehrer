@@ -48,7 +48,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
   - ol-social-auth==0.3.1
-  - pydantic-settings[yaml]==2.16.2
+  - pydantic-settings[yaml]==2.16.3
   - django-aqueduct==0.15.1
   - ol-openedx-chat==0.7.1
   - ol-openedx-chat-xblock==0.5.1
@@ -101,7 +101,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
   - pip==26.2
-  - pydantic-settings[yaml]==2.16.2
+  - pydantic-settings[yaml]==2.16.3
   - django-aqueduct==0.15.1
   - rapid-response-xblock==0.12.2
   - ol-openedx-chat==0.7.1
@@ -140,7 +140,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
   - pip==26.2
-  - pydantic-settings[yaml]==2.16.2
+  - pydantic-settings[yaml]==2.16.3
   - django-aqueduct==0.15.1
   - rapid-response-xblock==0.12.2
   - ol-openedx-chat==0.7.1
@@ -179,7 +179,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - ol-social-auth==0.3.1
   - openedx-scorm-xblock==19.0.5
-  - pydantic-settings[yaml]==2.16.2
+  - pydantic-settings[yaml]==2.16.3
   - ol-openedx-chat==0.7.1
   - ol-openedx-chat-xblock==0.5.1
   - opentelemetry-api>=1.45.2  # GHSA-xcq7-p3pf-p88h, GHSA-mf5v-w3w3-f6cg
@@ -218,7 +218,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
   - pip==26.2
-  - pydantic-settings[yaml]==2.16.2
+  - pydantic-settings[yaml]==2.16.3
   - django-aqueduct==0.15.1
   # Held at 0.12.0 while this release loads MathJax 2: 0.12.1+
   # (mitodl/open-edx-plugins#969) reworks rapid.js for MathJax 4 and its
@@ -269,7 +269,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - openedx-scorm-xblock==19.0.5
   - pip==26.2
-  - pydantic-settings[yaml]==2.16.2
+  - pydantic-settings[yaml]==2.16.3
   - django-aqueduct==0.15.1
   # Held at 0.12.0 while this release loads MathJax 2: 0.12.1+
   # (mitodl/open-edx-plugins#969) reworks rapid.js for MathJax 4 and its
@@ -320,7 +320,7 @@ cells:
   - ol-openedx-sentry==0.6.1
   - ol-social-auth==0.3.1
   - openedx-scorm-xblock==19.0.5
-  - pydantic-settings[yaml]==2.16.2
+  - pydantic-settings[yaml]==2.16.3
   - django-aqueduct==0.15.1
   - ol-openedx-chat==0.7.1
   - ol-openedx-chat-xblock==0.5.1
