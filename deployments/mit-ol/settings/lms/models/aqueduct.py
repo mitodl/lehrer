@@ -242,14 +242,6 @@ class AqueductSettings(BaseSettings):
         description="Reverification checkpoint name pattern",
     )
     CMS_BASE: str = Field(default="studio.edx.org", description="CMS base")
-    CODE_JAIL: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {
-            "python_bin": "/edx/app/edxapp/venvs/edxapp-sandbox/bin/python",
-            "user": "sandbox",
-            "limits": {"CPU": 1, "VMEM": 536870912, "REALTIME": 3, "PROXY": 0},
-            "limit_overrides": {},
-        },
-    )
     COMMENTS_SERVICE_KEY: str = Field(default="")
     COMMENTS_SERVICE_URL: str = Field(default="")
     COMMON_ROOT: Any = Field(
@@ -1211,7 +1203,6 @@ class AqueductSettings(BaseSettings):
             "openedx.core.djangoapps.dark_lang.middleware.DarkLangMiddleware",
             "django.middleware.locale.LocaleMiddleware",
             "lms.djangoapps.discussion.django_comment_client.utils.ViewNameMiddleware",
-            "codejail.django_integration.ConfigureCodeJailMiddleware",
             "openedx.core.djangoapps.session_inactivity_timeout.middleware.SessionInactivityTimeout",  # noqa: E501
             "django.middleware.clickjacking.XFrameOptionsMiddleware",
             "lms.djangoapps.courseware.middleware.CacheCourseIdMiddleware",
@@ -2700,17 +2691,17 @@ class AqueductSettings(BaseSettings):
         default=0.5,
         description=".. setting_name: CODE_JAIL_REST_SERVICE_CONNECT_TIMEOUT\n.. setting_default: 0.5\n.. setting_description: Set the number of seconds LMS will wait to establish an internal\nconnection to the codejail remote service.",  # noqa: E501
     )
-    CODE_JAIL_REST_SERVICE_HOST: str = Field(
-        default="http://127.0.0.1:8550",
-        description=".. setting_name: CODE_JAIL_REST_SERVICE_HOST\n.. setting_default: 'http://127.0.0.1:8550'\n.. setting_description: Set the codejail remote service host",  # noqa: E501
-    )
+    CODE_JAIL_REST_SERVICE_HOST: Any = Field(
+        default=None,
+        description=".. setting_name: CODE_JAIL_REST_SERVICE_HOST\n.. setting_default: None\n.. setting_description: Set the codejail remote service host. When not set problem blocks may return an\nImproperlyConfigured error.",  # noqa: E501
+    )  # refine type
     CODE_JAIL_REST_SERVICE_READ_TIMEOUT: float = Field(
         default=3.5,
         description=".. setting_name: CODE_JAIL_REST_SERVICE_READ_TIMEOUT\n.. setting_default: 3.5\n.. setting_description: Set the number of seconds LMS/CMS will wait for a response from the\ncodejail remote service endpoint.",  # noqa: E501
     )
     CODE_JAIL_REST_SERVICE_REMOTE_EXEC: str = Field(
-        default="xmodule.capa.safe_exec.remote_exec.send_safe_exec_request_v0",
-        description=".. setting_name: CODE_JAIL_REST_SERVICE_REMOTE_EXEC\n.. setting_default: 'xmodule.capa.safe_exec.remote_exec.send_safe_exec_request_v0'\n.. setting_description: Set the python package.module.function that is reponsible of\ncalling the remote service in charge of jailed code execution",  # noqa: E501
+        default="xblock_problem.capa.safe_exec.remote_exec.send_safe_exec_request_v0",
+        description=".. setting_name: CODE_JAIL_REST_SERVICE_REMOTE_EXEC\n.. setting_default: 'xblock_problem.capa.safe_exec.remote_exec.send_safe_exec_request_v0'\n.. setting_description: Set the python package.module.function that is reponsible of\ncalling the remote service in charge of jailed code execution",  # noqa: E501
     )
     COMPLETION_VIDEO_COMPLETE_PERCENTAGE: float = Field(
         default=0.95,
@@ -2756,10 +2747,6 @@ class AqueductSettings(BaseSettings):
     CORS_ORIGIN_WHITELIST: Any = Field(
         default=None, json_schema_extra={"aqueduct_unresolved": True}
     )  # DERIVED: reproduce in a @model_validator (conditional/computed value)
-    COURSES_WITH_UNSAFE_CODE: Annotated[list[Any], NoDecode] = Field(
-        default_factory=list,
-        description='Some courses are allowed to run unsafe code. This is a list of regexes, one\nof them must match the course id for that course to run unsafe code.\nFor example:\nCOURSES_WITH_UNSAFE_CODE = [\nr"Harvard/XY123.1/.*"',  # noqa: E501
-    )
     COURSEWARE_SEARCH_INCLUSION_DATE: Any = Field(
         default=None,
         description=".. setting_name: COURSEWARE_SEARCH_INCLUSION_DATE\n.. setting_default: None\n.. setting_description: YYYY-MM-DD cutoff date used to roll out courseware search to newer courses.\nIn the LMS, the courseware-search-enabled endpoint exposes search for any course whose start date\nis after this date (in addition to any course where the courseware.mfe_courseware_search waffle\nflag is enabled); leaving it None disables this date-based rollout. The Studio\n`reindex_course --from_inclusion_date` command reindexes courses starting on/after this date,\nflooring an unset value at 2020-01-01 so the standalone command still has a bound to filter by.",  # noqa: E501
@@ -3105,9 +3092,6 @@ class AqueductSettings(BaseSettings):
         default=None,
         description=".. toggle_name: ENABLE_CHANGE_USER_PASSWORD_ADMIN\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: Set to True to enable changing a user password through django admin. This is disabled by\ndefault because enabling allows a method to bypass password policy.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2020-02-21\n.. toggle_tickets: 'https://github.com/openedx/edx-platform/pull/21616'",  # noqa: E501
     )  # REDACTED: name looks secret-like — set via a source, not here
-    ENABLE_CODEJAIL_REST_SERVICE: bool = Field(
-        default=False, description="Code jail REST service"
-    )
     ENABLE_COMPREHENSIVE_THEMING: bool = Field(
         default=False,
         description=".. toggle_name: ENABLE_COMPREHENSIVE_THEMING\n.. toggle_implementation: DjangoSetting\n.. toggle_default: False\n.. toggle_description: When enabled, this toggle activates the use of the custom theme\ndefined by DEFAULT_SITE_THEME.\n.. toggle_use_cases: open_edx\n.. toggle_creation_date: 2016-06-30",  # noqa: E501
@@ -4132,15 +4116,9 @@ class AqueductSettings(BaseSettings):
         default="http://your_xqa_server.com",
         description=".. setting_name: XQA_SERVER\n.. setting_default: 'http://your_xqa_server.com'\n.. setting_description: URL of the XQA staff debug/inspection server linked from the\nstaff-only markup rendered by openedx.core.lib.xblock_utils.add_staff_markup. Set\nto a real endpoint if operating an XQA-compatible service; leave the placeholder\ndefault to effectively disable the link.",  # noqa: E501
     )
-    XQUEUE_INTERFACE: Annotated[dict[str, Any], NoDecode] = Field(
-        default_factory=lambda: {
-            "url": "http://localhost:18040",
-            "basic_auth": ["edx", "edx"],
-            "django_auth": {"username": "lms", "password": "password"},
-        },
-    )
     XQUEUE_WAITTIME_BETWEEN_REQUESTS: int = Field(
-        default=5, description="Used with XQueue"
+        default=5,
+        description="Seconds a learner must wait between submissions to a problem graded by an external grader.",  # noqa: E501
     )
     X_FRAME_OPTIONS: str = Field(
         default="DENY",
@@ -4196,7 +4174,6 @@ class AqueductSettings(BaseSettings):
         "COMPREHENSIVE_THEME_LOCALE_PATHS",
         "CONTEXT_PROCESSORS",
         "COUNTRIES_FIRST",
-        "COURSES_WITH_UNSAFE_CODE",
         "COURSE_BLOCKS_API_EXTRA_FIELDS",
         "CSRF_TRUSTED_ORIGINS",
         "DATABASE_ROUTERS",
@@ -4271,7 +4248,6 @@ class AqueductSettings(BaseSettings):
         "CACHES",
         "CELERYBEAT_SCHEDULE",
         "CERTIFICATE_TEMPLATE_LANGUAGES",
-        "CODE_JAIL",
         "CONTENT_TYPE_GATE_GROUP_IDS",
         "COURSE_LISTINGS",
         "COURSE_LIVE_GLOBAL_CREDENTIALS",
@@ -4331,7 +4307,6 @@ class AqueductSettings(BaseSettings):
         "VIDEO_CDN_URL",
         "VIDEO_UPLOAD_PIPELINE",
         "XBLOCK_SETTINGS",
-        "XQUEUE_INTERFACE",
         "YOUTUBE",
         "ZENDESK_CUSTOM_FIELDS",
         "ZENDESK_GROUP_ID_MAPPING",
